@@ -23,6 +23,7 @@ import dev.gorny.buymyway.data.prefs.CategoryOrderSource
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import java.util.UUID
 
@@ -71,15 +72,19 @@ class ListRepository(
         .map { rows -> rows.map { ListSummary(it.list.toDomain(), it.checkedCount, it.total) } }
         .distinctUntilChanged()
 
-    /** Lista. Null when the list does not exist or was deleted. */
-    fun observeList(listId: String): Flow<ListDetail?> = combine(
+    /**
+     * Lista. Null when the list does not exist or was deleted. [lingering] are items just
+     * ticked that the screen still shows in place (see [ListViews.detail]).
+     */
+    fun observeList(listId: String, lingering: Flow<Set<String>> = flowOf(emptySet())): Flow<ListDetail?> = combine(
         db.lists().observe(listId),
         db.categories().observeForList(listId),
         db.items().observeForList(listId),
-    ) { list, categories, items ->
+        lingering,
+    ) { list, categories, items, inPlace ->
         list?.toDomain()
             ?.takeIf { it.deletedAt == null && it.updatedAt > 0 }
-            ?.let { ListViews.detail(it, categories.map { c -> c.toDomain() }, items.map { i -> i.toDomain() }) }
+            ?.let { ListViews.detail(it, categories.map { c -> c.toDomain() }, items.map { i -> i.toDomain() }, inPlace) }
     }.distinctUntilChanged()
 
     /** The edit sheet. */
@@ -162,7 +167,7 @@ class ListRepository(
             return@withTransaction AddResult.Revived(revived.id)
         }
 
-        val category = categoryId ?: rememberedCategory(listId, itemName) ?: categorize(itemName)
+        val category = categoryId ?: proposeCategory(listId, itemName)
         val itemId = newId()
         val content = ItemContent(
             name = itemName,
@@ -189,6 +194,13 @@ class ListRepository(
         val at = nextAt()
         commit(listOf(Op.ItemPut(newId(), item.listId, actor(), at, itemId, cleaned)))
         remember(cleaned.name, cleaned.categoryId, at)
+    }
+
+    /** A drag within a category: only the moved item's `sortKey` changes, and history does not. */
+    suspend fun moveItem(itemId: String, sortKey: Double) = db.withTransaction {
+        val item = liveItem(itemId)
+        if (item.sortKey == sortKey) return@withTransaction
+        commit(listOf(Op.ItemPut(newId(), item.listId, actor(), nextAt(), itemId, item.content.copy(sortKey = sortKey))))
     }
 
     suspend fun setChecked(itemId: String, checked: Boolean) = db.withTransaction {
@@ -348,6 +360,13 @@ class ListRepository(
         if (!Merge.isVisible(item, list)) throw NoSuchElementException("item $itemId")
         return item
     }
+
+    /**
+     * The category the add bar proposes for [name]: the one this name was last filed under on
+     * this device, if this list still has it, or the dictionary's guess.
+     */
+    suspend fun proposeCategory(listId: String, name: String): String =
+        rememberedCategory(listId, name) ?: categorize(name)
 
     /** The user's last choice for this name, if that category is usable in this list. */
     private suspend fun rememberedCategory(listId: String, name: String): String? {

@@ -89,4 +89,24 @@ class ListViewsTest {
             BuiltinCategories.completeOrder(listOf("napoje", "bogus", "warzywa", "napoje"), listOf("x")),
         )
     }
+
+    @Test
+    fun aJustTickedItemStaysInItsCategoryStruckThroughUntilItLetsGo() {
+        val ops = base + listOf(
+            Op.ItemPut(id(), "l", null, 2, "a", ItemContent("Mleko", categoryId = "nabial", sortKey = 1.0)),
+            Op.ItemPut(id(), "l", null, 3, "b", ItemContent("Ser", categoryId = "nabial", sortKey = 2.0)),
+            Op.ItemCheck(id(), "l", null, 4, "a", true),
+        )
+        val s = state(*ops.toTypedArray())
+
+        val lingering = ListViews.detail(s.list!!, s.categories.values, s.items.values, lingering = setOf("a"))
+        assertEquals(listOf("Mleko", "Ser"), lingering.sections.single().items.map { it.name })
+        assertEquals(true, lingering.sections.single().items.first().checked)
+        assertEquals(emptyList<Item>(), lingering.bought)
+        assertEquals(2, lingering.total)
+
+        val settled = ListViews.detail(s.list, s.categories.values, s.items.values)
+        assertEquals(listOf("Ser"), settled.sections.single().items.map { it.name })
+        assertEquals(listOf("Mleko"), settled.bought.map { it.name })
+    }
 }

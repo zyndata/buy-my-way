@@ -1,4 +1,4 @@
-# Pinned at Phase 1 (STATE.md decision 26), Phase 2 additions in decision 37.
+# Pinned at Phase 1 (STATE.md decision 26), Phase 2 additions in decision 37, Phase 3 in 48.
 # Dependabot proposes bumps monthly.
 # Every library here must be on PLAN.md's stack list or have a STATE.md decision.
 
@@ -10,6 +10,7 @@ googleServices = "4.5.0"
 composeBom = "2026.09.00"
 activityCompose = "1.13.0"
 navigationCompose = "2.10.1"
+lifecycle = "2.11.0"
 firebaseBom = "34.19.0"
 room = "2.8.5"
 datastore = "1.2.1"
@@ -24,6 +25,10 @@ androidx-activity-compose = { module = "androidx.activity:activity-compose", ver
 androidx-compose-bom = { module = "androidx.compose:compose-bom", version.ref = "composeBom" }
 androidx-compose-material3 = { module = "androidx.compose.material3:material3" }
 androidx-compose-ui = { module = "androidx.compose.ui:ui" }
+androidx-compose-ui-test-junit4 = { module = "androidx.compose.ui:ui-test-junit4" }
+androidx-compose-ui-test-manifest = { module = "androidx.compose.ui:ui-test-manifest" }
+androidx-lifecycle-viewmodel-compose = { module = "androidx.lifecycle:lifecycle-viewmodel-compose", version.ref = "lifecycle" }
+androidx-lifecycle-runtime-compose = { module = "androidx.lifecycle:lifecycle-runtime-compose", version.ref = "lifecycle" }
 androidx-navigation-compose = { module = "androidx.navigation:navigation-compose", version.ref = "navigationCompose" }
 androidx-room-runtime = { module = "androidx.room:room-runtime", version.ref = "room" }
 androidx-room-ktx = { module = "androidx.room:room-ktx", version.ref = "room" }

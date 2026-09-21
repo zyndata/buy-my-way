@@ -59,6 +59,8 @@ android {
 
     buildFeatures {
         compose = true
+        // BuildConfig.VERSION_NAME for Ustawienia.
+        buildConfig = true
     }
 
     lint {
@@ -88,6 +90,8 @@ dependencies {
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.navigation.compose)
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.androidx.lifecycle.runtime.compose)
 
     // On the classpath from Phase 1 so FirebaseApp initialises; first called in Phase 4.
     implementation(platform(libs.firebase.bom))
@@ -109,4 +113,7 @@ dependencies {
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.androidx.room.testing)
     androidTestImplementation(libs.kotlinx.coroutines.test)
+    androidTestImplementation(platform(libs.androidx.compose.bom))
+    androidTestImplementation(libs.androidx.compose.ui.test.junit4)
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
 }

@@ -26,7 +26,17 @@ data class ListDetail(
 data class ListSummary(val list: ShoppingList, val checked: Int, val total: Int)
 
 object ListViews {
-    fun detail(list: ShoppingList, categories: Collection<Category>, items: Collection<Item>): ListDetail {
+    /**
+     * [lingering] are items just ticked on this device that stay where they were, struck
+     * through, for a moment before they move to „Kupione" (PLAN.md *Screens*): they are shown
+     * in their category, still `checked`.
+     */
+    fun detail(
+        list: ShoppingList,
+        categories: Collection<Category>,
+        items: Collection<Item>,
+        lingering: Set<String> = emptySet(),
+    ): ListDetail {
         val byId = categories.associateBy { it.id }
         val live = categories.filter { Merge.isVisible(it) }.associateBy { it.id }
         val order = BuiltinCategories.completeOrder(list.categoryOrder, live.keys.filterNot(BuiltinCategories::isBuiltin))
@@ -40,13 +50,14 @@ object ListViews {
             }
         }
         val visible = items.filter { Merge.isVisible(it, list) }
-        val toBuy = visible.filterNot { it.checked }.groupBy { Merge.resolveCategory(it.categoryId, byId) }
+        val inPlace = { item: Item -> !item.checked || item.id in lingering }
+        val toBuy = visible.filter(inPlace).groupBy { Merge.resolveCategory(it.categoryId, byId) }
         val sections = infos.mapNotNull { info ->
             toBuy[info.id]
                 ?.sortedWith(compareBy<Item>({ it.sortKey }, { it.createdAt }, { it.id }))
                 ?.let { CategorySection(info, it) }
         }
-        val bought = visible.filter { it.checked }
+        val bought = visible.filterNot(inPlace)
             .sortedWith(compareByDescending<Item> { it.checkedAt ?: 0 }.thenBy { it.id })
         return ListDetail(list, infos, sections, bought)
     }

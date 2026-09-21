@@ -63,7 +63,7 @@ builds as `0.0.0-dev`, which is why CI checks out the full history.
 | `./gradlew installDebug` | Build and install on the connected device or emulator |
 | `./gradlew lint` | Android Lint; warnings are errors on our own code |
 | `./gradlew testDebugUnitTest` | JVM unit tests (pure Kotlin: merge, parsers, categoriser) |
-| `./gradlew connectedDebugAndroidTest` | Instrumented tests (Room DAOs, the repository, migrations) on every device `adb` sees: a connected phone, the emulator, or both |
+| `./gradlew connectedDebugAndroidTest` | Instrumented tests (Room DAOs, the repository, migrations, the Compose screen flows) on every device `adb` sees: a connected phone, the emulator, or both. It uninstalls the app afterwards, so the debug build's lists are gone; `installDebug` again to keep using it |
 | `./gradlew assembleRelease` | Signed release APK — needs the signing properties below (Phase 10) |
 | `npm run changelog` | Regenerate `CHANGELOG.md` from commits (git-cliff) |
 | `npm --prefix firebase test` | Realtime Database rules tests against the Firebase emulator (from Phase 5) |

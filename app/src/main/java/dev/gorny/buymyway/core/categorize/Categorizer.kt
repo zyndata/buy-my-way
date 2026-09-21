@@ -32,6 +32,11 @@ class Categorizer(dictionary: Dictionary) {
         names.map { Entry(meaningful(TextKey.words(it)), categoryId) }.filter { it.words.isNotEmpty() }
     }
 
+    /** Every dictionary name with its folded form, for autocomplete. */
+    private val names: List<Pair<String, String>> = dictionary.categories.values.flatten()
+        .map { it to TextKey.fold(it) }
+        .distinctBy { it.second }
+
     private val overrides: List<Pair<String, String>> = dictionary.overrides.flatMap { (categoryId, words) ->
         words.map { TextKey.fold(it) to categoryId }
     }
@@ -59,6 +64,27 @@ class Categorizer(dictionary: Dictionary) {
             if (cmp >= 0) winners += entry.categoryId
         }
         return winners.singleOrNull() ?: BuiltinCategories.FALLBACK
+    }
+
+    /**
+     * Dictionary names for the add bar's autocomplete: those that start with what was typed
+     * first, then those with a later word that does, shorter names first. Typing without Polish
+     * letters finds them too („zolt" → „żółty ser").
+     */
+    fun suggest(typed: String, limit: Int): List<String> {
+        val key = TextKey.fold(typed)
+        if (key.length < MIN_SUGGEST) return emptyList()
+        return names
+            .mapNotNull { (name, folded) ->
+                when {
+                    folded.startsWith(key) -> 0 to name
+                    folded.contains(" $key") -> 1 to name
+                    else -> null
+                }
+            }
+            .sortedWith(compareBy({ it.first }, { it.second.length }, { it.second }))
+            .take(limit)
+            .map { it.second }
     }
 
     /** Letters matched, then (as a tie-break) fewer letters of inflection on either side. */
@@ -93,6 +119,7 @@ class Categorizer(dictionary: Dictionary) {
 
     companion object {
         private const val MIN_STEM = 3
+        private const val MIN_SUGGEST = 2
         private const val LONG_STEM = 4
         private const val SHORT_WORD = 5
         private const val MAX_ENDING = 3

@@ -102,4 +102,17 @@ class CategorizerTest {
         assertTrue("$right / 100 right; misses: ${results.filter { it.second != it.third }}", right >= 90)
         println("Categorizer sample: $right / 100 right, misses: ${results.filter { it.second != it.third }}")
     }
+
+    @Test
+    fun suggestionsStartWithWhatWasTypedEvenWithoutPolishLetters() {
+        val ziem = categorizer.suggest("ziem", 5)
+        assertEquals("ziemniaki", ziem.first())
+        assertTrue(ziem.toString(), ziem.all { TextKey.fold(it).contains("ziem") })
+        val zolt = categorizer.suggest("zolt", 5)
+        assertTrue(zolt.toString(), zolt.isNotEmpty() && zolt.all { TextKey.fold(it).startsWith("zolt") || TextKey.fold(it).contains(" zolt") })
+        // A later word matches too, after the names that start with it.
+        assertTrue("cebula czerwona" in categorizer.suggest("czerwona", 20))
+        assertEquals(emptyList<String>(), categorizer.suggest("z", 5))
+        assertEquals(3, categorizer.suggest("ma", 3).size)
+    }
 }

@@ -3,13 +3,83 @@
     <string name="app_name" translatable="false">Buy My Way</string>
 
     <string name="title_lists">Listy</string>
-    <string name="title_list">Lista</string>
     <string name="title_share">Udostępnianie</string>
     <string name="title_import">Import</string>
     <string name="title_settings">Ustawienia</string>
+    <string name="title_category_order">Kolejność kategorii</string>
+    <string name="title_default_order">Domyślna kolejność kategorii</string>
 
-    <string name="action_back">Wstecz</string>
     <string name="placeholder_body">Ten ekran powstanie w kolejnych etapach.</string>
-    <string name="placeholder_open_list">Otwórz przykładową listę</string>
-    <string name="placeholder_open_share">Udostępnij</string>
+
+    <!-- Actions -->
+    <string name="action_back">Wstecz</string>
+    <string name="action_more">Więcej opcji</string>
+    <string name="action_new_list">Nowa lista</string>
+    <string name="action_create">Utwórz</string>
+    <string name="action_save">Zapisz</string>
+    <string name="action_cancel">Anuluj</string>
+    <string name="action_add">Dodaj</string>
+    <string name="action_rename">Zmień nazwę</string>
+    <string name="action_delete">Usuń</string>
+    <string name="action_undo">Cofnij</string>
+    <string name="action_edit">Edytuj</string>
+    <string name="action_check">Oznacz jako kupione</string>
+    <string name="action_uncheck">Przywróć na listę</string>
+    <string name="action_move_up">Przesuń wyżej</string>
+    <string name="action_move_down">Przesuń niżej</string>
+    <string name="action_category_order">Kolejność kategorii</string>
+    <string name="action_check_all">Zaznacz wszystko</string>
+    <string name="action_uncheck_all">Odznacz wszystko</string>
+    <string name="action_clear_bought">Wyczyść kupione</string>
+    <string name="action_add_category">Dodaj kategorię</string>
+
+    <!-- Listy -->
+    <string name="lists_empty">Nie masz jeszcze żadnej listy.</string>
+    <string name="lists_empty_hint">Utwórz pierwszą przyciskiem „Nowa lista”.</string>
+    <string name="list_private">Lista prywatna</string>
+    <string name="list_progress">%1$d / %2$d</string>
+    <string name="list_progress_description">Kupione %1$d z %2$d</string>
+    <string name="field_list_name">Nazwa listy</string>
+    <string name="rename_list_title">Zmień nazwę listy</string>
+    <string name="deleted_list">Usunięto listę „%1$s”</string>
+
+    <!-- Lista -->
+    <string name="list_empty">Lista jest pusta.</string>
+    <string name="list_empty_hint">Wpisz na dole, co kupić. Kilka rzeczy oddziel przecinkami, np. „2 kg ziemniaki, mleko”.</string>
+    <string name="list_all_bought">Wszystko kupione.</string>
+    <string name="bought_header">Kupione (%1$d)</string>
+    <string name="state_bought">kupione</string>
+    <string name="state_to_buy">do kupienia</string>
+    <string name="state_expanded">rozwinięte</string>
+    <string name="state_collapsed">zwinięte</string>
+    <string name="add_hint">Dodaj, np. 2 kg ziemniaki</string>
+    <string name="category_chip_description">Kategoria: %1$s. Dotknij, aby zmienić</string>
+    <string name="revived">„%1$s” wraca z kupionych</string>
+    <string name="deleted_item">Usunięto „%1$s”</string>
+
+    <!-- Edycja -->
+    <string name="edit_title">Edytuj</string>
+    <string name="field_name">Nazwa</string>
+    <string name="field_quantity">Ilość</string>
+    <string name="field_quantity_error">Podaj liczbę, np. 1,5</string>
+    <string name="field_unit">Jednostka</string>
+    <string name="field_category">Kategoria</string>
+    <string name="field_note">Notatka</string>
+    <string name="photo_soon">Zdjęcia będą dostępne wkrótce</string>
+
+    <!-- Kategorie -->
+    <string name="category_order_hint">Ustaw kategorie w kolejności, w jakiej chodzisz po sklepie. Przeciągnij za uchwyt po prawej.</string>
+    <string name="field_category_name">Nazwa kategorii</string>
+    <string name="rename_category_title">Zmień nazwę kategorii</string>
+    <string name="delete_category_title">Usunąć kategorię „%1$s”?</string>
+    <string name="delete_category_body">Rzeczy z tej kategorii trafią do „Inne”.</string>
+
+    <!-- Ustawienia -->
+    <string name="settings_default_order">Domyślna kolejność kategorii</string>
+    <string name="settings_default_order_hint">Dla nowych list</string>
+    <string name="settings_theme">Motyw</string>
+    <string name="settings_theme_value">Jasny lub ciemny, zgodnie z ustawieniami systemu</string>
+    <string name="settings_version">Wersja</string>
+    <string name="settings_icons">Ikony</string>
+    <string name="settings_icons_value">Material Symbols, licencja Apache 2.0</string>
 </resources>

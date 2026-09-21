@@ -10,21 +10,32 @@ brought in from [Eat My Way](https://github.com/zyndata/eat-my-way) with one sha
 
 The interface is in **Polish**. The code, comments and documentation are in English.
 
-> **Status: early development — nothing usable yet.** [PLAN.md](PLAN.md) holds the
-> specification and the phases (Phase 11, Google Play, was dropped); [STATE.md](STATE.md)
-> records what has been decided and what is still open.
+> **Status: early development. It works as a private shopping list on one phone; nothing is
+> shared yet.** [PLAN.md](PLAN.md) holds the specification and the phases (Phase 11, Google
+> Play, was dropped); [STATE.md](STATE.md) records what has been decided and what is still
+> open.
 > Phase 0, a spike on Drive sharing and the Google project, is done. Its verdict: another
 > member cannot read a shared Drive file under the `drive.file` scope, so shared lists live in
 > Firebase Realtime Database instead (STATE.md decisions 19–24). A change reached the other
 > phone in ~0.1 s, and a push reached a closed app in under 3 s.
 > Phase 1 is done: the app builds (`./gradlew assembleDebug`, see
-> [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)) and opens on placeholder screens with their
-> Polish titles.
-> Phase 2 is done: the lists live in a local database on the phone. Every change is also kept
-> as an operation that waits to be sent, and one tested merge settles changes made on two
-> phones. A built-in dictionary of about 660 products files a typed item under its part of
-> the shop. There are no screens for it yet. CI runs the unit tests and the database tests on
-> an emulator. Phase 3, lists and items on screen, is next.
+> [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)).
+> Phase 2 is done: the lists live in a local database on the phone, and one tested merge
+> settles changes made on two phones.
+> Phase 3 is done: lists and items on screen. You can create lists and put them in your own
+> order. Type „2 kg ziemniaki, mleko" to add two items, each under its part of the shop. A tap
+> strikes an item through and moves it to „Kupione". Items and departments can be dragged
+> into the order you walk the shop, and a deleted list or item comes back with „Cofnij".
+> Everything works offline and without an account. Phase 4, Google sign-in and the lists in
+> the cloud, is next.
+
+## Screenshots
+
+<p>
+  <img src="docs/screenshots/lists.png" width="240" alt="Listy: one list, „Zakupy na sobote”, 2 of 10 bought">
+  <img src="docs/screenshots/list-checking.png" width="240" alt="A list grouped by department; „cebula” has just been ticked and is struck through">
+  <img src="docs/screenshots/list-bought.png" width="240" alt="The bottom of the list: „Kupione (2)” expanded, with „Wyczyść kupione”">
+</p>
 
 ## What makes it different
 
@@ -52,4 +63,6 @@ The interface is in **Polish**. The code, comments and documentation are in Engl
 
 ## Licence
 
-MIT — see [LICENSE](LICENSE).
+MIT — see [LICENSE](LICENSE). The icons in `app/src/main/res/drawable` (except the launcher
+icon) are [Material Symbols](https://github.com/google/material-design-icons) by Google,
+Apache License 2.0.

@@ -10,7 +10,7 @@ Any deviation from [PLAN.md](PLAN.md) must be recorded here before proceeding.
 | 0     | Spike: Drive sharing & Google project  | done    | 2026-09-21 |
 | 1     | Scaffold & CI                          | done    | 2026-09-21 |
 | 2     | Local data layer & the merge           | done    | 2026-09-21 |
-| 3     | Lists & items on screen                | pending |           |
+| 3     | Lists & items on screen                | done    | 2026-09-21 |
 | 4     | Google sign-in & Drive persistence     | pending |           |
 | 5     | Sharing & real-time                    | pending |           |
 | 6     | Photos                                 | pending |           |
@@ -24,8 +24,8 @@ Statuses: `pending` → `in-progress` → `done` (or `blocked` with a note, or `
 decision).
 
 The repository holds the plan, the workflow files, the repository hygiene (2026-09-18), the
-push sender's skeleton (`push/`, deployed), from Phase 1 the Android app's scaffold and, from
-Phase 2, its local data layer.
+push sender's skeleton (`push/`, deployed), from Phase 1 the Android app's scaffold, from
+Phase 2 its local data layer and, from Phase 3, its screens for private lists.
 
 **Phase 0 done (2026-09-21).** Under `drive.file`, a shared file is invisible to the other
 member's copy of the app. So shared lists and photos move to Firebase Realtime Database and
@@ -60,6 +60,28 @@ made 12 tests fail, so the tests do catch a wrong merge. **Not verified:** the L
 (CI's Ubuntu runner stands in again), and a physical phone for the Room tests. The merged
 manifest still declares Firebase's network permissions (there since Phase 1). Phase 2 adds
 none, and no code opens a connection or signs in. Phase 3 is next.
+
+**Phase 3 done (2026-09-21).** The app can be used. Listy: create, rename, delete with
+„Cofnij", drag to reorder (kept per device), „2 / 10" on each card. Lista: items under their
+department in the list's walk order. A tap strikes an item through, and 800 ms later it
+moves to the collapsed „Kupione". A tap there brings it back. Also „Wyczyść kupione",
+„Zaznacz / Odznacz wszystko", drag within a department, and the category order editor, where
+a list's own categories can be added, renamed and deleted. The add bar reads „2 kg
+ziemniaki, mleko" as two items, offers names from the dictionary and from this device's
+history, and shows the proposed department as a chip that can be changed. The edit sheet has
+a disabled photo slot. Ustawienia holds the default category order, the theme and the version.
+Haptics on tick. A list is swept once a day when it is opened (decision 42). No new
+background work, so nothing new wakes the device. Decisions 48–52.
+Verified: 54 JVM tests (16 new ones for the add-bar parser, quantities, ordering, the
+lingering tick and dictionary suggestions). 21 instrumented tests, with 4 new Compose flows:
+add → tick → „Kupione" → back; a category dragged by touch and one moved by the accessibility
+action, both persisted; a list deleted and restored with „Cofnij", and one committed when the
+snackbar closes; an item deleted from the edit sheet and restored. They passed on the API 35
+emulator and on a **physical S10e (Android 12)**. By hand on the emulator: the app was killed
+in the background, and the list, the tick and even the half-typed add-bar text came back
+(process death). The screenshots in the README were taken on the S10e. **Not verified:**
+TalkBack (dropped by the owner, decision 52), and the Linux machine (CI's Ubuntu runner stands
+in again). CI time: recorded after the push. Phase 4 is next.
 
 ## Decisions
 
@@ -477,6 +499,45 @@ Newest last. Every deviation from PLAN.md lands here **before** it is acted on.
     CI. Also for Phase 3: PLAN.md's „emulator API 34" is already API 35 (decision 38), so
     Phase 3 only adds its tests to the existing job. The add bar's quantity/unit parser is
     written as the pure parser Phase 7's dictation will reuse.
+
+### 2026-09-21 — Phase 3 (lists & items on screen)
+
+48. **Phase 3 libraries, all on PLAN.md's stack list.** `lifecycle-viewmodel-compose` and
+    `lifecycle-runtime-compose` 2.11.0 ("Lifecycle + ViewModel"; Navigation already brings
+    2.11.0, so they are named, not added), and Compose's `ui-test-junit4` (androidTest) with
+    `ui-test-manifest` (debug only) from the Compose BoM ("Compose UI test"). `buildConfig` is
+    switched on so that Ustawienia can show `BuildConfig.VERSION_NAME`. No other dependency.
+    ViewModels are built with the `viewModel { … }` initializer from the `AppContainer`, still
+    no DI framework.
+49. **Drag starts on a handle, not after a long press (refines decision 45).** On a row, a long
+    press opens the edit sheet, and on a list card it opens the menu (PLAN.md *Screens*). So
+    the drag needs its own place, the ⋮⋮ handle at the end of the row, and it starts at
+    once on it with `detectVerticalDragGestures`. The rest is as decided: in-house, on
+    `LazyListState`. Every draggable row also has TalkBack actions „Przesuń wyżej" / „Przesuń
+    niżej", so reordering does not need a drag at all. A row is opened for editing by a long
+    press only. PLAN.md's "long-press **or swipe**" is kept to the first. A swipe on a list
+    row is too easily mistaken for a scroll in a shop.
+50. **What Phase 3 leaves to later phases, and one small addition.** The card menu has
+    „Zmień nazwę" and „Usuń". „Udostępnij" and „Uprawnienia" arrive with Phase 5, and the mic
+    button with Phase 7, so no control is shown that does nothing. The category order editor
+    (a screen, `list/{listId}/categories`) can also add, rename and delete a list's *own*
+    categories. The repository has had those ops since Phase 2, decision 9 promises them, and
+    without a screen they would be unreachable. The nine departments can only be reordered.
+51. **„Strike through, then slide" is a view over Room, not a delayed write.** A tap commits
+    `item.check` at once, so the tick survives the app dying in the next 800 ms. The screen
+    keeps the item in its category, struck through, for 800 ms (`ListViews.detail`'s
+    `lingering`), then lets it move to „Kupione". Undo from „Kupione" is an ordinary uncheck.
+    The deletes held back by „Cofnij" (decision 43) are committed when the snackbar closes
+    without „Cofnij": by timeout, by the next delete replacing it, or by leaving the screen.
+    Only the app dying loses one, which is the safe side, as decided.
+52. **No manual TalkBack check (owner, 2026-09-21).** Phase 3's acceptance criterion
+    "TalkBack reads the list sensibly (manual check, recorded)" is dropped. The owner does
+    not use TalkBack and does not want to verify it. What task 7 built stays, because it costs
+    nothing and Lint requires the descriptions: content descriptions, the „kupione / do
+    kupienia" state on every row, headings, and the move actions of decision 49. Nothing
+    checks by hand that they read well, and no later phase will. Asked at the same time: a
+    mic that types the spoken name into the add field, as in Listonic. The owner chose to keep
+    Phase 7 as planned (dictation, the parser, the review sheet), so Phase 3 has no mic.
 
 ## Open questions
 
