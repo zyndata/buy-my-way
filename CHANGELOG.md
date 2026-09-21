@@ -14,17 +14,20 @@ project adheres to [Semantic Versioning](https://semver.org).
 - Drop Google Play and publish the consent screen
 - Record the published consent screen
 - Record pre-phase-2 decisions (tests, public repo, invite host, expiry)
+- Record pre-phase-3 decisions (undo, list order, drag, icons, device checks)
 
 ### Features
 
 - Phase 0 — Drive sharing spike and the Google project
 - Phase 1 — scaffold & CI
 - Phase 2 — local data layer & the merge
+- Phase 3 — lists & items on screen
 
 ### Miscellaneous
 
 - Plan, workflow and repository hygiene
 - **spike:** Phase 0 spike app and push sender skeleton
+- Update CHANGELOG
 - Update CHANGELOG
 - Update CHANGELOG
 - Update CHANGELOG
