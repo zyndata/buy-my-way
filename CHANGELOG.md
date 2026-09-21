@@ -17,11 +17,13 @@ project adheres to [Semantic Versioning](https://semver.org).
 ### Features
 
 - Phase 0 — Drive sharing spike and the Google project
+- Phase 1 — scaffold & CI
 
 ### Miscellaneous
 
 - Plan, workflow and repository hygiene
 - **spike:** Phase 0 spike app and push sender skeleton
+- Update CHANGELOG
 - Update CHANGELOG
 - Update CHANGELOG
 
