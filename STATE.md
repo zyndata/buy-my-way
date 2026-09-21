@@ -244,7 +244,9 @@ Newest last. Every deviation from PLAN.md lands here **before** it is acted on.
       after 7 days in Testing (open question 7). The app now asks only for basic sign-in
       scopes (decision 21), and the Apps Script's two scopes are authorised by the owner
       alone, so this needs no verification. At worst it shows the "unverified app" notice,
-      and 100 users is far above a household.
+      and 100 users is far above a household. **Published 2026-09-21.** Afterwards the
+      script still answered correctly (`GET` → `{"ok":true}`; a forged token →
+      `unauthenticated`, which means `UrlFetchApp` is still authorised).
     - The privacy page is still shown: Google links it on the sign-in sheet and in Google
       Account → Connections. Nothing enforces its content any more, but it should tell the
       truth. So Eat My Way's `privacy.html` gets a Buy My Way section (open question 6),
