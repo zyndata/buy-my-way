@@ -12,17 +12,21 @@ The interface is in **Polish**. The code, comments and documentation are in Engl
 
 > **Status: planned, nothing built yet.** [PLAN.md](PLAN.md) holds the specification and the
 > twelve phases; [STATE.md](STATE.md) records what has been decided and what is still open.
-> Phase 0, a spike on Drive sharing, is in progress: the tooling is in `spike/` and `push/`,
-> and the measurements are pending.
+> Phase 0, a spike on Drive sharing, is in progress. Its verdict is in: another member cannot
+> read a shared Drive file under the `drive.file` scope, so shared lists now live in Firebase
+> Realtime Database instead (STATE.md decisions 19–21). The latency measurements are pending.
 
 ## What makes it different
 
-- **Your lists stay on your Drive.** The documents and photos of every list live in a
-  `Buy My Way` folder on the list owner's Google Drive, shared with the members through
-  Drive's own permissions. There is no server of ours and no database holding your lists.
-- **Live, without draining the battery.** A tiny, short-lived log of changes in Firebase
-  Realtime Database is what moves another person's screen in under a second while the list is
-  open. When the app is closed, a push message wakes it — no background service, no polling.
+- **Your lists are on your phone first.** The app works fully offline and without an account;
+  a list you never share never leaves the device.
+- **Shared lists live in a Firebase project, not on a server of ours.** When you sign in, your
+  lists and their photos go to a Firebase Realtime Database that only the list's members can
+  read, enforced by the database's rules. The app asks Google for your name and email and
+  nothing else: no access to your Drive, your contacts or your location.
+- **Live, without draining the battery.** Another person's screen moves in under a second while
+  the list is open. When the app is closed, a push message wakes it — no background service,
+  no polling.
 - **Nothing you did not ask for.** No premium tier, no ads, no leaflets, no price tracking, no
   analytics, no location or contacts permission.
 - **Speaks Eat My Way.** The nine departments of the shop are the same, so a shared week's list

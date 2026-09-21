@@ -7,7 +7,7 @@
  *
  * Script properties (Project settings → Script properties; ids, not secrets):
  *   FIREBASE_API_KEY     the Web API key of the Firebase project
- *   FIREBASE_PROJECT_ID  e.g. buy-my-way
+ *   FIREBASE_PROJECT_ID  buy-my-way-c3949
  *   FCM_TOKEN            the one device to push to (Phase 0 only)
  *
  * No service-account key: the script's Cloud project is the Firebase project, so

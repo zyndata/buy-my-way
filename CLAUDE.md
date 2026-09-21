@@ -1,11 +1,11 @@
 # Buy My Way — project guidance
 
 Shared shopping-list app for Android (Kotlin, Jetpack Compose, Polish UI), the shop-side
-companion of Eat My Way. Room is the source of truth on the device; the user's Google Drive
-(`drive.file`) holds the list documents and photos; Firebase Realtime Database carries a
-short-lived operation log so a change reaches another open screen in under a second; FCM,
-sent by a Google Apps Script, wakes closed apps. No server of ours, no premium, no ads, no
-analytics.
+companion of Eat My Way. Room is the source of truth on the device; Firebase Realtime
+Database holds the shared lists and their photos, one node per item, so a change reaches
+another open screen in under a second; FCM, sent by a Google Apps Script, wakes closed apps.
+No Google Drive access (Phase 0 verdict, STATE.md decisions 19–21). No server of ours, no
+premium, no ads, no analytics.
 
 - Full specification and phase breakdown: [PLAN.md](PLAN.md)
 - Progress, decisions, open questions: [STATE.md](STATE.md)
@@ -40,7 +40,7 @@ analytics.
   do, and the screenshots. Re-take screenshots whenever a screen in them changed.
 - **Code and comments in English. All user-facing UI text in Polish.**
 - **Minimal dependencies** — every package must justify itself with a STATE.md decision; this
-  app holds a Google token with write access to a folder on the user's Drive.
+  app holds a Firebase session that can read and write every list its user belongs to.
 - **Battery is a requirement.** No foreground service, no persistent background connection, no
   polling. Background work goes through WorkManager with constraints or through FCM. A phase
   that adds background work has to say in STATE.md what wakes the device and how often.
@@ -63,8 +63,8 @@ analytics.
   is what CI runs; `connectedDebugAndroidTest` is the emulator suite; the Firebase rules tests
   live in `firebase/` and run with the emulator suite via npm. Prefer these over ad-hoc
   commands — they behave the same on both machines and in CI.
-- **Public repository.** Never commit a credential, a Drive file id from a real account, or a
-  real person's email in a fixture.
+- **Public repository.** Never commit a credential, a real uid or list id, or a real person's
+  email in a fixture.
 - **Reference material, not a dependency:** `D:\Work\eat-my-way\android\listonic` (and the other
   folders beside it) are decompiled third-party apps kept for ideas about categories, voice
   input and live-change UX. Nothing is copied from them, and their premium, ads and leaflet

@@ -50,7 +50,7 @@ These are the real project settings. Only the RTDB rules are temporary.
 2. *Project settings → Google Cloud Platform project → Change project* → the **project
    number** of `buy-my-way` (Firebase → Project settings → General). This is what lets
    `ScriptApp.getOAuthToken()` call FCM without a service-account key.
-3. *Script properties*: `FIREBASE_API_KEY`, `FIREBASE_PROJECT_ID` = `buy-my-way`, `FCM_TOKEN`
+3. *Script properties*: `FIREBASE_API_KEY`, `FIREBASE_PROJECT_ID` = `buy-my-way-c3949`, `FCM_TOKEN`
    (from the phone, step 3.9 below).
 4. *Deploy → New deployment → Web app*, execute as **me**, access **Anyone**. Authorise. Put
    the `/exec` URL into `spike.properties` as `pushEndpoint`.

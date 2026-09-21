@@ -29,38 +29,33 @@ Taken deliberately from what the reference app (Listonic) does that this one mus
 
 **A change one person makes reaches the other person's open screen in under a second, and
 their closed app within a few seconds — without draining anyone's battery.** Every
-architectural choice below serves that sentence; where it collides with „the data lives on the
-user's Drive", this is how the collision is resolved:
+architectural choice below serves that sentence:
 
-- the **user's Google Drive holds the data** (the list documents and the photos), because that
-  is where the user's data belongs and it costs nothing;
-- **Firebase Realtime Database carries the signal** — a short-lived log of the operations
-  people perform („Ania checked *mleko* at 17:02:11"), which is what makes the other screen
-  move instantly, and is pruned after a week;
+- **Firebase Realtime Database holds the shared lists** — one node per item carrying its
+  current state, written the moment someone changes it, which is what makes the other screen
+  move instantly; photos sit beside them, downscaled;
+- **Room on the phone is the source of truth for what the screen shows**, so the app works
+  offline and signed out, and a list that is never shared never leaves the device;
 - **Firebase Cloud Messaging wakes a closed app**, sent by a ~40-line Google Apps Script
   that runs under the owner's Google account for free.
 
-The signal is not a second copy of the data: an operation is a fact about one change, the Drive
-document is the folded result of all of them, and a device that has the document plus the
-operations newer than it has the whole list. STATE.md decision 1 records why this hybrid was
-chosen over „Firebase holds everything" and „Drive alone with polling".
+The first plan kept the list documents on the owner's Google Drive with RTDB as the fast
+signal. Phase 0 showed that under the `drive.file` scope another member's copy of the app
+cannot see a shared file at all (STATE.md decisions 19–21), so the lists moved into RTDB and
+Drive left the app.
 
 ## Architecture
 
 ```
-  phone A (Compose UI)                              phone B
-  ┌────────────────────┐                            ┌────────────────────┐
-  │ Room (source of    │                            │ Room               │
-  │ truth on device)   │                            │                    │
-  │  ├ lists, items    │      Firebase RTDB         │                    │
-  │  ├ outbox (ops)    │──op──▶ /lists/{id}/ops ──▶ listener ──▶ apply   │
-  │  └ applied ops     │                            │   (strike-through, │
-  └───────┬────────────┘                            │    then „Kupione") │
-          │ debounced 3 s                           └───────▲────────────┘
-          ▼                                                 │ on open / on push
-   Google Drive (owner's account, drive.file scope)         │
-     Buy My Way/<list>/list.json  ◀── snapshot = fold(ops) ─┘
-     Buy My Way/<list>/photos/*.webp
+  phone A (Compose UI)                                  phone B
+  ┌────────────────────┐                                ┌────────────────────┐
+  │ Room (source of    │      Firebase RTDB             │ Room               │
+  │ truth on device)   │   /lists/{id}/items/{itemId}   │                    │
+  │  ├ lists, items    │──write──▶ item node ──child──▶ listener ──▶ apply  │
+  │  └ outbox          │   (rules: newer write wins)    │   (strike-through, │
+  └────────────────────┘   /photos/{id}/{itemId}        │    then „Kupione") │
+                                                        └───────▲────────────┘
+                                                                │ on open / on push
                                                   Apps Script (push sender)
    phone A ──POST {listId} + Firebase ID token──▶  verifies token, reads members
                                                    & FCM tokens from RTDB, sends
@@ -73,16 +68,16 @@ chosen over „Firebase holds everything" and „Drive alone with polling".
   a network response. The app is fully usable offline; a private list never needs sign-in.
 - **Every change is an operation** (`Op`): `item.put`, `item.check`, `item.delete`,
   `list.put`, `category.put`, `category.delete`, `items.clearChecked`. An op is applied to
-  Room immediately (optimistic), written to the RTDB op log (the Firebase SDK queues it
-  offline), and folded into the Drive snapshot by a debounced background write.
+  Room immediately (optimistic), kept in an outbox, and written to RTDB as the new state of the
+  node it touches (an item, the list meta, a category), in one multi-path update. The Firebase
+  SDK queues the write while offline.
 - **Merging is deterministic.** Item content fields are last-writer-wins by `updatedAt`; the
   checked state is last-writer-wins by `checkedAt` *separately*, so a tick racing a note edit
-  keeps both; a tombstone (`deletedAt`) beats any older write; ops are idempotent by id, so
-  applying the log twice is harmless. The same pure Kotlin function folds ops into Room and
-  into the Drive snapshot, and it is unit-tested to convergence (Phase 2).
-- **Drive is written by whoever made the change**, not only by the owner — every editor holds
-  `writer` on the list folder. Two editors writing within seconds converge because the writer
-  re-reads the file's `version` after upload and re-merges when it moved (Phase 4).
+  keeps both; a tombstone (`deletedAt`) beats any older write; applying the same state twice is
+  harmless. The same pure Kotlin function merges a remote node into Room, and it is
+  unit-tested to convergence (Phase 2). **The RTDB rules enforce the same order on the
+  server**: a write whose `updatedAt` (or `checkedAt`) is older than the stored one is
+  rejected, so a phone coming back from a week offline cannot overwrite a newer change.
 - **The RTDB connection exists only while a list is on screen** (plus a 30 s grace period),
   never in the background. Background freshness comes from FCM and from a coarse WorkManager
   catch-up. See *Battery policy*.
@@ -98,18 +93,18 @@ Versions are „latest stable at the time of Phase 1" and are pinned there in
   WebP encoding), **targetSdk / compileSdk = current** (36 at the time of writing).
 - **Jetpack Compose** with **Material 3**, Navigation Compose, Lifecycle + ViewModel,
   `kotlinx.coroutines` / `Flow`.
-- **Room** (KSP) for local data, **WorkManager** for the Drive write-behind, catch-up and
+- **Room** (KSP) for local data, **WorkManager** for the outbox flush, catch-up and
   periodic sync, **DataStore** (preferences) for small settings.
 - **kotlinx.serialization** for every JSON document and payload.
 - **Firebase** (BoM): `firebase-auth`, `firebase-database`, `firebase-messaging`. Nothing else
   from Firebase — no Analytics, no Crashlytics, no Storage.
 - **Google identity**: `androidx.credentials` + `googleid` (Sign in with Google → Firebase
-  Auth) and `play-services-auth` `AuthorizationClient` for the `drive.file` scope.
-- **OkHttp** + a thin hand-written Drive REST v3 client — not `google-api-client`, which
-  drags in Guava and a HTTP stack of its own. Eat My Way talks to the same endpoints from the
-  browser; the wrapper is ~300 lines.
-- **Coil** (with the OkHttp client above) for photos: memory/disk cache and lifecycle-aware
-  loading are not worth reimplementing.
+  Auth). No Drive scope and no `AuthorizationClient` (STATE.md decision 21).
+- **OkHttp** for the two plain HTTPS calls the app makes outside Firebase: the push endpoint
+  (Phase 9) and the GitHub update check (Phase 10).
+- **Photos** come out of RTDB as bytes; whether Coil earns its place for the memory/disk cache
+  and lifecycle-aware decoding, or a small in-house cache does, is decided in Phase 6 and
+  recorded in STATE.md.
 - **Testing**: JUnit 4 + `kotlinx-coroutines-test` for JVM unit tests (all pure logic lives in
   plain Kotlin so it is testable without Android); AndroidX Test + Compose UI test on an
   emulator for Room and the screen flows; **Firebase Emulator Suite** for the RTDB rules
@@ -118,33 +113,36 @@ Versions are „latest stable at the time of Phase 1" and are pinned there in
   No ktlint/detekt — `.editorconfig` carries the formatting rules and Android Studio applies
   them on both machines.
 
-Every dependency outside this list needs a STATE.md decision entry. This app holds a Google
-token with write access to a folder on the user's Drive; the fewer libraries, the fewer places
-that token can go.
+Every dependency outside this list needs a STATE.md decision entry. This app holds a Firebase
+session that can read and write every list its user belongs to; the fewer libraries, the fewer
+places that session can go.
 
 ## Security
 
 - `google-services.json` **is committed** — it is configuration, not a credential (Firebase's
   own guidance). The Android API key it holds is restricted in Google Cloud to this package
-  name and the registered signing SHA-1s. What actually protects the data is the RTDB rules
-  and Drive's own permissions.
+  name and the registered signing SHA-1s. What actually protects the data is the RTDB rules.
 - Never in the repo: the release keystore and its passwords (GitHub Secrets; locally
   `~/.gradle/gradle.properties`), OAuth client secrets (none are needed — Android clients are
-  public), Google tokens, anyone's Drive file ids or emails in test fixtures.
-- **Drive scope is `drive.file` only**: the app sees the folders it created and the ones shared
-  into it, never the rest of the user's Drive. `drive.appdata` for the per-user preference
-  file. Both are non-sensitive scopes in Google's classification; the OAuth consent screen
-  stays in *Testing* with the household as test users (100-user cap, no verification).
-- Tokens live in memory and in the Google/Firebase SDKs' own storage; the app never writes an
-  access token to Room, DataStore, logs or an Intent.
-- RTDB rules (Phase 5) are the authorization layer for the op log: only members read a list's
-  node, only editors and the owner create ops, nobody updates an op, only the owner writes
-  members and deletes ops. Op payloads are size-limited and shape-validated in the rules.
+  public), Google tokens, real uids, list ids or emails in test fixtures.
+- **No Drive scope.** Sign in with Google asks only for the basic profile scopes; the app holds
+  no token that can touch the user's Drive (STATE.md decision 21). The consent screen can
+  therefore leave *Testing* without verification.
+- **The RTDB rules are the only authorization layer** for lists (Phase 5): only members read a
+  list's nodes and photos, only editors and the owner write items and categories, a write
+  older than the stored `updatedAt`/`checkedAt` is rejected, only the owner writes members,
+  meta and deletes the list. Item and photo payloads are size-limited and shape-validated in
+  the rules.
+- **Where the data is**: in the owner's Firebase project. Its members reach it through the
+  rules; the project owner can also read it in the Firebase console. For a household on the
+  owner's own project that is the owner; SECURITY.md and the README say so plainly.
+- The Firebase session lives in the Firebase SDK's own storage; the app never writes an ID
+  token to Room, DataStore, logs or an Intent.
 - The push endpoint (Apps Script) accepts a request only with a valid Firebase ID token whose
   user is a member of the list named, rate-limits per list, and sends nothing but a list id and
   a change kind in the FCM payload — item names never travel through FCM.
-- A photo is downscaled on the device before upload, stored on the list owner's Drive, and
-  reachable only through Drive's permissions on that folder.
+- A photo is downscaled and stripped of EXIF on the device before upload, and readable only by
+  the list's members through the rules.
 
 ## Data model
 
@@ -157,11 +155,10 @@ data class ShoppingList(
   val name: String,
   val ownerUid: String?,       // null for a private list of a signed-out user
   val shared: Boolean,         // true once it has a members node
-  val driveFolderId: String?,  // null until first sync
-  val driveFileId: String?,
+  val synced: Boolean,         // true once it exists in RTDB (signed in)
   val categoryOrder: List<String>,   // category ids, the walk order of this list
   val createdAt: Long, val updatedAt: Long,
-  val snapshotAt: Long         // server time of the newest op folded into list.json
+  val seenUpTo: Long           // server time of the newest remote change applied to Room
 )
 
 data class Item(
@@ -170,7 +167,7 @@ data class Item(
   val quantity: Double?, val unit: String?,   // „2", „kg"; both optional
   val categoryId: String,                     // one of the list's categories, „inne" by default
   val note: String?,
-  val photoFileId: String?,                   // Drive file id in <list>/photos/
+  val photoAt: Long?,                         // set when /photos/{listId}/{id} exists; null = none
   val checked: Boolean, val checkedAt: Long?, val checkedBy: String?,
   val createdAt: Long, val createdBy: String?,
   val updatedAt: Long, val updatedBy: String?,
@@ -204,8 +201,8 @@ data class Member(val uid: String, val role: Role, val since: Long,
   add its own categories and reorder all of them; the order is the list's, shared with it.
 - **Auto-categorisation**: a bundled Polish product dictionary (`assets/products-pl.json`,
   ~600 common names → category id, built and maintained in-repo) proposes a category when an
-  item is typed or dictated; the user's corrections are remembered per user in `prefs.json`
-  (appDataFolder) and win over the dictionary. Never a network call.
+  item is typed or dictated; the user's corrections are remembered per user in `/users/{uid}/prefs`
+  and win over the dictionary. Never a network call to categorise.
 - **Merge rules** (`core/sync/Merge.kt`, pure): `ItemPut` wins if `at > item.updatedAt`;
   `ItemCheck` wins if `at > item.checkedAt`; `ItemDelete` wins over anything older than it and
   is never undone by an older `ItemPut`; `ClearChecked` is an `ItemDelete` for every item
@@ -213,60 +210,42 @@ data class Member(val uid: String, val role: Role, val since: Long,
 
 ## Storage layout
 
-### Google Drive (list owner's account)
-
-```
-Buy My Way/                          ← app root folder in „Mój dysk", found by appProperties
-  Biedronka (a1b2c3…)/               ← one folder per list; the (id) suffix keeps names unique
-    list.json                        ← the snapshot, below
-    photos/
-      <itemId>.webp                  ← ≤ 1200 px, quality 80, typically 60–150 kB
-appDataFolder/
-  prefs.json                         ← per-user: category memory, sort choices, last opened
-```
-
-`list.json`:
-
-```json
-{ "v": 1, "id": "…", "name": "Biedronka", "ownerUid": "…",
-  "categories": [{"id":"warzywa","name":"Warzywa i owoce","builtin":true}, …],
-  "categoryOrder": ["warzywa","nabial",…],
-  "items": { "<itemId>": { …Item fields… } },
-  "snapshotAt": 1758210000000 }
-```
-
-- A **private list** has the same folder, unshared. A **shared list**'s folder carries a Drive
-  permission per member: `writer` for editors, `reader` for viewers, mirrored from RTDB
-  `members` by the owner's device (only the owner's device changes Drive permissions).
-- The folder is visible in the owner's Drive on purpose: it is their data and they can open,
-  copy or delete it with Drive itself. The app must survive that (a missing file is treated as
-  „deleted by the owner" and the list is offered for removal, never re-created silently).
-
 ### Firebase Realtime Database
 
 ```
 /users/{uid}                 { name, email, photoUrl, updatedAt }        write: self
+/users/{uid}/prefs           { categoryMemory, defaultOrder, updatedAt } read/write: self
 /emailIndex/{sha256(email)}  uid                                          write: self
 /fcmTokens/{uid}/{token}     { at }                                       write: self; read: nobody (the script reads as owner)
 /userLists/{uid}/{listId}    role                                         write: the list's owner
-/lists/{listId}/meta         { name, ownerUid, driveFolderId, driveFileId, updatedAt }
+/lists/{listId}/meta         { name, ownerUid, categoryOrder, updatedAt } write: owner (name, order: editors too)
 /lists/{listId}/members/{uid} { role, since }                             write: owner
-/lists/{listId}/ops/{opId}   { actor, at: ServerValue.TIMESTAMP, type, payload }
-                              create: editor/owner; update: never; delete: owner (pruning)
+/lists/{listId}/categories/{catId} { name, builtin, updatedAt, deletedAt } write: editor/owner
+/lists/{listId}/items/{itemId}  { …Item fields… }                         write: editor/owner, only if not older
 /lists/{listId}/presence/{uid} timestamp, removed by onDisconnect
+/photos/{listId}/{itemId}    { webp: base64, w, h, by, at }               read: members; write: editor/owner; ≤ 110 kB
 /invites/{token}             { listId, role, by, expiresAt }              token: 128-bit random
 ```
 
-- A member finds their lists through `/userLists/{uid}`, then the Drive ids in `meta`.
-- **Pruning**: the owner's device deletes ops older than 7 days each time it opens the list.
-  A device offline for longer reads the snapshot (which contains everything) and only the ops
-  after `snapshotAt`. Volume is tiny: an op is ~200 bytes, a busy family produces a few
-  hundred a week.
+- A member finds their lists through `/userLists/{uid}`, then reads `meta`, `categories` and
+  `items` of each.
+- **An item node is the whole truth about that item.** A write carries the full content fields
+  with `updatedAt`/`updatedBy`, or the checked fields with `checkedAt`/`checkedBy`, or
+  `deletedAt`; the rules accept it only if its timestamp is not older than the stored one.
+  A device catching up reads `items` ordered by `updatedAt` from its `seenUpTo` (indexed in
+  the rules), so after a month offline it downloads only what changed.
+- **Tombstones** (`deletedAt`) are kept 30 days so a device that was offline learns about the
+  deletion, then the owner's device removes the node and its photo.
+- **Photos** live under a separate root so reading a list never downloads one; a row fetches its
+  photo only when it is shown, and the device keeps a disk cache.
 - **Presence** exists so the push sender can skip people who are looking at the list right
-  now (they got the op through the listener already) — fewer pushes, fewer wake-ups.
-- Firebase plan: **Spark** (free). Realtime Database only; the free limits (1 GB stored,
-  10 GB/month egress, 100 simultaneous connections) are two orders of magnitude above what a
-  household can produce, and the op log is pruned.
+  now (they got the change through the listener already) — fewer pushes, fewer wake-ups.
+- Firebase plan: **Spark** (free). The free limits (1 GB stored, 10 GB/month downloaded, 100
+  simultaneous connections) hold a household's lists with room to spare; photos are what
+  count, at ≤ 80 kB each about ten thousand of them.
+- A **private list of a signed-out user** exists only in Room. Signing in uploads it
+  (members = the owner alone), which is also what gives the user a second device and a
+  backup.
 
 ### Push sender (Google Apps Script, `push/`)
 
@@ -274,7 +253,7 @@ A web app deployed from `push/Code.gs` + `push/appsscript.json`, *Execute as: me
 anyone*, bound to the Firebase project's Cloud project so `ScriptApp.getOAuthToken()` carries
 the `firebase.database` and `firebase.messaging` scopes — **no service-account key anywhere**.
 
-1. Client: after writing an op, unless every other member is present, `POST <script url>`
+1. Client: after a change is written, unless every other member is present, `POST <script url>`
    with `{ listId, kind }` and the user's Firebase ID token — debounced 5 s per list, so a
    burst of ten items is one push saying „10 zmian".
 2. Script: validates the ID token with Firebase Auth REST (`accounts:lookup`, public Web API
@@ -283,8 +262,8 @@ the `firebase.database` and `firebase.messaging` scopes — **no service-account
    token (`android.priority: high`, payload `{ listId, kind, count, actor }`), and deletes
    tokens FCM reports as unregistered.
 3. Receiver: `FirebaseMessagingService` enqueues an expedited `CatchUpWorker(listId)`, which
-   reads the ops since the device's last seen time, applies them, and posts a notification
-   when the list is not on screen.
+   reads the items changed since the device's `seenUpTo`, applies them, and posts a
+   notification when the list is not on screen.
 
 Latency 1–3 s (Apps Script cold start); free on a consumer Google account (20 000 URL fetches
 a day; a push is one fetch per recipient). If it ever proves unreliable, the same client
@@ -303,12 +282,14 @@ This is a requirement, not a preference. Concretely:
   → expedited one-shot `CatchUpWorker`. Plus one **periodic** `CatchUpWorker` every 3 hours
   with `NetworkType.CONNECTED` and `requiresBatteryNotLow`, as insurance when a push was
   dropped. Nothing polls.
-- Drive writes are coalesced: one `SnapshotWorker` per list, debounced 3 s, unique work so
-  ten ticks in a row are one upload.
-- Photos are downscaled before upload and cached by Coil; a list screen never downloads a
-  photo it does not show.
-- On app open: one read of `/userLists`, one `meta` read per list, ops since last seen — a few
-  kilobytes.
+- Writes leave through the Firebase SDK while the connection is open. An outbox entry is
+  cleared only when its write is acknowledged; entries still pending when the connection
+  closes are flushed by one `OutboxWorker` (unique work, `NetworkType.CONNECTED`), which goes
+  online, re-sends them (state writes are idempotent) and goes offline again.
+- Photos are downscaled before upload and cached on the device; a list screen never downloads
+  a photo it does not show.
+- On app open: one read of `/userLists`, one `meta` read per list, the items changed since
+  `seenUpTo` — a few kilobytes.
 - Verification (Phase 9): a day of ordinary use leaves the app absent from Android's battery
   usage screen; `dumpsys batterystats` shows no wakelocks held by the app outside worker
   runs; the Energy Profiler shows a flat line while a list is open but idle.
@@ -319,14 +300,14 @@ This is a requirement, not a preference. Concretely:
   My Way into a shared list, or turns on notifications — never at first launch. Private lists
   work signed-out and are adopted (uploaded) when the user signs in.
 - Sign in with Google via Credential Manager gives an ID token → `FirebaseAuth
-  .signInWithCredential`. The Drive scopes are requested separately with `AuthorizationClient`
-  the first time a Drive call is needed, so the consent screen explains itself in context.
+  .signInWithCredential`. That is the only Google permission the app asks for: basic profile,
+  no Drive (STATE.md decision 21).
 - One Google Cloud project = the Firebase project; one Android OAuth client per signing
   SHA-1 (each developer machine's debug key, the release key, and later Play App Signing's
   key), one Web client id used as `serverClientId`. All ids are public; they live in
   `gradle.properties`.
-- Sign-out clears Room, DataStore and the Firebase session, and revokes nothing on Drive — the
-  data stays the user's.
+- Sign-out clears Room, DataStore and the Firebase session. The lists stay in RTDB for the
+  other members and for the user's next sign-in.
 - A second account on the same device is not supported: signing in as someone else is a
   sign-out first, with the sentence that says so.
 
@@ -335,21 +316,20 @@ This is a requirement, not a preference. Concretely:
 - Roles: **owner** (everything, including permissions and deletion), **editor** (add, edit,
   check, delete items, add categories), **viewer** (sees and cannot touch — not even check;
   STATE.md decision 6 keeps the rules to one question per write).
-- Invite by **link** (`https://buymyway.gorny.dev/i/<token>` — an App Link into the app,
-  served as a static redirect page by the existing web host; the token is one-use-per-person,
+- Invite by **link** (an App Link into the app on the Eat My Way host, e.g.
+  `https://eatmyway.gorny.dev/bmw/i/<token>` — STATE.md open question 4 —, served as a static
+  redirect page; the token is one-use-per-person,
   7-day expiry) or by **email** (the owner types an address; if that person has signed in
   before, `/emailIndex` resolves them and they see the list on next open; otherwise the app
   offers the link to send).
 - Accepting an invite writes the member into `/lists/{listId}/members` under a rule that
-  checks the invite; the owner's device notices the new member on its next open and adds the
-  Drive permission. Until it does, the new member sees the list *through the ops* it can read
-  but not the snapshot — the screen says „Czekam, aż właściciel udostępni pliki" rather than
-  showing an empty list.
-- Changing a role or removing a member is the owner's action: RTDB first (instant), Drive
-  permission mirrored by the owner's device. A removed member's device gets a permission-denied
-  on its next read, drops the list locally and says so.
-- „Uczyń prywatną" removes all members and permissions; „Udostępnij" turns a private list into
-  a shared one by creating the members node with the owner in it.
+  checks the invite. The rules then let them read the whole list and its photos at once;
+  there is nothing for the owner's device to mirror.
+- Changing a role or removing a member is the owner's action and takes effect in the rules
+  immediately. A removed member's device gets a permission-denied on its next read, drops the
+  list locally and says so.
+- „Uczyń prywatną" removes all members; „Udostępnij" turns a private list into a shared one by
+  creating the members node with the owner in it.
 
 ## Voice input
 
@@ -448,7 +428,8 @@ two machines:
 # Phases
 
 Each phase is one conversation, started with `/phase N`. Phase 0 is a spike whose outcome can
-change the plan; its findings are recorded in STATE.md before Phase 1 begins.
+change the plan; its findings are recorded in STATE.md before Phase 1 begins. It did change it:
+Phases 2, 4, 5 and 6 below were amended on 2026-09-21 (STATE.md decisions 19–21).
 
 ## Phase 0 — Spike: Drive sharing under `drive.file`, and the Google project
 
@@ -476,11 +457,16 @@ or Testing mode forever) or Firebase-held data. Find out before writing the sync
 5. Record the findings in STATE.md (a decision each): the scope verdict, the latencies, any
    surprise in the Google console setup. Adjust PLAN.md Phase 4/5 if the verdict is negative.
 
+**Verdict (2026-09-21): it cannot.** The second account got an empty list and 404s; the plan
+below is already amended (STATE.md decisions 19–21): lists and photos in RTDB, no Drive scope.
+The Drive `files.get` timing of task 3 no longer describes a path the app uses and is not
+measured.
+
 ### Acceptance criteria
 
-- [ ] The second account, holding only `drive.file`, lists, reads and updates the file the
+- [x] The second account, holding only `drive.file`, lists, reads and updates the file the
       first account created and shared — or STATE.md records that it cannot, and the plan is
-      amended before Phase 1.
+      amended before Phase 1. *(It cannot; amended.)*
 - [ ] RTDB op round trip median and p95 recorded; Apps Script push latency recorded.
 - [ ] Firebase project exists on the Spark plan; RTDB rules deny everything to unauthenticated
       users; the consent screen lists the test users.
@@ -522,20 +508,21 @@ or Testing mode forever) or Firebase-held data. Find out before writing the sync
 
 ### Tasks
 
-1. Room schema v1: `lists`, `items`, `categories`, `members`, `outbox_ops`, `applied_ops`
-   (op id + at, pruned after 14 days), `list_sync` (per-list `lastSeenOpAt`, `snapshotAt`,
-   Drive ids, dirty flag). Exported schema JSON committed; migrations tested from v1 onward.
-2. `core/model` domain types and `core/sync/Merge.kt`: `apply(op, state) -> state`, pure,
-   plus `fold(snapshot, ops)`. Property-style unit tests: commutativity over shuffled op
-   orders, idempotence, tombstone dominance, check/content independence.
+1. Room schema v1: `lists`, `items`, `categories`, `members`, `outbox_ops`, `list_sync`
+   (per-list `seenUpTo`, `synced`, dirty flag). Exported schema JSON committed; migrations
+   tested from v1 onward.
+2. `core/model` domain types and `core/sync/Merge.kt`: `apply(op, state) -> state` and
+   `mergeRemote(local, remoteNode) -> state`, both pure. Property-style unit tests:
+   commutativity over shuffled op orders, idempotence, tombstone dominance, check/content
+   independence, and local-vs-remote node merges converging whichever side arrives first.
 3. `ListRepository`: every mutation is an op — applied to Room in one transaction with an
    outbox insert. `Flow`s per screen. No network in this phase; the outbox simply accumulates.
 4. Built-in categories seeded per list; `categoryOrder` defaults from the user's DataStore
    preference or the nine-department order.
 5. `assets/products-pl.json` v1 (~600 entries) and `Categorizer` (normalises Polish
    inflection by stem prefix matching; „ziemniaków" → „ziemniak" → `warzywa`); unit tests.
-6. JSON codec for `list.json` and for ops (kotlinx.serialization), with forward-compatible
-   unknown-field tolerance; round-trip tests.
+6. Codec between the domain types and the RTDB node shapes of *Storage layout* (maps of
+   primitives, as the Firebase SDK wants them), tolerant of unknown fields; round-trip tests.
 
 ### Acceptance criteria
 
@@ -574,60 +561,55 @@ or Testing mode forever) or Firebase-held data. Find out before writing the sync
 - [ ] Instrumented job green in CI; total CI time recorded in STATE.md.
 - [ ] TalkBack reads the list sensibly (manual check, recorded).
 
-## Phase 4 — Google sign-in & Drive persistence
+## Phase 4 — Google sign-in & cloud persistence
 
 ### Tasks
 
 1. Sign in with Google (Credential Manager) → Firebase Auth; `/users/{uid}` and
    `/emailIndex` written; sign-out flow; the „another account" sentence.
-2. `AuthorizationClient` for `drive.file` + `drive.appdata`, requested on first need with a
-   one-sentence explanation screen before the system dialog.
-3. `DriveClient` (OkHttp): find-or-create app root folder (by `appProperties.buyMyWay=root`),
-   folder per list, multipart create/update of `list.json` with `fields=id,version,
-   modifiedTime`, `files.get?alt=media`, `files.list` by parent, permissions create/delete,
-   `appDataFolder` read/write of `prefs.json`. Every call retries on 5xx/429 with backoff and
-   surfaces 401 as „sign in again", 403/404 as „file gone".
-4. `SnapshotWorker` (WorkManager, unique per list, debounced 3 s, network constraint): read
-   remote `version`; download if newer than last known; fold local ops (outbox and applied)
-   into it; upload; re-read `version`; if it moved during upload, merge again. Marks ops as
-   folded.
-5. On sign-in: adopt existing private lists (create their folders and snapshots). On app open
-   and on pull-to-refresh: reconcile each list's snapshot if `modifiedTime` moved.
-6. `prefs.json`: category memory and default order, merged by `updatedAt`.
-7. Tests: a fake Drive (in-memory, version-counting) driving the worker through concurrent
-   writers; instrumented sign-in smoke test with the emulator's Google account is **not**
-   attempted — the fake is the evidence, as in Eat My Way (its `FakeDrive`).
+2. `RemoteLists` over the Firebase SDK: write a list's `meta`, `categories` and `items`
+   (multi-path update per op, outbox entry cleared on acknowledgement); read `/userLists`,
+   then each list; catch up by `items` ordered by `updatedAt` from `seenUpTo`; merge every
+   remote node into Room through Phase 2's `Merge`.
+3. First version of `firebase/database.rules.json` for a single user's own lists: owner-only
+   read/write, the not-older-than-stored check on items, shape and size validation; rules
+   tests in `firebase/` with the emulator; `ci.yml` gains the `rules` job.
+4. `OutboxWorker` (unique, network constraint) for writes still pending when the connection
+   closes; `goOffline()` 30 s after background.
+5. On sign-in: adopt existing private lists (upload them with the owner as the only member).
+   On app open and on pull-to-refresh: catch up every list.
+6. `/users/{uid}/prefs`: category memory and default order, merged by `updatedAt`.
+7. Tests: the rules tests above, and the Room ↔ remote merge driven through a fake
+   `RemoteLists` with two writers and a delayed one; an instrumented sign-in smoke test with
+   the emulator's Google account is **not** attempted — the fakes are the evidence.
 
 ### Acceptance criteria
 
 - [ ] Two devices signed in as the same account converge on a list after edits on both while
       one was offline.
-- [ ] Deleting the folder in Drive by hand makes the app say so and offer to remove the list;
-      nothing is silently re-created.
-- [ ] Tokens appear nowhere in Room, DataStore or logcat (grep the debug log for `ya29.`).
-- [ ] CI green.
+- [ ] A write carrying an older `updatedAt` than the stored one is rejected by the rules
+      (rules test) and the device that sent it adopts the newer state.
+- [ ] ID tokens appear nowhere in Room, DataStore or logcat.
+- [ ] CI green, including the `rules` job.
 
 ## Phase 5 — Sharing & real-time
 
 ### Tasks
 
-1. `firebase/database.rules.json` implementing the layout above, with `.validate` on op
-   shape and size (payload ≤ 4 kB) and rules tests (`firebase/test/rules.test.mjs`, emulator)
-   for every allow/deny in the table; `ci.yml` gains the `rules` job.
-2. `OpsChannel`: write outbox ops to `/lists/{listId}/ops` (SDK persistence on, so offline
-   writes queue); child listener attached while the list is on screen; apply incoming ops
-   through `Merge`; `applied_ops` for idempotence; `lastSeenOpAt` per list; `goOffline()`
-   30 s after background.
+1. `firebase/database.rules.json` extended to the full layout above — members, roles,
+   invites, presence, `/userLists` — with rules tests (`firebase/test/rules.test.mjs`,
+   emulator) for every allow/deny in the table.
+2. Live listener: a child listener on `items` (and `categories`, `meta`) attached while the
+   list is on screen; incoming nodes applied through `Merge`; `seenUpTo` advanced.
 3. Presence with `onDisconnect`; the „Ania ogląda" line on the home card and in the list's
    top bar.
-4. **Udostępnianie** screen: invite by link (`/invites/{token}`, the App Link
-   `buymyway.gorny.dev/i/<token>` served by a static page on the existing host, plus the
-   `buymyway://` scheme as fallback), invite by email, roles, remove, make private. Owner's
-   device mirrors members into Drive permissions on every open and after each change.
-5. The remote-change feedback: an op by someone else strikes the row with the actor's initial,
-   holds 1.5 s, slides to „Kupione"; an added item fades in under its category; a deleted one
-   fades out. Never a full-list refresh.
-6. Pruning of ops older than 7 days by the owner's device; `applied_ops` pruning.
+4. **Udostępnianie** screen: invite by link (`/invites/{token}`, the App Link on the Eat My
+   Way host — STATE.md open question 4 — plus the `buymyway://` scheme as fallback), invite by
+   email, roles, remove, make private.
+5. The remote-change feedback: a change by someone else strikes the row with the actor's
+   initial, holds 1.5 s, slides to „Kupione"; an added item fades in under its category; a
+   deleted one fades out. Never a full-list refresh.
+6. Tombstones older than 30 days removed by the owner's device, with their photos.
 7. Removed-member and permission-denied handling: the list is dropped locally with a sentence.
 
 ### Acceptance criteria
@@ -637,8 +619,8 @@ or Testing mode forever) or Firebase-held data. Find out before writing the sync
 - [ ] Rules tests cover: non-member read denied, viewer op denied, editor op allowed, op update
       denied, member write by non-owner denied, invite acceptance allowed once and expired
       denied.
-- [ ] A member invited by link sees the list, its snapshot and photos after the owner's next
-      open; before that the waiting sentence is shown, never an empty list.
+- [ ] A member invited by link sees the whole list and its photos as soon as they accept,
+      without the owner's phone doing anything.
 - [ ] Airplane mode on one phone for ten minutes of edits on both: reconnect converges, no
       duplicates, no lost checks.
 
@@ -647,20 +629,23 @@ or Testing mode forever) or Firebase-held data. Find out before writing the sync
 ### Tasks
 
 1. Camera (`ActivityResultContracts.TakePicture`) and gallery (Photo Picker, no storage
-   permission); downscale to ≤ 1200 px, WebP q80, EXIF orientation applied and stripped.
-2. Upload to `<list>/photos/<itemId>.webp` by a `PhotoWorker`; `photoFileId` written as an
-   `ItemPut` only after the upload succeeds; replace and remove.
-3. Coil with an OkHttp fetcher that adds the Drive token and honours cache; thumbnail in the
-   row, full-screen viewer with pinch-zoom.
+   permission); downscale to ≤ 800 px, WebP, quality stepped down until ≤ 80 kB, EXIF
+   orientation applied and stripped.
+2. Write to `/photos/{listId}/{itemId}` by a `PhotoWorker`; `photoAt` written on the item only
+   after the photo write succeeds; replace and remove. Rules: members read, editors write,
+   size capped.
+3. Loading and caching: decide Coil vs. a small disk cache keyed by `photoAt` (STATE.md
+   decision); thumbnail in the row, full-screen viewer with pinch-zoom.
 4. Orphan cleanup: photos of items deleted 30 days ago are removed by the owner's device.
 
 ### Acceptance criteria
 
-- [ ] A photo taken on one phone appears on the other's row within the next snapshot cycle and
-      is visible full-screen; removing it removes the Drive file.
-- [ ] A 12-megapixel photo becomes ≤ 200 kB; no `READ_EXTERNAL_STORAGE`/`READ_MEDIA_*`
+- [ ] A photo taken on one phone appears on the other's row within seconds and is visible
+      full-screen; removing it removes the `/photos` node.
+- [ ] A 12-megapixel photo becomes ≤ 80 kB; no `READ_EXTERNAL_STORAGE`/`READ_MEDIA_*`
       permission is declared.
-- [ ] Coil's disk cache is capped (50 MB) and the app's storage does not grow with viewing.
+- [ ] The photo disk cache is capped (50 MB), the app's storage does not grow with viewing,
+      and a photo already cached is not downloaded again.
 
 ## Phase 7 — Voice input
 
@@ -706,7 +691,7 @@ or Testing mode forever) or Firebase-held data. Find out before writing the sync
 ### Tasks
 
 1. FCM: token registration to `/fcmTokens/{uid}`, refresh, removal on sign-out;
-   `FirebaseMessagingService` → expedited `CatchUpWorker`.
+   `FirebaseMessagingService` → expedited `CatchUpWorker` (items since `seenUpTo`).
 2. `push/Code.gs` finished as specified; deployment documented in `docs/DEPLOYMENT.md` (manual
    or `clasp`); the URL in `gradle.properties`; the client's debounced, presence-aware call.
 3. Notifications: channels „Zmiany na wspólnej liście" and „Nowe udostępnione listy";
@@ -774,6 +759,8 @@ or Testing mode forever) or Firebase-held data. Find out before writing the sync
 
 ## Later — after daily use
 
-Not planned in detail; recorded so nobody forgets them: a structured export from Eat My Way;
+Not planned in detail; recorded so nobody forgets them: „Zapisz kopię na Dysku" (an export
+of a list to the user's own Drive under `drive.file`, which works for one's own files); a
+structured export from Eat My Way;
 Wear OS glance of the current list; widgets; „often bought" suggestions from this user's own
 history; optional Gemini (BYO key, as in Eat My Way) for smarter dictation; iOS is out of scope.

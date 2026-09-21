@@ -3,8 +3,8 @@
 # Google Cloud → APIs & Services → Credentials. All of these are public ids.
 firebaseApiKey=
 firebaseAppId=
-firebaseProjectId=buy-my-way
-firebaseDatabaseUrl=https://buy-my-way-default-rtdb.europe-west1.firebasedatabase.app
+firebaseProjectId=buy-my-way-c3949
+firebaseDatabaseUrl=https://buy-my-way-c3949-default-rtdb.europe-west1.firebasedatabase.app
 firebaseSenderId=
 webClientId=
 pushEndpoint=

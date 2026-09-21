@@ -124,14 +124,77 @@ Newest last. Every deviation from PLAN.md lands here **before** it is acted on.
 18. **The spike's RTDB rules open `/spike` to signed-in users only** (`spike/database.rules.json`).
     Everything else stays locked, and the rules go back to fully locked when the spike ends.
 
+19. **Spike verdict: `drive.file` does NOT reach across users (2026-09-21).** Two real
+    phones (S10e = A, S23 Ultra = B), two accounts, both on the test-user list, both
+    granted exactly `drive.file` + `drive.appdata`, same OAuth project and same APK. A's copy
+    created `Buy My Way/spike/list.json` and shared the folder with B as `writer`; the
+    permission was confirmed to target B's signed-in account. B's copy then got:
+    `files.list` in the folder → **empty**; `files.get` → **404 File not found**;
+    `files.update` → **404**; `sharedWithMe` folders → **empty**. A still read its own file
+    (version 3, unchanged). So a file one user's copy of the app creates is invisible to
+    another user's copy even when shared with them: `drive.file` access is per user and per
+    file, and sharing does not grant it. The hybrid's Drive half (decisions 1 and 2), the
+    shared `list.json` and the photos on the owner's Drive, **does not work as planned**.
+    Plan to be amended before Phase 1. Owner's choice pending (open question 1).
+    Working under `drive.file`: sign-in, the consent screen in Testing, per-user
+    `appDataFolder` (create/list/read `prefs.json`), creating files in one's own Drive, and
+    RTDB writes under the spike rules.
+
+20. **Shared lists and photos live in Firebase Realtime Database (owner's choice,
+    2026-09-21, after decision 19).** Chosen over the full `drive` scope (a restricted scope:
+    the consent screen in Testing for good, access to the whole of every member's Drive) and
+    over a further Google Picker spike (a web page to host, one more step per member per
+    list, and it is not known whether a picked folder covers its files). This supersedes
+    decisions 1 and 2:
+    - **RTDB holds the list itself**: `meta`, `members`, `categories`, and one node per item
+      that carries the item's current state. A change is written to that node, together with
+      the fields the merge needs (`updatedAt`/`updatedBy`, `checkedAt`/`checkedBy`,
+      `deletedAt`). The rules reject a write older than what is stored, so the server
+      enforces last-writer-wins per field group, the same rules Phase 2's pure merge applies
+      on the device. The separate op log, its 7-day pruning, the Drive snapshot and the
+      `SnapshotWorker` are gone: the item node *is* the op, and a device that was offline
+      for a month reads the items changed since it last looked (`orderByChild("updatedAt")`).
+    - **Photos are stored in RTDB**, under their own node (`/photos/{listId}/{itemId}`), so
+      a list read never downloads them. They are downscaled on the device to ≤ 800 px WebP,
+      target ≤ 80 kB, capped by the rules. On Spark (1 GB stored, 10 GB/month downloaded)
+      that is about ten thousand photos, and a cached photo is not downloaded twice.
+      Firebase Storage stays out (Blaze plan, decision 2).
+    - **Room is still the source of truth on the device**, and the app still works fully
+      signed out and offline. Nothing about the hard requirement changes. RTDB was always
+      the fast path, and now it is also the durable one.
+    - Consequence to be honest about: the lists no longer live on the user's Drive. They sit
+      in the owner's Firebase project, readable by its members through the rules and by the
+      project owner in the Firebase console. README, SECURITY.md and CLAUDE.md say so from
+      now on.
+21. **Drive leaves the app entirely.** With the lists in RTDB, the only Drive use left was
+    `prefs.json` in `appDataFolder` (it works, decision 19). A per-user node
+    `/users/{uid}/prefs` does the same job without a Drive token. So the app requests **no
+    Drive scope at all**: no `AuthorizationClient`, no Drive REST client, and the consent
+    screen asks only for the basic sign-in scopes. That removes the most sensitive thing the
+    app held, a token with write access to the user's Drive, and it makes open question 7
+    moot for the app, because basic scopes can be published to *In production* without
+    verification. A "save a copy to Drive" export can return later as a feature. It is under
+    *Later* in PLAN.md, not planned. The Drive API stays enabled in the project for the
+    spike only and is switched off when Phase 0 closes.
+
 ## Open questions
 
-1. **Does `drive.file` let user B open a file user A's copy of the app created and shared?**
-   The hybrid and the photo decision both rest on it. Phase 0 answers it by experiment. If no:
-   the fallback order is (a) the `drive` scope with the consent screen kept in Testing mode
-   for the household, (b) list data in RTDB with Drive only for photos the owner uploads.
-2. **Firebase project, OAuth clients, Realtime Database — not created yet.** Phase 0 task 1.
-   The public ids go into `gradle.properties` and here; nothing else is written down.
+1. ~~Where do shared lists live, now that `drive.file` cannot cross users?~~ Answered by
+   decisions 19–21: in RTDB, and Drive leaves the app.
+2. **Firebase project created 2026-09-21.** Public ids so far:
+   - project id `buy-my-way-c3949` (the plain `buy-my-way` was taken), project number
+     `270774397521`
+   - Web client id (`serverClientId`)
+     `270774397521-4l890vstjdbmsvvhkjjho056io7ue221.apps.googleusercontent.com`
+   - Android app id `1:270774397521:android:7f3a8715b5ec1f9a386670` (`dev.gorny.buymyway`)
+   - Android OAuth client (Windows debug SHA-1 `5A:DB:9A:F8:…:52:8D`)
+     `270774397521-0msiurf1sb48iqp7nb3l2jp6mh48oiuo.apps.googleusercontent.com`
+   - RTDB `https://buy-my-way-c3949-default-rtdb.europe-west1.firebasedatabase.app`
+   - OAuth consent screen: External, Testing, Eat My Way branding (open question 6), scopes
+     `drive.file` and `drive.appdata`.
+
+   Still to do: the Linux machine's debug SHA-1; confirm Google sign-in, the Drive API and
+   the spike rules on the phone. Nothing but public ids is written down.
 3. **GitHub repository `zyndata/buy-my-way` exists but is private** (checked 2026-09-21),
    while decision 4 says public. The owner has to flip the visibility
    (`gh repo edit zyndata/buy-my-way --visibility public --accept-visibility-change-consequences`)
@@ -139,10 +202,19 @@ Newest last. Every deviation from PLAN.md lands here **before** it is acted on.
 4. **App Link host.** The invite link is planned as `https://buymyway.gorny.dev/i/<token>`
    served by a static page on the existing VM (nginx + a one-line `assetlinks.json`). To be set
    up in Phase 5; until then the `buymyway://` scheme works on its own.
+   The owner does not want a separate domain (2026-09-21), so Phase 5 should consider a path
+   on `eatmyway.gorny.dev` (for example `/bmw/i/<token>`) instead of `buymyway.gorny.dev`.
 5. **Room tests: Robolectric or the emulator?** Phase 2 decides. The emulator job exists from
    Phase 3 anyway, so instrumented is the likely answer unless it makes the CI loop too slow.
 6. **Privacy policy page** — required by Play (Phase 11), sensible before. One static page on
-   the existing host, written from `SECURITY.md`.
+   the existing host, written from `SECURITY.md`. The OAuth consent screen's branding already
+   requires a privacy link (2026-09-21). Buy My Way is part of the Eat My Way brand (owner,
+   2026-09-21), so the consent screen uses Eat My Way's: support email
+   `eatmyway-support@googlegroups.com`, home page `https://eatmyway.gorny.dev`, privacy link
+   `https://eatmyway.gorny.dev/privacy.html`, `gorny.dev` as an authorised domain. No separate
+   domain. That privacy page does **not yet mention Buy My Way**: it needs a Buy My Way section
+   (Drive, Firebase, photos) in the Eat My Way repository before the consent screen leaves
+   Testing or Play sees it.
 7. **Does *Testing* mode expire the grants after 7 days?** Google documents that an External
    app in Testing status issues refresh tokens that expire after 7 days. If that reaches the
    Play-services `AuthorizationClient` grant, or the Apps Script's stored authorisation (its

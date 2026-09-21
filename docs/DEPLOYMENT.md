@@ -21,22 +21,24 @@ buymyway.gorny.dev    a static page for invite App Links + assetlinks.json (Phas
 
 ## Firebase / Google Cloud (Phase 0)
 
-One project, `buy-my-way`, on the **Spark** (free) plan. It holds:
+One project, `buy-my-way-c3949` (the plain id was taken), on the **Spark** (free) plan. It holds:
 
 - **Realtime Database** in `europe-west1`, rules from `firebase/database.rules.json`
   (deployed with `firebase deploy --only database` — Phase 5).
 - **Authentication** with the Google provider.
 - **Cloud Messaging** — nothing to configure; tokens are registered by the app.
-- **OAuth consent screen** in *Testing* mode with the household as test users; scopes
-  `drive.file` and `drive.appdata`. *Testing* mode is deliberate: no verification is needed
-  below 100 test users, and the app will never have more.
+- **OAuth consent screen**: External, Eat My Way's branding (support group, home page and
+  privacy page on `eatmyway.gorny.dev`, `gorny.dev` authorised). The app asks for the basic
+  sign-in scopes only (STATE.md decision 21), so the screen can be published *In production*
+  without verification; it stays in *Testing* with the household as test users until the
+  privacy page covers Buy My Way (STATE.md open question 6).
 - **OAuth clients**: one Web client (its id is the `serverClientId` the app passes to Sign in
   with Google) and one Android client per signing SHA-1 — each developer machine's debug key,
   the release key, and Play App Signing's key once Phase 11 exists.
-- **Drive API** enabled.
+- **Drive API**: enabled only for the Phase 0 spike, and switched off when it closes.
 
 Public ids (`google-services.json`, the Web client id, the Apps Script URL) are committed.
-Nothing here is a secret; what protects the data is the database rules and Drive's permissions.
+Nothing here is a secret; what protects the data is the database rules.
 
 ## The push sender (Phase 9)
 
@@ -72,6 +74,6 @@ JSON is a GitHub Secret (`PLAY_SERVICE_ACCOUNT_JSON`) and nothing else.
 Sideload: install the previous Release's APK over the current one — same signature, lower
 `versionCode`, so `adb install -r -d` is needed; a normal user installs the older APK from the
 Release page after uninstalling. Play: promote the previous release in the console. Data is
-unaffected either way — it is on Drive, and the on-device Room schema is migrated forward only,
+unaffected either way — it is in RTDB, and the on-device Room schema is migrated forward only,
 so a rollback across a schema version has to be listed in the release notes as „requires
 reinstall".
