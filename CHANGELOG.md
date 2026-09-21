@@ -12,6 +12,7 @@ project adheres to [Semantic Versioning](https://semver.org).
 
 - Move shared lists to Realtime Database after the drive.file verdict
 - Drop Google Play and publish the consent screen
+- Record the published consent screen
 
 ### Features
 
@@ -21,6 +22,7 @@ project adheres to [Semantic Versioning](https://semver.org).
 
 - Plan, workflow and repository hygiene
 - **spike:** Phase 0 spike app and push sender skeleton
+- Update CHANGELOG
 - Update CHANGELOG
 
 
