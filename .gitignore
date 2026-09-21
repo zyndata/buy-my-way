@@ -1,0 +1,50 @@
+# Gradle
+.gradle/
+build/
+**/build/
+.kotlin/
+
+# Android Studio / IntelliJ — the SDK path is per machine and absolute
+local.properties
+.idea/
+*.iml
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Signing — never in the repository (see docs/DEPLOYMENT.md)
+*.keystore
+*.jks
+release.properties
+keystore.properties
+
+# Play service account and any Google secret file
+*-service-account*.json
+service-account*.json
+
+# Node (git-cliff, Firebase rules tests)
+node_modules/
+
+# Firebase emulator
+firebase/.firebase/
+firebase/*-debug.log
+firebase/ui-debug.log
+firebase/database-debug.log
+
+# Apps Script deployment state (clasp) — the script id is fine, the login is not
+push/.clasprc.json
+
+# Editor / OS
+.vscode/*
+!.vscode/extensions.json
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Claude Code local overrides (machine-specific; the shared settings.json is committed)
+.claude/settings.local.json
+
+# Phase 0 spike: local copy of the public ids (see spike/spike.properties.example)
+spike/spike.properties

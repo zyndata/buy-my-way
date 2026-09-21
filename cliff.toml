@@ -1,0 +1,56 @@
+# git-cliff configuration — generates CHANGELOG.md and GitHub Release notes
+# from Conventional Commits. https://git-cliff.org
+#
+# Kept in-repo so both the CI release job and a local `npm run changelog` run
+# produce identical output.
+
+[changelog]
+header = """
+# Changelog
+
+All notable changes to Buy My Way are documented here.
+This file is generated from Conventional Commit messages by
+[git-cliff](https://git-cliff.org) — edit the commit messages, not this file.
+The format follows [Keep a Changelog](https://keepachangelog.com) and the
+project adheres to [Semantic Versioning](https://semver.org).\n
+"""
+body = """
+{% if version %}\
+    ## [{{ version | trim_start_matches(pat="v") }}] - {{ timestamp | date(format="%Y-%m-%d") }}
+{% else %}\
+    ## [Unreleased]
+{% endif %}\
+{% for group, commits in commits | group_by(attribute="group") %}
+    ### {{ group | upper_first }}
+    {% for commit in commits %}
+        - {% if commit.scope %}**{{ commit.scope }}:** {% endif %}{{ commit.message | upper_first }}\
+    {% endfor %}
+{% endfor %}\n
+"""
+trim = true
+footer = ""
+
+[git]
+conventional_commits = true
+filter_unconventional = false
+split_commits = false
+protect_breaking_commits = true
+filter_commits = false
+tag_pattern = "v[0-9]*"
+topo_order = false
+sort_commits = "oldest"
+
+# Conventional-Commit type -> changelog section.
+commit_parsers = [
+  { message = "^feat", group = "Features" },
+  { message = "^fix", group = "Bug Fixes" },
+  { message = "^perf", group = "Performance" },
+  { message = "^refactor", group = "Refactor" },
+  { message = "^docs", group = "Documentation" },
+  { message = "^test", group = "Tests" },
+  { message = "^ci", group = "CI/CD" },
+  { message = "^build", group = "Build" },
+  { message = "^chore\\(release\\)", skip = true },
+  { message = "^chore", group = "Miscellaneous" },
+  { body = ".*security", group = "Security" },
+]

@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+    branches: [dev]
+  pull_request:
+  workflow_dispatch:
+
+# Read-only token: nothing here writes to the repo.
+permissions:
+  contents: read
+
+# A newer push to the same ref makes the running job pointless.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Lint, unit tests & debug build
+    runs-on: ubuntu-latest
+    steps:
+      # Full history: the app's versionName comes from `git describe`, and a shallow clone
+      # with no tags would leave every CI build calling itself by a commit hash.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # Temporary guard (STATE.md decision 13): until Phase 1 scaffolds the Gradle project
+      # there is nothing to build, and CI must be green before that. Phase 1 removes the
+      # guard together with this comment.
+      - name: Is the app scaffolded yet?
+        id: scaffold
+        run: |
+          if [ -f gradlew ]; then echo "present=true" >> "$GITHUB_OUTPUT"; else echo "present=false" >> "$GITHUB_OUTPUT"; echo "No gradlew yet — skipping the Gradle steps."; fi
+
+      - uses: actions/setup-java@v5
+        if: steps.scaffold.outputs.present == 'true'
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v5
+        if: steps.scaffold.outputs.present == 'true'
+
+      - name: Lint, unit tests, debug build
+        if: steps.scaffold.outputs.present == 'true'
+        run: ./gradlew lint testDebugUnitTest assembleDebug --no-daemon
+
+      - uses: actions/upload-artifact@v7
+        if: failure() && steps.scaffold.outputs.present == 'true'
+        with:
+          name: lint-and-test-reports
+          path: |
+            app/build/reports/
+            app/build/test-results/
+          retention-days: 7
+
+  # Phase 5 adds `rules` (Firebase emulator, database rules tests).
+  # Phase 3 adds `instrumented` (Android emulator, connectedDebugAndroidTest) — this project's
+  # e2e gate, and the reason a release may only be cut from a `dev` commit whose run is green.

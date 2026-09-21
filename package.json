@@ -1,0 +1,16 @@
+{
+  "name": "buy-my-way",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Tooling for the Buy My Way Android app: changelog generation and, from Phase 5, the Firebase rules tests. The app itself is built with Gradle.",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "changelog": "git-cliff --config cliff.toml -o CHANGELOG.md"
+  },
+  "devDependencies": {
+    "git-cliff": "2.13.1"
+  }
+}

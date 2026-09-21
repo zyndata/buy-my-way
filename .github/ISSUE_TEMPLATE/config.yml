@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentation
+    url: https://github.com/zyndata/buy-my-way#readme
+    about: What the app does, how to run it locally and how it is deployed.
+  - name: Specification and roadmap
+    url: https://github.com/zyndata/buy-my-way/blob/main/PLAN.md
+    about: The full spec and the phase plan — check here before proposing a feature.
+  - name: Security problem
+    url: https://github.com/zyndata/buy-my-way/security/advisories/new
+    about: Report privately. Never open a public issue for a security problem.

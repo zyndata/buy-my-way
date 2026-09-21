@@ -1,0 +1,70 @@
+name: Bug report
+description: Something in the app behaves incorrectly.
+labels: [bug]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. ...
+        2. ...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: App version
+      description: Shown in Ustawienia. The released tag, e.g. v1.2.0.
+      placeholder: "v1.0.0"
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Phone and Android version
+      placeholder: "Pixel 8 / Android 16"
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: How was it installed?
+      options:
+        - APK from GitHub Releases
+        - Google Play (closed testing)
+        - Debug build from Android Studio
+    validations:
+      required: true
+  - type: dropdown
+    id: list-kind
+    attributes:
+      label: Which kind of list?
+      options:
+        - Private list, signed out
+        - Private list, signed in
+        - Shared list — I am the owner
+        - Shared list — I am a member
+  - type: textarea
+    id: logcat
+    attributes:
+      label: Logcat output
+      description: >
+        Relevant lines from `adb logcat` if you have them.
+        Never paste OAuth tokens, Drive file ids, other people's emails or invite links —
+        issues are public.
+      render: text
+  - type: checkboxes
+    id: scrubbed
+    attributes:
+      label: Confirmation
+      options:
+        - label: I removed all credentials and personal data from everything above.
+          required: true

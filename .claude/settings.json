@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(./gradlew lint *)",
+      "Bash(./gradlew testDebugUnitTest *)",
+      "Bash(./gradlew assembleDebug *)",
+      "Bash(./gradlew connectedDebugAndroidTest *)",
+      "Bash(./gradlew installDebug *)",
+      "Bash(./gradlew --version)",
+      "Bash(npm ci)",
+      "Bash(npm install)",
+      "Bash(npm run changelog)",
+      "Bash(npm --prefix firebase test)",
+      "Bash(adb devices)",
+      "Bash(adb logcat *)",
+      "Bash(adb shell dumpsys *)",
+      "Bash(git status *)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(git fetch *)",
+      "Bash(git add *)",
+      "Bash(git branch *)",
+      "Bash(git tag -l *)",
+      "Bash(git ls-files *)",
+      "Bash(gh run list *)",
+      "Bash(gh run view *)",
+      "Bash(gh run watch *)"
+    ]
+  }
+}

@@ -1,0 +1,25 @@
+# Normalize line endings: LF in the repository, native in the working copy.
+# Keeps the Windows and Linux checkouts of this project byte-identical in git.
+* text=auto eol=lf
+
+# The Gradle wrapper script runs in CI and on Linux: LF, always.
+gradlew text eol=lf
+*.sh text eol=lf
+
+# Windows-only scripts keep CRLF.
+gradlew.bat text eol=crlf
+*.ps1 text eol=crlf
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+# Binary assets.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.ico binary
+*.jar binary
+*.keystore binary
+*.jks binary
+*.ttf binary
+*.otf binary
