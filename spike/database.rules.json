@@ -1,0 +1,12 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "spike": {
+      ".read": "auth != null",
+      ".write": "auth != null",
+      "ping": { ".indexOn": ["at"] },
+      "pong": { ".indexOn": ["at"] }
+    }
+  }
+}

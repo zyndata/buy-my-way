@@ -1,0 +1,10 @@
+# Copy to spike.properties (git-ignored) and fill in from the Firebase console:
+# Project settings → General → Your apps → the Android app, and the Web client id from
+# Google Cloud → APIs & Services → Credentials. All of these are public ids.
+firebaseApiKey=
+firebaseAppId=
+firebaseProjectId=buy-my-way
+firebaseDatabaseUrl=https://buy-my-way-default-rtdb.europe-west1.firebasedatabase.app
+firebaseSenderId=
+webClientId=
+pushEndpoint=
