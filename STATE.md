@@ -301,6 +301,63 @@ Newest last. Every deviation from PLAN.md lands here **before** it is acted on.
 31. **Placeholder navigation is a button per route and a text „Wstecz" in the top bar**, not
     an icon: Material 3 no longer carries the icon set, and `material-icons` would be a
     dependency for one arrow. Phase 3 decides the icons with the real screens.
+32. **An AGP bump waits for a stable Android Studio that can sync it.** Found after Phase 1:
+    Studio 2026.1.3 refused AGP 9.4.1 ("Latest supported version is AGP 9.3.0"), because
+    Studio checks major.minor. The owner updated Studio instead of holding AGP back, so AGP
+    stays at 9.4.1 (decision 26). From now on, a Dependabot PR that raises AGP's minor
+    version is merged only after the stable Studio has been updated on both machines.
+
+### 2026-09-21 — Before Phase 2
+
+33. **Room tests are instrumented, not Robolectric (owner, answers open question 5).**
+    Locally, `connectedDebugAndroidTest` runs on a physical phone when one is connected
+    over `adb`, and on an emulator otherwise. Gradle already picks whatever device `adb`
+    sees, so this needs no extra code. CI always uses the emulator. Consequence for PLAN.md:
+    Room's DAO tests arrive in Phase 2, so the `instrumented` CI job has to exist by then
+    too (PLAN.md adds it in Phase 3). Otherwise CI would not run them, and CI is the only
+    evidence that counts. Phase 2 records that move when it starts.
+34. **The repository is public, as decision 4 says (owner, answers open question 3).** It
+    was made public on 2026-09-21 after a scan of the whole history for credentials. The only
+    key found was the Android API key in `google-services.json`, which is public by design.
+    The owner's worry is that someone builds the app and uses up the free Firebase quota.
+    A private repository would not prevent that: every APK on the public Releases page
+    carries the same `google-services.json` values. What does limit it:
+    - **Spark has no billing.** The worst case is a quota exhausted for the month (1 GB
+      stored, 10 GB downloaded), never an invoice.
+    - **Every write needs a Firebase sign-in, and the only provider is Google.** A rebuild
+      signed with a different key fails Google sign-in, because the Android OAuth client is
+      bound to the package and to our SHA-1s.
+    - **The RTDB rules (Phase 4)** limit each write to the lists the signed-in user belongs
+      to, and cap sizes (photos ≤ 80 kB).
+    - **Still to do:** restrict the Android API key to the package and SHA-1s (open
+      question 2). App Check is not available: its Android provider, Play Integrity, assumes
+      Play distribution, which decision 25 dropped. A household allow-list in the rules is
+      open question 9.
+35. **The invite link lives on `eatmyway.gorny.dev` (owner, answers open question 4).** The
+    link is `https://eatmyway.gorny.dev/bmw/i/<token>`. The existing nginx serves a static
+    page there (it says where to get the app) and `/.well-known/assetlinks.json`, which
+    names `dev.gorny.buymyway` and the release SHA-256, so that Android opens the app
+    directly. `buymyway://` stays as the fallback. Set up in Phase 5.
+36. **Bought items expire after 90 days, and re-adding revives them (owner, 2026-09-21).**
+    The goal is that RTDB cannot grow without bound. Photos are what fill it: ≤ 80 kB each,
+    so ~12,000 fill Spark's 1 GB, while all text together is a few MB.
+    - **Expiry:** an item whose `checkedAt` is more than 90 days old gets `deletedAt` (an
+      ordinary delete, so the merge needs nothing new). The existing 30-day tombstone rule
+      then removes the node and its photo, about 4 months after the purchase in total. The
+      same rule applies to private lists in Room.
+    - **Revive:** adding an item whose normalised name matches an item in „Kupione" unchecks
+      that item instead of creating a new node. Photo, category and quantity are kept.
+    - **Autocomplete history** is a local Room table of names only, so it survives expiry.
+    - **Who cleans:** any editor's device, when a list is opened, at most once a day. No
+      background work, so nothing new wakes the device. The writes are idempotent, so two
+      devices cleaning at once agree. An Apps Script janitor on a weekly trigger would also
+      clean lists nobody opens any more. It is not planned, because it would give the script
+      admin rights over the whole database, and today it can only send pushes.
+    - **Other leftovers:** expired invites are removed by the owner's device; the push sender
+      deletes a token when FCM answers `UNREGISTERED`; deleting a list removes its items,
+      photos and invites at once.
+    - Where it lands: the rule and revive in Phase 2 (Room, pure and tested), the add-bar
+      behaviour in Phase 3, the RTDB side in Phases 5–6, token cleanup in Phase 9.
 
 ## Open questions
 
@@ -333,17 +390,12 @@ Newest last. Every deviation from PLAN.md lands here **before** it is acted on.
    `google-services.json`. Also unchecked: whether the Android API key is restricted in
    Google Cloud to the package and SHA-1s as PLAN.md's *Security* section asks. Nothing but
    public ids is written down.
-3. **GitHub repository `zyndata/buy-my-way` exists but is private** (checked 2026-09-21),
-   while decision 4 says public. The owner has to flip the visibility
-   (`gh repo edit zyndata/buy-my-way --visibility public --accept-visibility-change-consequences`)
-   and add the rulesets that Eat My Way has (protect `main` and `v*` tags, no bypass actors).
-4. **App Link host.** The invite link is planned as `https://buymyway.gorny.dev/i/<token>`
-   served by a static page on the existing VM (nginx + a one-line `assetlinks.json`). To be set
-   up in Phase 5; until then the `buymyway://` scheme works on its own.
-   The owner does not want a separate domain (2026-09-21), so Phase 5 should consider a path
-   on `eatmyway.gorny.dev` (for example `/bmw/i/<token>`) instead of `buymyway.gorny.dev`.
-5. **Room tests: Robolectric or the emulator?** Phase 2 decides. The emulator job exists from
-   Phase 3 anyway, so instrumented is the likely answer unless it makes the CI loop too slow.
+3. ~~Should `zyndata/buy-my-way` be made public?~~ Yes, done 2026-09-21 (decision 34).
+   Still open: the rulesets that Eat My Way has (protect `main` and `v*` tags, no bypass
+   actors).
+4. ~~App Link host?~~ `eatmyway.gorny.dev/bmw/i/<token>` (decision 35).
+5. ~~Room tests: Robolectric or the emulator?~~ Instrumented: a phone if one is connected,
+   an emulator otherwise and in CI (decision 33).
 6. **Privacy policy page.** Buy My Way is part of the Eat My Way brand, so its consent
    screen uses Eat My Way's support group, home page `https://eatmyway.gorny.dev` and privacy
    link `https://eatmyway.gorny.dev/privacy.html` (`gorny.dev` authorised). No separate
@@ -360,3 +412,7 @@ Newest last. Every deviation from PLAN.md lands here **before** it is acted on.
    leaves the others, and removes `/users/{uid}`, `/emailIndex`, `/fcmTokens`,
    `/userLists` and their photos is small once Phase 5 exists. It is proposed for Phase 5
    or 9, and the owner decides when that phase starts.
+9. **Limit sign-in to the household?** The RTDB rules (Phase 4) could accept writes only
+   from uids listed under an `/allowed` node that only the owner can edit in the console.
+   That would stop a stranger's Google account from using the quota even through our own
+   APK, but every new user would need a manual step. Phase 4 decides.
