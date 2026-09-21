@@ -81,7 +81,8 @@ emulator and on a **physical S10e (Android 12)**. By hand on the emulator: the a
 in the background, and the list, the tick and even the half-typed add-bar text came back
 (process death). The screenshots in the README were taken on the S10e. **Not verified:**
 TalkBack (dropped by the owner, decision 52), and the Linux machine (CI's Ubuntu runner stands
-in again). CI time: recorded after the push. Phase 4 is next.
+in again). CI time: 6 min 44 s for the whole run (instrumented job 6 min 41 s,
+lint + unit tests + build 3 min 49 s, in parallel), run 35654135415, green. Phase 4 is next.
 
 ## Decisions
 
