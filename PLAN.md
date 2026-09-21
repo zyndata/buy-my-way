@@ -303,8 +303,7 @@ This is a requirement, not a preference. Concretely:
   .signInWithCredential`. That is the only Google permission the app asks for: basic profile,
   no Drive (STATE.md decision 21).
 - One Google Cloud project = the Firebase project; one Android OAuth client per signing
-  SHA-1 (each developer machine's debug key, the release key, and later Play App Signing's
-  key), one Web client id used as `serverClientId`. All ids are public; they live in
+  SHA-1 (each developer machine's debug key and the release key), one Web client id used as `serverClientId`. All ids are public; they live in
   `gradle.properties`.
 - Sign-out clears Room, DataStore and the Firebase session. The lists stay in RTDB for the
   other members and for the user's next sign-in.
@@ -414,8 +413,8 @@ two machines:
   only evidence that counts, exactly as in Eat My Way; the instrumented job is this project's
   e2e gate.
 - **Release (`deploy.yml`)** on a `v*` tag: `assembleRelease` signed from secrets → git-cliff
-  CHANGELOG commit-back → GitHub Release with the APK attached. Phase 11 adds an upload to a
-  Google Play closed-testing track from the same workflow.
+  CHANGELOG commit-back → GitHub Release with the APK attached. There is no Google Play
+  (STATE.md decision 25).
 - **One phase per conversation** via `/phase N`; STATE.md updated before and after; deviations
   recorded before they are acted on; Conventional Commits; a push is done only when its CI run
   is green.
@@ -729,8 +728,8 @@ measured.
 4. `.claude/skills/release/SKILL.md` adapted from Eat My Way: local install to a connected
    device vs. tag release; the CI-green gate on `dev` before merging to `main`.
 5. `README.md` with screenshots (`scripts/screenshots` via the emulator and `adb`),
-   `SECURITY.md`, privacy policy page (required by Play in Phase 11; a static page on the
-   existing host), `docs/DEPLOYMENT.md` complete.
+   `SECURITY.md`, a check that the Buy My Way section of Eat My Way's privacy page matches
+   what the app does (STATE.md open question 6), `docs/DEPLOYMENT.md` complete.
 6. Tag `v1.0.0` after a week of daily use by the household with no open bug.
 
 ### Acceptance criteria
@@ -740,23 +739,11 @@ measured.
 - [ ] The in-app update banner appears on the older build and installs the newer one.
 - [ ] README status, screenshots and the „what it does" claims match the app.
 
-## Phase 11 — Google Play closed testing
+## Phase 11 — Google Play closed testing (dropped)
 
-### Tasks
-
-1. Play Console app, Play App Signing (upload key = our release key), closed-testing track
-   with the household as testers, data-safety form answered from `SECURITY.md`, privacy policy
-   URL.
-2. `deploy.yml` uploads the AAB to the closed track after the GitHub Release (service account
-   JSON as a secret, `r0adkll/upload-google-play` or Gradle Play Publisher — decide and
-   record).
-3. In-app update check prefers Play when installed from Play (`installerPackageName`), GitHub
-   otherwise.
-
-### Acceptance criteria
-
-- [ ] A tag reaches the closed track without manual steps; testers receive the update.
-- [ ] Sideload and Play installs coexist in the household without signature conflicts.
+Dropped on 2026-09-21 (STATE.md decision 25): the app is distributed through GitHub Releases
+only, and the OAuth consent screen is published *In production*, so no grant expires after
+7 days.
 
 ## Later — after daily use
 

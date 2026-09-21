@@ -11,7 +11,8 @@ brought in from [Eat My Way](https://github.com/zyndata/eat-my-way) with one sha
 The interface is in **Polish**. The code, comments and documentation are in English.
 
 > **Status: planned, nothing built yet.** [PLAN.md](PLAN.md) holds the specification and the
-> twelve phases; [STATE.md](STATE.md) records what has been decided and what is still open.
+> phases (Phase 11, Google Play, was dropped); [STATE.md](STATE.md) records what has been
+> decided and what is still open.
 > Phase 0, a spike on Drive sharing and the Google project, is done. Its verdict: another
 > member cannot read a shared Drive file under the `drive.file` scope, so shared lists live in
 > Firebase Realtime Database instead (STATE.md decisions 19–24). A change reached the other
@@ -38,7 +39,7 @@ The interface is in **Polish**. The code, comments and documentation are in Engl
 - [PLAN.md](PLAN.md) — specification and phases
 - [STATE.md](STATE.md) — progress, decisions, open questions
 - [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) — local setup on Windows and Linux
-- [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) — releases, Firebase, the push script, Play
+- [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) — releases, Firebase, the push script
 - [CHANGELOG.md](CHANGELOG.md) — generated from commit messages by git-cliff
 
 ## Licence

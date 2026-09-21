@@ -18,9 +18,10 @@ Any deviation from [PLAN.md](PLAN.md) must be recorded here before proceeding.
 | 8     | Import from Eat My Way                 | pending |           |
 | 9     | Background, notifications & battery    | pending |           |
 | 10    | Release engineering & 1.0              | pending |           |
-| 11    | Google Play closed testing             | pending |           |
+| 11    | Google Play closed testing             | dropped | 2026-09-21 |
 
-Statuses: `pending` → `in-progress` → `done` (or `blocked` with a note).
+Statuses: `pending` → `in-progress` → `done` (or `blocked` with a note, or `dropped` by a
+decision).
 
 Nothing of the app is built yet. The repository holds the plan, the workflow files, the
 repository hygiene (2026-09-18) and the push sender's skeleton (`push/`, deployed).
@@ -232,6 +233,23 @@ Newest last. Every deviation from PLAN.md lands here **before** it is acted on.
     a deployment keeps the manifest of its version, so every manifest change needs
     **Manage deployments → edit → New version**; tick every box on the consent screen.
 
+### 2026-09-21 — After Phase 0
+
+25. **No Google Play. Phase 11 is dropped, and the consent screen goes *In production*
+    (owner, 2026-09-21).** Decision 3 is superseded: distribution is GitHub Releases only,
+    and the in-app update check reads `releases/latest`. What this changes:
+    - Phase 11 and everything Play-specific are gone from PLAN.md: the service account, Play
+      App Signing, the data-safety form, the installer check.
+    - The OAuth consent screen is **published to *In production*** so that no grant expires
+      after 7 days in Testing (open question 7). The app now asks only for basic sign-in
+      scopes (decision 21), and the Apps Script's two scopes are authorised by the owner
+      alone, so this needs no verification. At worst it shows the "unverified app" notice,
+      and 100 users is far above a household.
+    - The privacy page is still shown: Google links it on the sign-in sheet and in Google
+      Account → Connections. Nothing enforces its content any more, but it should tell the
+      truth. So Eat My Way's `privacy.html` gets a Buy My Way section (open question 6),
+      done in the Eat My Way repository.
+
 ## Open questions
 
 1. ~~Where do shared lists live, now that `drive.file` cannot cross users?~~ Answered by
@@ -268,23 +286,19 @@ Newest last. Every deviation from PLAN.md lands here **before** it is acted on.
    on `eatmyway.gorny.dev` (for example `/bmw/i/<token>`) instead of `buymyway.gorny.dev`.
 5. **Room tests: Robolectric or the emulator?** Phase 2 decides. The emulator job exists from
    Phase 3 anyway, so instrumented is the likely answer unless it makes the CI loop too slow.
-6. **Privacy policy page** — required by Play (Phase 11), sensible before. One static page on
-   the existing host, written from `SECURITY.md`. The OAuth consent screen's branding already
-   requires a privacy link (2026-09-21). Buy My Way is part of the Eat My Way brand (owner,
-   2026-09-21), so the consent screen uses Eat My Way's: support email
-   `eatmyway-support@googlegroups.com`, home page `https://eatmyway.gorny.dev`, privacy link
-   `https://eatmyway.gorny.dev/privacy.html`, `gorny.dev` as an authorised domain. No separate
-   domain. That privacy page does **not yet mention Buy My Way**: it needs a Buy My Way section
-   (Drive, Firebase, photos) in the Eat My Way repository before the consent screen leaves
-   Testing or Play sees it.
-7. **Does *Testing* mode expire the grants after 7 days?** Google documents that an External
-   app in Testing status issues refresh tokens that expire after 7 days. If that reaches the
-   Play-services `AuthorizationClient` grant, or the Apps Script's stored authorisation (its
-   Cloud project is the same one), "Testing mode forever" (DEPLOYMENT.md) means a re-consent
-   every week, or a push sender that stops. After decision 21 only the Apps Script can be
-   affected. Check on or after **2026-09-29**, without re-authorising anything:
-   `curl -sL -d '{"idToken":"x"}' <script url>` must still answer
-   `{"ok":false,"error":"unauthenticated"}`, not an authorisation error page. If it
-   bites: publish the consent screen to *In production*. The app has only basic sign-in
-   scopes now, and the script's two are not restricted, so that should need no verification,
-   only the privacy page of open question 6.
+6. **Privacy policy page.** Buy My Way is part of the Eat My Way brand, so its consent
+   screen uses Eat My Way's support group, home page `https://eatmyway.gorny.dev` and privacy
+   link `https://eatmyway.gorny.dev/privacy.html` (`gorny.dev` authorised). No separate
+   domain. Play is out (decision 25), so nothing enforces the page, but Google shows it at
+   sign-in. **To do in the Eat My Way repository:** a Buy My Way section on that page (what
+   goes to Firebase, who can read it, push, voice, deletion). Requested 2026-09-21.
+7. **Does *Testing* mode expire the grants after 7 days?** Answered by avoiding it: the
+   consent screen goes *In production* (decision 25). Once it is published, the Apps Script
+   check stays useful after any console change:
+   `curl -sL -d '{"idToken":"x"}' <script url>` must answer
+   `{"ok":false,"error":"unauthenticated"}`, not an authorisation error page.
+8. **"Usuń moje dane" in the app?** The privacy page can only offer deletion by email until
+   the app has it. A Settings action that deletes the user's lists where they are the owner,
+   leaves the others, and removes `/users/{uid}`, `/emailIndex`, `/fcmTokens`,
+   `/userLists` and their photos is small once Phase 5 exists. It is proposed for Phase 5
+   or 9, and the owner decides when that phase starts.

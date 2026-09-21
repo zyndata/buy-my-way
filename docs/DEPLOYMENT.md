@@ -8,8 +8,7 @@ GitHub tag vX.Y.Z
       │
       ├─ check     lint + unit tests                       (deploy.yml, Phase 10)
       ├─ build     assembleRelease, signed from secrets
-      ├─ release   git-cliff → CHANGELOG.md on main + GitHub Release with the APK
-      └─ play      upload the AAB to the closed-testing track (Phase 11)
+      └─ release   git-cliff → CHANGELOG.md on main + GitHub Release with the APK
 
 Firebase project      Realtime Database (Spark plan), Auth (Google), Cloud Messaging
 Google Apps Script    the push sender, deployed from push/ under the owner's account
@@ -29,12 +28,13 @@ One project, `buy-my-way-c3949` (the plain id was taken), on the **Spark** (free
 - **Cloud Messaging** — nothing to configure; tokens are registered by the app.
 - **OAuth consent screen**: External, Eat My Way's branding (support group, home page and
   privacy page on `eatmyway.gorny.dev`, `gorny.dev` authorised). The app asks for the basic
-  sign-in scopes only (STATE.md decision 21), so the screen can be published *In production*
-  without verification; it stays in *Testing* with the household as test users until the
-  privacy page covers Buy My Way (STATE.md open question 6).
+  sign-in scopes only (STATE.md decision 21), so the screen is published *In production*
+  (decision 25). Testing would expire grants after 7 days, the Apps Script's included. No
+  verification is needed; the household's accounts may still see the "unverified app"
+  notice once.
 - **OAuth clients**: one Web client (its id is the `serverClientId` the app passes to Sign in
   with Google) and one Android client per signing SHA-1 — each developer machine's debug key,
-  the release key, and Play App Signing's key once Phase 11 exists.
+  the release key. There is no Play App Signing key: no Google Play (STATE.md decision 25).
 - **Drive API**: off. It was enabled only for the Phase 0 spike (2026-09-21).
 
 Public ids (`google-services.json`, the Web client id, the Apps Script URL) are committed.
@@ -86,17 +86,15 @@ A push is one fetch per recipient; a household will not get near either.
 - Tags are protected by a ruleset (no deletion, no force-update, no bypass actors), as in Eat
   My Way: a bad release is fixed forward with the next patch version, never by moving a tag.
 
-## Google Play (Phase 11)
+## Google Play
 
-Play App Signing with our release key as the upload key, a closed-testing track, the data
-safety form answered from `SECURITY.md`, and the privacy policy page. The Play service account
-JSON is a GitHub Secret (`PLAY_SERVICE_ACCOUNT_JSON`) and nothing else.
+Not used (STATE.md decision 25). Releases are GitHub Releases only.
 
 ## Rollback
 
 Sideload: install the previous Release's APK over the current one — same signature, lower
 `versionCode`, so `adb install -r -d` is needed; a normal user installs the older APK from the
-Release page after uninstalling. Play: promote the previous release in the console. Data is
+Release page after uninstalling. Data is
 unaffected either way — it is in RTDB, and the on-device Room schema is migrated forward only,
 so a rollback across a schema version has to be listed in the release notes as „requires
 reinstall".

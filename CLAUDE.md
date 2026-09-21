@@ -11,7 +11,7 @@ premium, no ads, no analytics.
 - Progress, decisions, open questions: [STATE.md](STATE.md)
 - Release notes: [CHANGELOG.md](CHANGELOG.md) (generated — never hand-edited)
 - Local setup and cross-platform rules: [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)
-- Release, Firebase, Apps Script, Play: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
+- Release, Firebase, Apps Script: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
 
 ## Workflow rules
 
@@ -44,8 +44,8 @@ premium, no ads, no analytics.
 - **Battery is a requirement.** No foreground service, no persistent background connection, no
   polling. Background work goes through WorkManager with constraints or through FCM. A phase
   that adds background work has to say in STATE.md what wakes the device and how often.
-- **Secrets never enter the repository.** The release keystore, its passwords and any Play
-  service account live only in GitHub Secrets and `~/.gradle/gradle.properties`.
+- **Secrets never enter the repository.** The release keystore and its passwords live only
+  in GitHub Secrets and `~/.gradle/gradle.properties`.
   `google-services.json`, OAuth client ids and the Apps Script URL are public by design.
 
 ## Repository conventions
