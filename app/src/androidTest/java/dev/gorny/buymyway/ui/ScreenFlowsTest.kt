@@ -92,6 +92,8 @@ class ScreenFlowsTest {
     private fun showList(listId: String): ListViewModel {
         val vm = ListViewModel(repo, listId, { _, _ -> emptyList() }, scope)
         compose.setContent { BuyMyWayTheme { ListScreen(vm, onBack = {}, onOpenCategoryOrder = {}) } }
+        // The screen (and its add bar) appears once Room has answered.
+        waitFor { exists(hasTestTag("addField")) }
         return vm
     }
 
