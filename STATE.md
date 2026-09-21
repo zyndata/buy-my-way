@@ -448,6 +448,36 @@ Newest last. Every deviation from PLAN.md lands here **before** it is acted on.
     run at most once a day per list. Nothing runs in the background: the sweep is called when
     a list is opened (Phase 3), so nothing new wakes the device.
 
+### 2026-09-21 — Before Phase 3
+
+43. **„Cofnij" after a delete holds the delete back (owner, 2026-09-21).** A tombstone stays
+    final (decision 39). Deleting a list or an item hides it on screen at once, and the
+    `list.delete` / `item.delete` op is committed only when the undo snackbar closes without
+    „Cofnij". If the app dies while the snackbar is open, the delete is lost and the thing is
+    still there: the safe side. Chosen over an „undelete" op, which the merge and the Phase 5
+    rules would both have to allow.
+44. **The order of lists on the home screen is personal and stored per device (owner,
+    2026-09-21).** Two members may sort a shared list differently, so the order is not part
+    of the list. Phase 3 keeps it in DataStore (list ids in order; lists not named in it come
+    after, oldest first). Phase 4 moves it to `/users/{uid}/prefs` with the other per-user
+    settings.
+45. **Drag-to-reorder is written in-house, no library (owner, 2026-09-21).** It covers the
+    lists, the items within a category and the category order editor. It is about 150 lines on
+    `detectDragGesturesAfterLongPress` and `LazyListState`, chosen over
+    `sh.calvin.reorderable` because of the minimal-dependencies rule.
+46. **Icons are vector drawables copied from Material Symbols (Apache-2.0), no icon
+    library (owner, 2026-09-21).** It is only the few the screens need (add, mic, share, drag
+    handle, delete, more, back…), in `res/drawable`, with the licence noted in the README.
+    `material-icons-extended` is large and would be mostly unused. This settles what decision
+    31 put off.
+47. **TalkBack and the README screenshots are done by the owner on a real phone (owner,
+    2026-09-21).** Phase 3 asks for the phone to be connected over `adb` when it reaches those
+    steps: the TalkBack check (recorded here as the owner reports it) and the screenshots
+    (taken with `adb exec-out screencap`). The Compose UI tests still run on the emulator in
+    CI. Also for Phase 3: PLAN.md's „emulator API 34" is already API 35 (decision 38), so
+    Phase 3 only adds its tests to the existing job. The add bar's quantity/unit parser is
+    written as the pure parser Phase 7's dictation will reuse.
+
 ## Open questions
 
 1. ~~Where do shared lists live, now that `drive.file` cannot cross users?~~ Answered by
