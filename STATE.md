@@ -9,7 +9,7 @@ Any deviation from [PLAN.md](PLAN.md) must be recorded here before proceeding.
 |-------|----------------------------------------|---------|-----------|
 | 0     | Spike: Drive sharing & Google project  | done    | 2026-09-21 |
 | 1     | Scaffold & CI                          | done    | 2026-09-21 |
-| 2     | Local data layer & the merge           | pending |           |
+| 2     | Local data layer & the merge           | done    | 2026-09-21 |
 | 3     | Lists & items on screen                | pending |           |
 | 4     | Google sign-in & Drive persistence     | pending |           |
 | 5     | Sharing & real-time                    | pending |           |
@@ -24,7 +24,8 @@ Statuses: `pending` → `in-progress` → `done` (or `blocked` with a note, or `
 decision).
 
 The repository holds the plan, the workflow files, the repository hygiene (2026-09-18), the
-push sender's skeleton (`push/`, deployed) and, from Phase 1, the Android app's scaffold.
+push sender's skeleton (`push/`, deployed), from Phase 1 the Android app's scaffold and, from
+Phase 2, its local data layer.
 
 **Phase 0 done (2026-09-21).** Under `drive.file`, a shared file is invisible to the other
 member's copy of the app. So shared lists and photos move to Firebase Realtime Database and
@@ -42,6 +43,23 @@ removed. Verified on Windows (clean build, API 35 emulator: every route shows it
 works, logcat `FirebaseApp initialization successful`) and in CI on Linux. **Not verified:** a
 build on the Linux machine itself; CI's Ubuntu runner is the Linux evidence for now, and the
 Linux machine's debug SHA-1 is still to be registered (open question 2). Phase 2 is next.
+
+**Phase 2 done (2026-09-21).** The local data layer, with no screen and no network yet. The
+domain types and ops (`core/model`) and a pure merge (`core/sync/Merge.kt`) where applying an
+op and merging a remote node are the same join (decision 39). Room schema v1 (seven tables,
+schema exported to `app/schemas`) and `ListRepository`, where every mutation is merged into
+Room and queued in the outbox in one transaction, with flows per screen. The 90-day expiry
+and the revive rule (decision 36), the default category order in DataStore, the 662-name
+`products-pl.json` with the `Categorizer`, and the RTDB node codec. CI gained the
+`instrumented` job (decision 38).
+Verified: 38 JVM tests (merge laws over ≥ 1000 random orders per scenario, codec round
+trips, the categoriser sample at 100 / 100, see decision 41 for why that overstates it) and
+17 instrumented tests (every screen-facing DAO, the repository, the v1 migration walk) on the
+Windows machine's API 35 emulator, since no phone was connected. A deliberately broken merge
+made 12 tests fail, so the tests do catch a wrong merge. **Not verified:** the Linux machine
+(CI's Ubuntu runner stands in again), and a physical phone for the Room tests. The merged
+manifest still declares Firebase's network permissions (there since Phase 1). Phase 2 adds
+none, and no code opens a connection or signs in. Phase 3 is next.
 
 ## Decisions
 
@@ -358,6 +376,77 @@ Newest last. Every deviation from PLAN.md lands here **before** it is acted on.
       photos and invites at once.
     - Where it lands: the rule and revive in Phase 2 (Room, pure and tested), the add-bar
       behaviour in Phase 3, the RTDB side in Phases 5–6, token cleanup in Phase 9.
+
+### 2026-09-21 — Phase 2 (local data layer & the merge)
+
+37. **Phase 2 libraries, all on PLAN.md's stack list, pinned at their latest stable.** Room
+    2.8.5 (`room-runtime`, `room-ktx`, `room-compiler` through KSP, and `room-testing` for
+    the migration test), plus Room's own Gradle plugin `androidx.room`, which exports the
+    schema and hands it to the instrumented tests; KSP 2.3.12; kotlinx.serialization 1.11.0
+    (the compiler plugin at the Kotlin version, and `-json`); DataStore preferences 1.2.1;
+    `kotlinx-coroutines-test` 1.11.0; AndroidX Test (runner 1.7.0, `ext:junit` 1.3.0).
+    `kotlinx-coroutines-android` 1.11.0 is declared explicitly. Room and Firebase bring 1.9.0
+    on their own, and the 1.11 test library then fails on the device with a
+    `NoSuchMethodError`. The app uses coroutines directly anyway, so it names the version.
+38. **The `instrumented` CI job arrives in Phase 2, not Phase 3** (the consequence decision 33
+    announced). The Room tests are instrumented, and CI is the only evidence that counts, so
+    `ci.yml` gets `connectedDebugAndroidTest` on an emulator now. It uses
+    `reactivecircus/android-emulator-runner` (the usual way to run an emulator on a GitHub
+    runner with KVM), API 35 `google_apis` x86_64, the same API level as the Windows AVD, and
+    a cached AVD snapshot. Phase 3 inherits the job and adds its UI tests to it.
+39. **The merge is a join of item states, and four details of PLAN.md's model are settled
+    here.** An op becomes the partial node it would write, and `apply(op, state)` is
+    `mergeRemote(state, thatNode)`. So applying ops and merging remote nodes are one
+    function, and it is commutative, associative and idempotent by construction (a
+    semilattice join). Content is last-writer-wins by `updatedAt` and the checked state by
+    `checkedAt`, each on its own. Equal timestamps are broken by actor and then by content,
+    so the order is total and every device picks the same winner.
+    - **A tombstone is final.** PLAN.md says a delete is never undone by an *older* put; here
+      a newer one does not undo it either. Re-adding a name creates a new item, or revives the
+      checked one (decision 36). That keeps the Phase 5 rule simple: nothing but the cleanup
+      writes to a deleted node.
+    - **„Wyczyść kupione" is a list-level mark, `clearedAt` in the list meta** (the later mark
+      wins). An item checked before it counts as deleted. Rewriting each item at the moment of
+      clearing would not converge: a device that learns of an older check after the clear
+      would keep the item. With a mark in the meta it converges, and an item someone unchecks
+      after the clear comes back, which is what that person meant. The RTDB `meta` node gains
+      `clearedAt`.
+    - **Deleting a category leaves a tombstone that remembers `moveItemsTo`.** An item whose
+      category is gone is shown under that target (followed to a live category), or under
+      „Inne". Items are not rewritten, for the same convergence reason.
+    - **One op more than PLAN.md lists: `list.delete`.** Phase 3's „Usuń" needs it, and the
+      outbox format is fixed now. The meta keeps `deletedAt`. `Category` gains
+      `updatedAt`/`updatedBy`/`deletedAt`/`moveItemsTo`, the meta gains `updatedBy`, because
+      the merge needs them. A node whose check or delete is known but whose content is not yet
+      (possible only with out-of-order delivery) is kept with `updatedAt = 0` and never shown.
+40. **`products-pl.json` is written by hand, with Eat My Way's departments as the reference.**
+    About 600 everyday shop names, grouped by category id. Where Eat My Way files something
+    unexpectedly (oil, honey and peanut butter under „Przyprawy i dodatki", coconut milk and
+    nuts under „Sypkie"), the dictionary does the same, so a typed item and an imported one land
+    in the same place (decision 9). Two exceptions look like slips in Eat My Way and are not
+    copied: ketchup and potato starch (both „Warzywa" there) are filed under „Przyprawy" and
+    „Sypkie". Nothing is copied from the decompiled apps. The
+    `Categorizer` folds Polish letters (ą→a, so typing without diacritics works), drops numbers
+    and units, and matches words by common prefix with a short inflection allowance
+    („ziemniaków" ↔ „ziemniaki"). The longest matching entry wins („mleko kokosowe" beats
+    „mleko"). A tie between two departments gives „Inne": a miss is allowed, a wrong
+    department is not. Per-user corrections are passed in and win over the dictionary.
+41. **The Categorizer's 100-item sample is not a literal week's export, because none exists in
+    this repository or beside it.** It is built from the closest real thing: the 65 distinct
+    ingredients across the owner's 27 real recipes (read from an Eat My Way backup outside the
+    repository; only the ingredient names are copied, the backup holds personal data and stays
+    out), under the departments Eat My Way itself gives them, plus 35 names typed the way a
+    person types into a shopping list (inflected, without diacritics, with a count). It lives
+    in `app/src/test/resources/categorizer-sample.tsv`. A real export can replace it later
+    without code changes. **Result: 100 / 100, no miss.** That overstates it: the dictionary
+    was written after seeing the 65 recipe names, so they were bound to be covered. The 35
+    typed names are the fairer part of the test. Daily use will show the real miss rate, and a
+    miss costs one tap: it lands in „Inne", never in a wrong department.
+42. **Two small additions to schema v1, so Phase 3 does not start with a migration.** A
+    `name_history` table (decision 36's autocomplete history: names only, with last use and a
+    count), and `sweptAt` in `list_sync`, so the 90-day expiry and the 30-day tombstone purge
+    run at most once a day per list. Nothing runs in the background: the sweep is called when
+    a list is opened (Phase 3), so nothing new wakes the device.
 
 ## Open questions
 

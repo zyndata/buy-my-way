@@ -19,8 +19,12 @@ The interface is in **Polish**. The code, comments and documentation are in Engl
 > phone in ~0.1 s, and a push reached a closed app in under 3 s.
 > Phase 1 is done: the app builds (`./gradlew assembleDebug`, see
 > [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)) and opens on placeholder screens with their
-> Polish titles, with lint, a unit test and the debug build running in CI. Phase 2, the local
-> data layer and the merge, is next.
+> Polish titles.
+> Phase 2 is done: the lists live in a local database on the phone. Every change is also kept
+> as an operation that waits to be sent, and one tested merge settles changes made on two
+> phones. A built-in dictionary of about 660 products files a typed item under its part of
+> the shop. There are no screens for it yet. CI runs the unit tests and the database tests on
+> an emulator. Phase 3, lists and items on screen, is next.
 
 ## What makes it different
 

@@ -1,0 +1,121 @@
+{
+  "version": 1,
+  "overrides": {
+    "mrozonki": ["mrożony", "mrożona", "mrożone", "mrożonki"]
+  },
+  "categories": {
+    "warzywa": [
+      "ziemniaki", "młode ziemniaki", "bataty", "cebula", "cebula czerwona", "cebulka dymka", "dymka", "szalotka",
+      "czosnek", "por", "marchew", "marchewka", "pietruszka", "natka pietruszki", "seler", "seler naciowy",
+      "burak", "buraki", "botwina", "kapusta", "kapusta biała", "kapusta czerwona", "kapusta pekińska",
+      "kapusta włoska", "kapusta kiszona", "brukselka", "kalafior", "brokuł", "brokuły", "kalarepa",
+      "rzodkiewka", "rzepa", "ogórek", "ogórki kiszone", "ogórki konserwowe", "ogórki małosolne", "pomidor",
+      "pomidory", "pomidorki koktajlowe", "pomidory z puszki", "pomidory krojone", "passata", "przecier pomidorowy",
+      "koncentrat pomidorowy", "pomidory suszone", "sos pomidorowy", "papryka", "papryczka chili", "cukinia",
+      "bakłażan", "dynia", "kukurydza", "kukurydza konserwowa", "groszek", "groszek konserwowy", "fasolka",
+      "fasolka szparagowa", "szparagi", "sałata", "sałata lodowa", "sałata rzymska", "rukola", "roszponka",
+      "mix sałat", "szpinak", "jarmuż", "kiełki", "rzeżucha", "szczypiorek", "awokado", "pieczarki", "grzyby",
+      "boczniaki", "kurki", "borowiki", "imbir", "oliwki", "chrzan świeży", "koper włoski", "karczochy",
+      "jabłko", "jabłka", "gruszki", "banany", "pomarańcze", "mandarynki", "klementynki", "cytryna", "cytryny",
+      "limonka", "grejpfrut", "kiwi", "winogrona", "truskawki", "maliny", "borówki", "borówki amerykańskie",
+      "jagody", "jeżyny", "porzeczki", "agrest", "wiśnie", "czereśnie", "śliwki", "brzoskwinie", "nektarynki",
+      "morele", "arbuz", "melon", "ananas", "mango", "granat", "figi", "daktyle", "rodzynki", "żurawina",
+      "śliwki suszone", "morele suszone", "owoce", "warzywa", "rabarbar", "kaki", "marakuja", "pomelo",
+      "włoszczyzna", "rzodkiew", "cykoria", "fenkuł", "pak choi", "edamame"
+    ],
+    "nabial": [
+      "mleko", "mleko bez laktozy", "mleko owsiane", "mleko sojowe", "mleko migdałowe", "napój roślinny",
+      "maślanka", "kefir", "zsiadłe mleko", "jogurt", "jogurt naturalny", "jogurt grecki", "jogurt pitny",
+      "jogurt owocowy", "skyr", "serek homogenizowany", "serek wiejski", "serek śmietankowy", "serek topiony",
+      "twaróg", "ser biały", "ser", "ser żółty", "gouda", "edam", "cheddar", "mozzarella", "parmezan",
+      "grana padano", "feta", "ser sałatkowy", "ricotta", "mascarpone", "ser pleśniowy", "camembert", "brie",
+      "gorgonzola", "halloumi", "ser topiony", "oscypek", "ser kozi", "śmietana", "śmietanka",
+      "śmietanka kremówka", "śmietanka do kawy", "masło", "masło klarowane", "margaryna", "jajka", "jaja",
+      "jajko", "tofu", "hummus", "drożdże", "deser mleczny", "serek danio", "kefir owocowy", "mleko zagęszczone",
+      "ser w plastrach", "ser tarty", "burrata", "kozi ser", "labneh", "jogurt kokosowy"
+    ],
+    "mieso": [
+      "mięso", "kurczak", "pierś z kurczaka", "pierś", "filet z kurczaka", "udka", "udka z kurczaka",
+      "podudzia", "skrzydełka", "ćwiartki", "indyk", "pierś z indyka", "mięso mielone", "mielone",
+      "wołowina", "wieprzowina", "cielęcina", "jagnięcina", "schab", "karkówka", "łopatka", "boczek",
+      "boczek wędzony", "żeberka", "polędwica", "polędwiczka", "golonka", "rostbef", "antrykot", "gulasz",
+      "kaczka", "gęś", "królik", "wątróbka", "serca", "żołądki", "szynka", "szynka parmeńska",
+      "kiełbasa", "kiełbaski", "kabanosy", "parówki", "salami", "pasztet", "pasztetowa", "kaszanka",
+      "salceson", "baleron", "polędwica sopocka", "chorizo", "wędlina", "mortadela", "szynka konserwowa",
+      "mielonka", "konserwa", "ryba", "ryby", "łosoś", "łosoś wędzony", "dorsz", "mintaj", "morszczuk",
+      "tuńczyk", "makrela", "makrela wędzona", "śledź", "śledzie", "pstrąg", "sardynki", "szprotki",
+      "krewetki", "owoce morza", "kalmary", "małże", "paluszki krabowe", "kawior", "flądra", "halibut",
+      "tilapia", "karp", "sandacz", "dorada", "okoń", "pangasius", "kotlety", "kotlet schabowy", "burgery",
+      "stek", "bekon", "pieczeń"
+    ],
+    "pieczywo": [
+      "chleb", "chleb żytni", "chleb pszenny", "chleb razowy", "chleb tostowy", "chleb graham", "bułki",
+      "bułka", "kajzerki", "grahamki", "bagietka", "rogale", "croissant", "drożdżówka", "pączki", "chałka",
+      "bułka tarta", "tortilla", "tortille", "pita", "wafle żytnie", "sucharki", "pieczywo chrupkie",
+      "ciastka", "herbatniki", "biszkopty", "babka", "ciasto", "sernik", "szarlotka", "placek", "bajgle",
+      "obwarzanki", "pierniki", "bułki do hamburgerów", "bułki do hot dogów", "pieczywo", "tosty",
+      "chlebek", "ciabatta", "focaccia", "muffinki", "rogaliki", "wafelki", "pączek", "keks", "makowiec",
+      "chleb bezglutenowy"
+    ],
+    "sypkie": [
+      "mąka", "mąka pszenna", "mąka żytnia", "mąka orkiszowa", "mąka pełnoziarnista", "cukier", "cukier puder",
+      "cukier trzcinowy", "ryż", "ryż basmati", "ryż jaśminowy", "ryż brązowy", "ryż do sushi", "ryż arborio",
+      "makaron", "spaghetti", "penne", "świderki", "kokardki", "lasagne", "nitki", "tagliatelle", "fusilli",
+      "makaron ryżowy", "makaron sojowy", "kasza", "kasza gryczana", "kasza jaglana", "kasza jęczmienna",
+      "kasza manna", "kasza kukurydziana", "pęczak", "kuskus", "bulgur", "komosa ryżowa", "quinoa",
+      "płatki owsiane", "płatki kukurydziane", "płatki jaglane", "płatki śniadaniowe", "musli", "granola",
+      "otręby", "fasola", "fasola czerwona", "fasola biała", "fasola jaś", "soczewica", "ciecierzyca",
+      "groch", "mleko kokosowe", "śmietanka kokosowa", "orzechy", "orzechy włoskie", "orzechy laskowe",
+      "orzeszki", "orzeszki ziemne", "nerkowce", "migdały", "pistacje", "pestki dyni", "pestki słonecznika",
+      "słonecznik", "siemię lniane", "nasiona chia", "chia", "sezam", "mak", "wiórki kokosowe", "kakao",
+      "budyń", "kisiel", "galaretka", "skrobia", "mąka ziemniaczana", "kaszka", "otręby owsiane",
+      "chipsy kokosowe", "żelatyna", "ryż preparowany"
+    ],
+    "przyprawy": [
+      "sól", "sól morska", "pieprz", "pieprz czarny", "papryka słodka", "papryka ostra", "papryka wędzona",
+      "papryka mielona", "chili w proszku", "chili", "kmin rzymski", "kminek", "oregano", "bazylia", "tymianek",
+      "rozmaryn", "majeranek", "koperek", "koper", "cynamon", "gałka muszkatołowa", "curry", "kurkuma",
+      "imbir mielony", "liść laurowy", "ziele angielskie", "goździki", "wanilia", "cukier wanilinowy",
+      "zioła prowansalskie", "przyprawa", "przyprawy", "vegeta", "kostki rosołowe", "bulion", "olej",
+      "olej rzepakowy", "olej słonecznikowy", "olej kokosowy", "olej sezamowy", "oliwa", "oliwa z oliwek",
+      "ocet", "ocet balsamiczny", "ocet jabłkowy", "musztarda", "majonez", "ketchup", "chrzan", "sos sojowy",
+      "pesto", "miód", "dżem", "konfitura", "powidła", "krem czekoladowy", "nutella", "masło orzechowe",
+      "tahini", "syrop klonowy", "syrop", "kapary", "smalec", "sos czosnkowy", "sos barbecue", "sriracha",
+      "tabasco", "sos", "proszek do pieczenia", "soda oczyszczona", "ekstrakt waniliowy", "czosnek granulowany",
+      "sok z cytryny", "sok z limonki", "natka suszona", "gorczyca", "kolendra", "estragon", "szafran",
+      "anyż", "kardamon", "sos rybny", "sos teriyaki", "sos worcestershire", "przyprawa do kurczaka",
+      "przyprawa do gyrosa", "przyprawa do mięsa", "sos słodko kwaśny", "sos pieczarkowy", "chutney",
+      "sos tzatziki", "dressing", "czekolada do pieczenia", "lukier", "polewa czekoladowa", "maggi",
+      "fix", "sól himalajska"
+    ],
+    "mrozonki": [
+      "mrożonki", "lody", "lód", "kostki lodu", "frytki", "pizza", "pierogi", "uszka", "kopytka", "knedle",
+      "paluszki rybne", "mieszanka warzywna", "warzywa na patelnię", "mieszanka kompotowa", "zapiekanki",
+      "nuggetsy", "krokiety", "naleśniki mrożone", "gnocchi", "pyzy", "kluski śląskie", "sorbet",
+      "lody na patyku", "rożki"
+    ],
+    "napoje": [
+      "woda", "woda mineralna", "woda gazowana", "woda niegazowana", "sok", "sok pomarańczowy", "sok jabłkowy",
+      "sok pomidorowy", "sok multiwitamina", "nektar", "napój", "napoje", "cola", "lemoniada", "oranżada",
+      "napój izotoniczny", "energetyk", "kawa", "kawa ziarnista", "kawa mielona", "kawa rozpuszczalna",
+      "kapsułki do kawy", "herbata", "herbata zielona", "herbata czarna", "herbata owocowa", "herbata miętowa",
+      "yerba mate", "piwo", "piwo bezalkoholowe", "wino", "wino czerwone", "wino białe", "prosecco",
+      "szampan", "wódka", "whisky", "gin", "rum", "likier", "tonik", "kompot", "syrop malinowy", "kakao do picia",
+      "woda kokosowa", "kombucha", "cydr", "smoothie", "ice tea"
+    ],
+    "inne": [
+      "papier toaletowy", "ręczniki papierowe", "ręcznik papierowy", "chusteczki", "chusteczki higieniczne",
+      "chusteczki nawilżane", "serwetki", "płyn do naczyń", "tabletki do zmywarki", "sól do zmywarki",
+      "kapsułki do prania", "proszek do prania", "płyn do prania", "płyn do płukania", "płyn do mycia",
+      "mleczko do czyszczenia", "odświeżacz", "worki na śmieci", "folia aluminiowa", "folia spożywcza",
+      "papier do pieczenia", "woreczki", "gąbki", "zmywaki", "ścierki", "mydło", "żel pod prysznic",
+      "szampon", "odżywka", "pasta do zębów", "szczoteczka do zębów", "nić dentystyczna", "płyn do płukania ust",
+      "dezodorant", "krem", "krem do rąk", "balsam", "pieluchy", "podpaski", "tampony", "wkładki",
+      "maszynki do golenia", "pianka do golenia", "patyczki", "płatki kosmetyczne", "zapałki", "świeczki",
+      "baterie", "żarówka", "karma dla kota", "karma dla psa", "karma", "żwirek", "chipsy", "paluszki",
+      "popcorn", "krakersy", "czekolada", "czekoladki", "cukierki", "żelki", "baton", "batony", "lizaki",
+      "guma do żucia", "słodycze", "wafle ryżowe", "precle", "prażynki", "chrupki", "orzeszki w czekoladzie",
+      "kwiaty", "prezent", "leki", "witaminy", "plastry", "worki", "reklamówka", "torba"
+    ]
+  }
+}

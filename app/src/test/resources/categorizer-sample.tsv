@@ -1,0 +1,110 @@
+# The Categorizer's acceptance sample (PLAN.md Phase 2, STATE.md decision 41): 100 names, each
+# with the department it belongs in. Tab-separated: name <TAB> category id.
+#
+# Lines 1-65: every distinct ingredient of the owner's 27 real Eat My Way recipes, spelled as
+# Eat My Way's shopping list prints them, under the department Eat My Way gives them. The one
+# exception is „Poledwica sopocka" (a custom ingredient, typed without „ł" and with no
+# department in Eat My Way): it is a cold cut, so `mieso`.
+Cukinia	warzywa
+Oliwa z oliwek	przyprawy
+Cebula	warzywa
+Czosnek	warzywa
+Sól	przyprawy
+Pieprz czarny	przyprawy
+Oregano	przyprawy
+Pomidory z puszki	warzywa
+Ser ricotta	nabial
+Jajko kurze	nabial
+Ser parmezan	nabial
+Natka pietruszki	warzywa
+Ser mozzarella	nabial
+Pierś z kurczaka	mieso
+Ryż biały	sypkie
+Chorizo surowe	mieso
+Papryka czerwona	warzywa
+Pomidory	warzywa
+Olej rzepakowy	przyprawy
+Papryka słodka mielona	przyprawy
+Chili w proszku	przyprawy
+Kmin rzymski	przyprawy
+Masło	nabial
+Poledwica sopocka	mieso
+Płatki owsiane	sypkie
+Mleko 2%	nabial
+Banan	warzywa
+Masło orzechowe	przyprawy
+Chleb pszenny	pieczywo
+Chleb żytni	pieczywo
+Serek wiejski	nabial
+Szczypiorek	warzywa
+Jogurt naturalny	nabial
+Granola domowa	sypkie
+Borówki amerykańskie	warzywa
+Szpinak	warzywa
+Ser żółty gouda	nabial
+Mąka pszenna biała	sypkie
+Brokuły	warzywa
+Makaron pszenny	sypkie
+Mięso mielone wołowe 10% tłuszczu	mieso
+Pomidory krojone z puszki	warzywa
+Łopatka wieprzowa	mieso
+Kasza gryczana	sypkie
+Marchew	warzywa
+Łosoś atlantycki hodowlany	mieso
+Ziemniaki	warzywa
+Koperek świeży	przyprawy
+Śmietana 18%	nabial
+Fasola czerwona	sypkie
+Mięso mielone wieprzowe	mieso
+Bułka tarta	pieczywo
+Ciecierzyca	sypkie
+Mleko kokosowe z puszki	sypkie
+Tuńczyk w wodzie	mieso
+Ogórek	warzywa
+Ser feta	nabial
+Szynka gotowana chuda	mieso
+Ser żółty cheddar	nabial
+Tortilla pszenna	pieczywo
+Rzodkiewka	warzywa
+Jabłko	warzywa
+Truskawki	warzywa
+Miód	przyprawy
+Orzechy włoskie	sypkie
+#
+# Lines 66-100: names typed the way a person types a shopping list: inflected, with a count or
+# a unit, without Polish letters.
+2 kg ziemniaków	warzywa
+cebule	warzywa
+pomidorki koktajlowe	warzywa
+banany	warzywa
+jablka	warzywa
+3 cytryny	warzywa
+salata	warzywa
+ogorki kiszone	warzywa
+mleko 3,2%	nabial
+10 jajek	nabial
+twarożek	nabial
+jogurty naturalne	nabial
+smietana 18	nabial
+papier toaletowy	inne
+filet z kurczaka	mieso
+pół kilo mielonego	mieso
+kiełbasa	mieso
+szynki	mieso
+parówki	mieso
+łosoś wędzony	mieso
+6 bułek	pieczywo
+chleb razowy	pieczywo
+bagietka	pieczywo
+makaron spaghetti	sypkie
+ryz	sypkie
+cukier	sypkie
+kasza jaglana	sypkie
+pieprz	przyprawy
+olej	przyprawy
+majonez	przyprawy
+pizza mrożona	mrozonki
+lody	mrozonki
+woda gazowana	napoje
+kawa	napoje
+4 piwa	napoje

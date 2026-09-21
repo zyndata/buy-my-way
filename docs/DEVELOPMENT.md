@@ -42,6 +42,7 @@ On Linux it is simply `sdk.dir=/home/you/Android/Sdk`.
 | SDK levels | minSdk 26, compileSdk and targetSdk 37 |
 | UI | Jetpack Compose (BoM), Material 3, Navigation Compose, single activity |
 | Firebase | BoM with `auth`, `database`, `messaging`; configured from the committed `app/google-services.json` |
+| Data | Room (KSP) with the schema exported to `app/schemas` and committed, DataStore preferences, kotlinx.serialization |
 | Checks | Android Lint with warnings as errors; Kotlin `allWarningsAsErrors` |
 
 Versions are pinned in `gradle/libs.versions.toml` and recorded in STATE.md (decision 26).
@@ -62,13 +63,14 @@ builds as `0.0.0-dev`, which is why CI checks out the full history.
 | `./gradlew installDebug` | Build and install on the connected device or emulator |
 | `./gradlew lint` | Android Lint; warnings are errors on our own code |
 | `./gradlew testDebugUnitTest` | JVM unit tests (pure Kotlin: merge, parsers, categoriser) |
-| `./gradlew connectedDebugAndroidTest` | Instrumented tests on the connected device/emulator (from Phase 3) |
+| `./gradlew connectedDebugAndroidTest` | Instrumented tests (Room DAOs, the repository, migrations) on every device `adb` sees: a connected phone, the emulator, or both |
 | `./gradlew assembleRelease` | Signed release APK — needs the signing properties below (Phase 10) |
 | `npm run changelog` | Regenerate `CHANGELOG.md` from commits (git-cliff) |
 | `npm --prefix firebase test` | Realtime Database rules tests against the Firebase emulator (from Phase 5) |
 
-CI runs `lint testDebugUnitTest assembleDebug` on every push to `dev`; the instrumented suite
-joins it in Phase 3 and the rules tests in Phase 5. Run the same before pushing.
+CI runs `lint testDebugUnitTest assembleDebug` and, in a second job, `connectedDebugAndroidTest`
+on an API 35 emulator on every push to `dev`; the rules tests join in Phase 5. Run the same
+before pushing.
 
 ## Google Sign-In on a debug build
 
@@ -116,8 +118,9 @@ CI reads the same four values from GitHub Secrets (the keystore as base64).
   a Gradle task or a Node script.
 - **File names are case-sensitive** on Linux and in CI; Windows will not tell you.
 - The emulator: one AVD per machine with a **Google APIs / Play Store image** (Play services
-  are needed for Sign-In and FCM), API 34 or newer — the Windows machine uses API 35. Phase 3
-  pins the image CI uses for `connectedDebugAndroidTest`.
+  are needed for Sign-In and FCM), API 34 or newer — the Windows machine uses API 35. CI runs
+  `connectedDebugAndroidTest` on API 35 `google_apis` x86_64 (STATE.md decision 38). A phone
+  connected over `adb` works as well: Gradle runs the suite on every device `adb` sees.
 
 ## Reference material
 

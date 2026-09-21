@@ -23,7 +23,7 @@ premium, no ads, no analytics.
 - **Conventional commits**; push after each phase.
 - **A push is not finished until CI is green.** `ci.yml` runs on every push to `dev` (and on
   pull requests) — never on `main`. It is the only check that runs somewhere other than the
-  machine the work was done on, and from Phase 3 it runs the instrumented suite on an emulator
+  machine the work was done on, and from Phase 2 it runs the instrumented suite on an emulator
   on every push — a green local run is evidence, not a substitute. After pushing, find the run
   by the pushed commit's SHA, wait for it (`gh run watch <id> --exit-status`) and report what
   it said. Never call work done while a run is pending or red.

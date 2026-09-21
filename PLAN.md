@@ -190,7 +190,8 @@ data class Member(val uid: String, val role: Role, val since: Long,
   data class ListPut(name, categoryOrder)
   data class CategoryPut(...: Category)
   data class CategoryDelete(categoryId, moveItemsTo: String)
-  data class ClearChecked()
+  data class ClearChecked()               // a list-level mark, `clearedAt` in meta (STATE.md decision 39)
+  data class ListDelete()                 // added in Phase 2 (decision 39)
 }
 ```
 
@@ -206,7 +207,8 @@ data class Member(val uid: String, val role: Role, val since: Long,
 - **Merge rules** (`core/sync/Merge.kt`, pure): `ItemPut` wins if `at > item.updatedAt`;
   `ItemCheck` wins if `at > item.checkedAt`; `ItemDelete` wins over anything older than it and
   is never undone by an older `ItemPut`; `ClearChecked` is an `ItemDelete` for every item
-  checked before `at`. Ops apply in any order and any number of times to the same result.
+  checked before `at` (kept as `clearedAt` in the meta, so a late tick converges too; STATE.md
+  decision 39). Ops apply in any order and any number of times to the same result.
 
 ## Storage layout
 
@@ -218,9 +220,10 @@ data class Member(val uid: String, val role: Role, val since: Long,
 /emailIndex/{sha256(email)}  uid                                          write: self
 /fcmTokens/{uid}/{token}     { at }                                       write: self; read: nobody (the script reads as owner)
 /userLists/{uid}/{listId}    role                                         write: the list's owner
-/lists/{listId}/meta         { name, ownerUid, categoryOrder, updatedAt } write: owner (name, order: editors too)
+/lists/{listId}/meta         { name, ownerUid, categoryOrder, createdAt, updatedAt, updatedBy, clearedAt, deletedAt }
+                             write: owner (name, order, clearedAt: editors too)
 /lists/{listId}/members/{uid} { role, since }                             write: owner
-/lists/{listId}/categories/{catId} { name, builtin, updatedAt, deletedAt } write: editor/owner
+/lists/{listId}/categories/{catId} { name, builtin, updatedAt, updatedBy, deletedAt, moveItemsTo } write: editor/owner
 /lists/{listId}/items/{itemId}  { …Item fields… }                         write: editor/owner, only if not older
 /lists/{listId}/presence/{uid} timestamp, removed by onDisconnect
 /photos/{listId}/{itemId}    { webp: base64, w, h, by, at }               read: members; write: editor/owner; ≤ 110 kB
@@ -409,7 +412,7 @@ two machines:
   npm (rules tests) and Actions, issue templates.
 - **CI (`ci.yml`)** on every push to `dev` and on PRs: `check` (JDK 21, Gradle cache, `lint`,
   `testDebugUnitTest`, `assembleDebug`), `rules` (Firebase emulator, rules tests), and from
-  Phase 3 `instrumented` (Android emulator, `connectedDebugAndroidTest`). Green CI is the
+  Phase 2 `instrumented` (Android emulator, `connectedDebugAndroidTest`). Green CI is the
   only evidence that counts, exactly as in Eat My Way; the instrumented job is this project's
   e2e gate.
 - **Release (`deploy.yml`)** on a `v*` tag: `assembleRelease` signed from secrets → git-cliff

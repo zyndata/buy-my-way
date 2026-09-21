@@ -39,7 +39,7 @@ Implement **Phase $ARGUMENTS** of this project. Follow this procedure exactly:
   every criterion honestly — if one fails or cannot be verified in this environment (no second
   phone, no second Google account, no emulator), say so explicitly and record it in STATE.md.
 - Run what CI runs before pushing: `./gradlew lint testDebugUnitTest assembleDebug`, and from
-  Phase 3 `./gradlew connectedDebugAndroidTest` on an emulator, and from Phase 5 the rules
+  Phase 2 `./gradlew connectedDebugAndroidTest` on an emulator, and from Phase 5 the rules
   tests in `firebase/`.
 
 ## 5. End-of-phase ritual (in this order)
