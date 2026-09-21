@@ -35,7 +35,7 @@ One project, `buy-my-way-c3949` (the plain id was taken), on the **Spark** (free
 - **OAuth clients**: one Web client (its id is the `serverClientId` the app passes to Sign in
   with Google) and one Android client per signing SHA-1 — each developer machine's debug key,
   the release key, and Play App Signing's key once Phase 11 exists.
-- **Drive API**: enabled only for the Phase 0 spike, and switched off when it closes.
+- **Drive API**: off. It was enabled only for the Phase 0 spike (2026-09-21).
 
 Public ids (`google-services.json`, the Web client id, the Apps Script URL) are committed.
 Nothing here is a secret; what protects the data is the database rules.
@@ -48,6 +48,29 @@ Firebase project so `ScriptApp.getOAuthToken()` carries the `firebase.database` 
 `firebase.messaging` scopes. No service-account key exists anywhere. The deployment URL goes
 into `gradle.properties` as `BUYMYWAY_PUSH_ENDPOINT`. Re-deploying after a change is „Deploy →
 Manage deployments → edit → new version"; the URL does not change.
+
+The Phase 0 skeleton has been deployed since 2026-09-21 (project "Buy My Way push" under the
+owner's account, Cloud project `270774397521`). Script properties: `FIREBASE_API_KEY`,
+`FIREBASE_PROJECT_ID`, and `FCM_TOKEN` for the skeleton's single target, which Phase 9
+replaces. What Phase 0 learned the hard way (STATE.md decisions 23 and 24):
+
+1. **Paste `appsscript.json` before the first deployment.** A deployment version keeps the
+   manifest it was created with. A version made before the `oauthScopes` were pasted only has
+   the scopes Apps Script guessed (`script.external_request`), and FCM then answers
+   `403 insufficient authentication scopes`.
+2. **Every manifest change needs a new version.** Manage deployments → ✏️ → *Version: New
+   version* → Deploy. The dialog defaults to the current version, and saving it that way
+   changes nothing.
+3. **Authorise by running a function in the editor, and tick every box.** Google's consent
+   screen lists each scope with its own checkbox. A partial grant is remembered, and the
+   script fails later with "you do not have permission to call UrlFetchApp.fetch".
+4. **Don't revoke "Buy My Way" in Google Account → Connections to redo the consent.** The
+   script and the app share one OAuth project, so that also ends the Firebase session of
+   every phone signed in with that account.
+5. Check a deployment from any machine: `GET <url>` → `{"ok":true}`; `POST` with
+   `{"idToken":"x"}` (let curl turn the 302 into a GET: `curl -sL -d …`, not `-X POST`) →
+   `{"ok":false,"error":"unauthenticated"}`. Anything else, an HTML error page above all,
+   means the authorisation is incomplete.
 
 Quotas that matter (consumer account): 20 000 URL fetches a day, 90 minutes of runtime a day.
 A push is one fetch per recipient; a household will not get near either.

@@ -12,9 +12,10 @@ The interface is in **Polish**. The code, comments and documentation are in Engl
 
 > **Status: planned, nothing built yet.** [PLAN.md](PLAN.md) holds the specification and the
 > twelve phases; [STATE.md](STATE.md) records what has been decided and what is still open.
-> Phase 0, a spike on Drive sharing, is in progress. Its verdict is in: another member cannot
-> read a shared Drive file under the `drive.file` scope, so shared lists now live in Firebase
-> Realtime Database instead (STATE.md decisions 19–21). The latency measurements are pending.
+> Phase 0, a spike on Drive sharing and the Google project, is done. Its verdict: another
+> member cannot read a shared Drive file under the `drive.file` scope, so shared lists live in
+> Firebase Realtime Database instead (STATE.md decisions 19–24). A change reached the other
+> phone in ~0.1 s, and a push reached a closed app in under 3 s. Phase 1, the scaffold, is next.
 
 ## What makes it different
 

@@ -45,6 +45,3 @@ Thumbs.db
 
 # Claude Code local overrides (machine-specific; the shared settings.json is committed)
 .claude/settings.local.json
-
-# Phase 0 spike: local copy of the public ids (see spike/spike.properties.example)
-spike/spike.properties

@@ -467,10 +467,11 @@ measured.
 - [x] The second account, holding only `drive.file`, lists, reads and updates the file the
       first account created and shared — or STATE.md records that it cannot, and the plan is
       amended before Phase 1. *(It cannot; amended.)*
-- [ ] RTDB op round trip median and p95 recorded; Apps Script push latency recorded.
-- [ ] Firebase project exists on the Spark plan; RTDB rules deny everything to unauthenticated
+- [x] RTDB op round trip median and p95 recorded; Apps Script push latency recorded.
+      *(Warm and to a killed app; the script's cold start is left to Phase 9.)*
+- [x] Firebase project exists on the Spark plan; RTDB rules deny everything to unauthenticated
       users; the consent screen lists the test users.
-- [ ] No spike code is left in the build path.
+- [x] No spike code is left in the build path.
 
 ## Phase 1 — Scaffold & CI
 

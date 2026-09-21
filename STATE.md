@@ -7,7 +7,7 @@ Any deviation from [PLAN.md](PLAN.md) must be recorded here before proceeding.
 
 | Phase | Name                                   | Status  | Completed |
 |-------|----------------------------------------|---------|-----------|
-| 0     | Spike: Drive sharing & Google project  | in-progress |           |
+| 0     | Spike: Drive sharing & Google project  | done    | 2026-09-21 |
 | 1     | Scaffold & CI                          | pending |           |
 | 2     | Local data layer & the merge           | pending |           |
 | 3     | Lists & items on screen                | pending |           |
@@ -22,14 +22,16 @@ Any deviation from [PLAN.md](PLAN.md) must be recorded here before proceeding.
 
 Statuses: `pending` → `in-progress` → `done` (or `blocked` with a note).
 
-Nothing of the app is built yet. The repository holds the plan, the workflow files and the
-repository hygiene (2026-09-18).
+Nothing of the app is built yet. The repository holds the plan, the workflow files, the
+repository hygiene (2026-09-18) and the push sender's skeleton (`push/`, deployed).
 
-**Phase 0 in progress (started 2026-09-21).** The spike tooling is written and builds:
-`spike/` (a standalone throwaway Gradle build, see [spike/README.md](spike/README.md) for the
-runbook) and `push/` (the Apps Script skeleton). Waiting on the owner for the Google console
-setup, two accounts on two phones and the measurements; none of those can be done from the
-development machine. The verdict may amend Phases 4 and 5 (decision 1, open question 1).
+**Phase 0 done (2026-09-21).** Under `drive.file`, a shared file is invisible to the other
+member's copy of the app. So shared lists and photos move to Firebase Realtime Database and
+the app requests no Drive scope (decisions 19–21). PLAN.md Phases 2, 4, 5 and 6 are
+amended. Measured: an RTDB change reached the other phone in ~70–110 ms median one way
+(decision 22); a push reached a killed app in 2.7 s, warm median 1.7 s (decision 24). The
+Firebase project `buy-my-way-c3949` is on Spark with the rules locked again. The spike is
+deleted, the Drive API is off, the spike's Drive folder is removed. Phase 1 is next.
 
 ## Decisions
 
@@ -136,6 +138,10 @@ Newest last. Every deviation from PLAN.md lands here **before** it is acted on.
     file, and sharing does not grant it. The hybrid's Drive half (decisions 1 and 2), the
     shared `list.json` and the photos on the owner's Drive, **does not work as planned**.
     Plan to be amended before Phase 1. Owner's choice pending (open question 1).
+    The grants are taken from both phones' logs (`granted scopes: [… drive.file,
+    drive.appdata …]`), not from the console. Afterwards the consent screen's *Data access*
+    list turned out not to name the Drive scopes. In Testing mode that list only matters for
+    verification, so it does not change the result.
     Working under `drive.file`: sign-in, the consent screen in Testing, per-user
     `appDataFolder` (create/list/read `prefs.json`), creating files in one's own Drive, and
     RTDB writes under the spike rules.
@@ -177,6 +183,55 @@ Newest last. Every deviation from PLAN.md lands here **before** it is acted on.
     *Later* in PLAN.md, not planned. The Drive API stays enabled in the project for the
     spike only and is switched off when Phase 0 closes.
 
+22. **RTDB change latency, phone to phone (2026-09-21): median ~70–110 ms one way, p95
+    ≤ 160 ms, far under the 1 s requirement.** Measured as an echo (decision 16): A writes,
+    B's listener answers, A times the round trip. 20 counted samples per run after one
+    warm-up. Phone A (S10e) has no SIM, so it was on home Wi-Fi in both runs. The plan's
+    "both on mobile data" was not possible and is not recorded.
+
+    | Run | B's network | RTT median | RTT p95 | one-way median | one-way p95 | max RTT |
+    |---|---|---|---|---|---|---|
+    | 1 | mobile data | 135 ms | 310 ms | 67 ms | 155 ms | 802 ms |
+    | 2 | Wi-Fi | 214 ms | 227 ms | 107 ms | 113 ms | 363 ms |
+
+    The Wi-Fi run is bimodal (≈110 ms or ≈215 ms RTT). That is most likely the phones' Wi-Fi
+    power saving; either way it is well inside budget. The warm-up of the first run (409 ms)
+    is the connection cost a list pays once when it opens. B's server-offset cross-check
+    agrees in scale (−13…+228 ms, the negatives being clock-offset error). The Drive
+    `files.get` timing was not measured: Drive no longer carries data (decision 21).
+
+23. **Removing the app in Google Account → Connections ends the Firebase session.** Found
+    by accident (2026-09-21). Removing "Buy My Way" at myaccount.google.com/connections, to
+    redo the Apps Script consent, also invalidated the Firebase session of the phone signed
+    in with that account. Its next `getIdToken(true)` threw
+    `FirebaseAuthInvalidUserException` ("the user's credential is no longer valid"). The
+    Apps Script and the Android app share one OAuth project, so they show up as one
+    connection. Phase 4 must treat that exception as "sign in again" (with a sentence),
+    never as a crash or a silent sign-out, and never lose local data. Related: a partial
+    consent (not every checkbox ticked on Google's granular consent screen) is remembered, so
+    the script ran without `script.external_request` and then without `firebase.messaging`.
+    DEPLOYMENT.md (Phase 9) must say "tick every box".
+
+24. **Push through the Apps Script works end to end: ~1.7 s median, under 2.8 s to a killed
+    app (2026-09-21).** Phone B (S23 Ultra, mobile data) asked the script to push to its own
+    token, so one clock measured the whole path (decision 16): tap → HTTPS POST → the script
+    verifies the Firebase ID token (`accounts:lookup`, 100–150 ms) → FCM v1 with the script's
+    own OAuth token → data message received.
+
+    | Case | n | end-to-end | script's own time |
+    |---|---|---|---|
+    | warm, app in foreground | 6 | median 1.67 s, min 1.27 s, max 1.99 s | 130–210 ms |
+    | app process killed (`am kill`), push sent from phone A | 1 | 2.73 s (A's and B's clocks, NTP) | 608 ms |
+
+    The killed app was started by the high-priority data message and posted its notification
+    with no activity running. **Not measured:** a true cold start of the script after 30+
+    minutes idle, and Doze. Both belong to Phase 9's acceptance ("notification within 5 s,
+    p95"), which measures them on the finished sender. The script also rejects a request with
+    no token or a forged one (`{"ok":false,"error":"unauthenticated"}`, checked with `curl`).
+    Deployment lessons for DEPLOYMENT.md: paste the manifest *before* the first deployment;
+    a deployment keeps the manifest of its version, so every manifest change needs
+    **Manage deployments → edit → New version**; tick every box on the consent screen.
+
 ## Open questions
 
 1. ~~Where do shared lists live, now that `drive.file` cannot cross users?~~ Answered by
@@ -193,8 +248,15 @@ Newest last. Every deviation from PLAN.md lands here **before** it is acted on.
    - OAuth consent screen: External, Testing, Eat My Way branding (open question 6), scopes
      `drive.file` and `drive.appdata`.
 
-   Still to do: the Linux machine's debug SHA-1; confirm Google sign-in, the Drive API and
-   the spike rules on the phone. Nothing but public ids is written down.
+   - Google sign-in on, verified on two phones; the Drive API was enabled for the spike and
+     is off again; RTDB rules locked (`.read`/`.write` false) until Phase 4 writes the real
+     ones; plan **Spark** (checked 2026-09-21).
+   - Apps Script push sender: project "Buy My Way push", Cloud project `270774397521`,
+     web-app URL
+     `https://script.google.com/macros/s/AKfycbxALVMNZHX5kQxw1OZyeYZ8IdELlmAFR1RXHE_1DXklCIhKFxxBNHcK_Zf7fy2MLjyCyA/exec`.
+
+   Still to do: register the **Linux machine's debug SHA-1** (Phase 1, the first build
+   there). Nothing but public ids is written down.
 3. **GitHub repository `zyndata/buy-my-way` exists but is private** (checked 2026-09-21),
    while decision 4 says public. The owner has to flip the visibility
    (`gh repo edit zyndata/buy-my-way --visibility public --accept-visibility-change-consequences`)
@@ -219,7 +281,10 @@ Newest last. Every deviation from PLAN.md lands here **before** it is acted on.
    app in Testing status issues refresh tokens that expire after 7 days. If that reaches the
    Play-services `AuthorizationClient` grant, or the Apps Script's stored authorisation (its
    Cloud project is the same one), "Testing mode forever" (DEPLOYMENT.md) means a re-consent
-   every week, or a push sender that stops. Spike step 3.10 checks it on day 8. If it
-   bites: publish the consent screen to *In production*. `drive.file` and `drive.appdata` are listed
-   as non-sensitive scopes (confirm in the console's scope list), so that should need no
-   verification, only the brand info.
+   every week, or a push sender that stops. After decision 21 only the Apps Script can be
+   affected. Check on or after **2026-09-29**, without re-authorising anything:
+   `curl -sL -d '{"idToken":"x"}' <script url>` must still answer
+   `{"ok":false,"error":"unauthenticated"}`, not an authorisation error page. If it
+   bites: publish the consent screen to *In production*. The app has only basic sign-in
+   scopes now, and the script's two are not restricted, so that should need no verification,
+   only the privacy page of open question 6.
