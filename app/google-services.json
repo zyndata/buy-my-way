@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "270774397521",
+    "firebase_url": "https://buy-my-way-c3949-default-rtdb.europe-west1.firebasedatabase.app",
+    "project_id": "buy-my-way-c3949",
+    "storage_bucket": "buy-my-way-c3949.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:270774397521:android:7f3a8715b5ec1f9a386670",
+        "android_client_info": {
+          "package_name": "dev.gorny.buymyway"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "270774397521-0msiurf1sb48iqp7nb3l2jp6mh48oiuo.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "dev.gorny.buymyway",
+            "certificate_hash": "5adb9af8a5caaccc15e0a494f1be80e52a49528d"
+          }
+        },
+        {
+          "client_id": "270774397521-4l890vstjdbmsvvhkjjho056io7ue221.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAKvHBqWho74Z0gcr84VXD5DF4Q3A7ovDs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "270774397521-4l890vstjdbmsvvhkjjho056io7ue221.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

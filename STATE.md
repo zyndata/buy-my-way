@@ -8,7 +8,7 @@ Any deviation from [PLAN.md](PLAN.md) must be recorded here before proceeding.
 | Phase | Name                                   | Status  | Completed |
 |-------|----------------------------------------|---------|-----------|
 | 0     | Spike: Drive sharing & Google project  | done    | 2026-09-21 |
-| 1     | Scaffold & CI                          | pending |           |
+| 1     | Scaffold & CI                          | done    | 2026-09-21 |
 | 2     | Local data layer & the merge           | pending |           |
 | 3     | Lists & items on screen                | pending |           |
 | 4     | Google sign-in & Drive persistence     | pending |           |
@@ -23,8 +23,8 @@ Any deviation from [PLAN.md](PLAN.md) must be recorded here before proceeding.
 Statuses: `pending` → `in-progress` → `done` (or `blocked` with a note, or `dropped` by a
 decision).
 
-Nothing of the app is built yet. The repository holds the plan, the workflow files, the
-repository hygiene (2026-09-18) and the push sender's skeleton (`push/`, deployed).
+The repository holds the plan, the workflow files, the repository hygiene (2026-09-18), the
+push sender's skeleton (`push/`, deployed) and, from Phase 1, the Android app's scaffold.
 
 **Phase 0 done (2026-09-21).** Under `drive.file`, a shared file is invisible to the other
 member's copy of the app. So shared lists and photos move to Firebase Realtime Database and
@@ -32,7 +32,16 @@ the app requests no Drive scope (decisions 19–21). PLAN.md Phases 2, 4, 5 and 
 amended. Measured: an RTDB change reached the other phone in ~70–110 ms median one way
 (decision 22); a push reached a killed app in 2.7 s, warm median 1.7 s (decision 24). The
 Firebase project `buy-my-way-c3949` is on Spark with the rules locked again. The spike is
-deleted, the Drive API is off, the spike's Drive folder is removed. Phase 1 is next.
+deleted, the Drive API is off, the spike's Drive folder is removed.
+
+**Phase 1 done (2026-09-21).** A Gradle project (`app`, `dev.gorny.buymyway`) with pinned
+versions (decision 26), five placeholder routes with Polish titles, dark theme and dynamic
+colour, Firebase on the classpath and initialising from the committed `google-services.json`,
+Lint and Kotlin warnings as errors, one unit test, and CI with the "no gradlew yet" guard
+removed. Verified on Windows (clean build, API 35 emulator: every route shows its title, back
+works, logcat `FirebaseApp initialization successful`) and in CI on Linux. **Not verified:** a
+build on the Linux machine itself; CI's Ubuntu runner is the Linux evidence for now, and the
+Linux machine's debug SHA-1 is still to be registered (open question 2). Phase 2 is next.
 
 ## Decisions
 
@@ -252,6 +261,47 @@ Newest last. Every deviation from PLAN.md lands here **before** it is acted on.
       truth. So Eat My Way's `privacy.html` gets a Buy My Way section (open question 6),
       done in the Eat My Way repository.
 
+### 2026-09-21 — Phase 1 (scaffold)
+
+26. **Toolchain pinned at Phase 1 (latest stable on 2026-09-21), with two deviations from
+    PLAN.md's ranges.** Gradle 9.7.1, **AGP 9.4.1** (the plan says 8.x; 9.x is the current
+    stable line and the spike already built with 9.3.2), Kotlin 2.4.20 through **AGP 9's
+    built-in Kotlin** (no `org.jetbrains.kotlin.android` plugin, only the Compose compiler
+    plugin), **compileSdk / targetSdk 37** (the plan wrote 36 "at the time of writing"; 37
+    is current), minSdk 26, bytecode target 17. Compose BoM 2026.09.00, Navigation Compose
+    2.10.1, Activity Compose 1.13.0, Firebase BoM 34.19.0, JUnit 4.13.2. CI builds on JDK 21;
+    locally Gradle runs on whatever JDK 21+ is on `JAVA_HOME` (the Windows machine has 24 and
+    Studio's JBR 25). No Gradle toolchain resolution: auto-provisioning needs the foojay
+    plugin, one more thing to trust for nothing the bytecode target doesn't already give.
+27. **Two build pieces not named on the stack list.** `com.google.gms.google-services` (build
+    plugin only, nothing in the APK beyond the generated resource values): it turns the
+    committed `google-services.json` into the values `FirebaseApp` initialises from, which
+    PLAN.md's "google-services.json committed" presupposes. `androidx.activity:activity-compose`:
+    `setContent` and predictive back live there; it is the entry point of any Compose app.
+    Navigation uses plain string routes (`list/{listId}`), exactly as PLAN.md names them, so
+    the kotlinx.serialization plugin waits for Phase 2, which needs it anyway.
+28. **`versionCode` comes from `git describe`, not from a timestamp.** A tag `vX.Y.Z` gives
+    `X·1 000 000 + Y·10 000 + Z·100`; a commit *n* commits after that tag adds `min(n, 99)`.
+    So a dev build installed over a release is newer, and the next release is newer again,
+    and the same commit always builds the same number, which a timestamp would not (it also
+    reconfigures the build on every run). With no tag yet: `versionName` `0.0.0-dev`,
+    `versionCode` = `min(commit count, 99)`. `versionName` is `git describe --tags
+    --match v* --dirty` without the `v`.
+29. **Lint's "a newer version exists" checks are off** (`GradleDependency`,
+    `NewerVersionAvailable`, `AndroidGradlePluginVersion`). With `warningsAsErrors`, they
+    would turn CI red whenever Google publishes something, with no change on our side.
+    Dependabot (monthly) owns version freshness. Every other check stays an error.
+30. **Android backup and device transfer are off** (`allowBackup="false"`,
+    `fullBackupContent="false"`, and `dataExtractionRules` that exclude every domain for
+    Android 12+, where `allowBackup` alone no longer stops device-to-device transfer). A
+    restored copy would carry a Firebase session and a Room database to another phone
+    without the user signing in there. The data that matters is safe anyway: a shared list
+    is in RTDB, and a private list will be exportable once Settings has „Kopia listy". Revisit if
+    daily use misses restoring private lists on a new phone.
+31. **Placeholder navigation is a button per route and a text „Wstecz" in the top bar**, not
+    an icon: Material 3 no longer carries the icon set, and `material-icons` would be a
+    dependency for one arrow. Phase 3 decides the icons with the real screens.
+
 ## Open questions
 
 1. ~~Where do shared lists live, now that `drive.file` cannot cross users?~~ Answered by
@@ -275,8 +325,14 @@ Newest last. Every deviation from PLAN.md lands here **before** it is acted on.
      web-app URL
      `https://script.google.com/macros/s/AKfycbxALVMNZHX5kQxw1OZyeYZ8IdELlmAFR1RXHE_1DXklCIhKFxxBNHcK_Zf7fy2MLjyCyA/exec`.
 
-   Still to do: register the **Linux machine's debug SHA-1** (Phase 1, the first build
-   there). Nothing but public ids is written down.
+   - `app/google-services.json` committed in Phase 1 (2026-09-21); it holds the Windows
+     debug SHA-1's Android client, the Web client and the Android API key.
+
+   Still to do: register the **Linux machine's debug SHA-1** at the first build there (not
+   done in Phase 1: the phase ran on Windows only), then commit the refreshed
+   `google-services.json`. Also unchecked: whether the Android API key is restricted in
+   Google Cloud to the package and SHA-1s as PLAN.md's *Security* section asks. Nothing but
+   public ids is written down.
 3. **GitHub repository `zyndata/buy-my-way` exists but is private** (checked 2026-09-21),
    while decision 4 says public. The owner has to flip the visibility
    (`gh repo edit zyndata/buy-my-way --visibility public --accept-visibility-change-consequences`)

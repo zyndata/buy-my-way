@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name" translatable="false">Buy My Way</string>
+
+    <string name="title_lists">Listy</string>
+    <string name="title_list">Lista</string>
+    <string name="title_share">Udostępnianie</string>
+    <string name="title_import">Import</string>
+    <string name="title_settings">Ustawienia</string>
+
+    <string name="action_back">Wstecz</string>
+    <string name="placeholder_body">Ten ekran powstanie w kolejnych etapach.</string>
+    <string name="placeholder_open_list">Otwórz przykładową listę</string>
+    <string name="placeholder_open_share">Udostępnij</string>
+</resources>

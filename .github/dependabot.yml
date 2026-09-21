@@ -11,8 +11,8 @@ updates:
     commit-message:
       prefix: ci
 
-  # This app holds a Google token with write access to a Drive folder, so security updates
-  # matter more than novelty. Patch/minor bumps are grouped into one PR a month; majors come
+  # This app holds a Firebase session that can read and write every list its user belongs
+  # to, so security updates matter more than novelty. Patch/minor bumps are grouped into one PR a month; majors come
   # separately so they get read properly.
   - package-ecosystem: gradle
     directory: /

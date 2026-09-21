@@ -4,21 +4,55 @@ This project is developed from **two machines — Windows and Linux**. Everythin
 on it lives in the repository; nothing is configured per machine outside `local.properties`,
 `~/.gradle/gradle.properties` and your own git identity.
 
-> Phase 1 fills this file in with the exact versions and the first Gradle tasks. Until then it
-> records the rules the scaffold has to satisfy.
-
 ## Setup (identical on both machines)
 
 ```bash
 git clone https://github.com/zyndata/buy-my-way.git
 cd buy-my-way
-# Android Studio (current stable) with the Android SDK; JDK 21 (the one bundled with Studio
-# is fine — point JAVA_HOME at it for command-line builds).
 ./gradlew assembleDebug            # gradlew.bat on Windows cmd; ./gradlew works in Git Bash
 ```
 
+What has to be installed:
+
+- **A JDK, 21 or newer**, on `JAVA_HOME`. CI uses Temurin 21; the Gradle build runs on any
+  newer JDK too (Android Studio's bundled JBR is fine). The app itself is compiled to Java 17
+  bytecode, so the JDK version does not change the APK.
+- **Android Studio** (current stable) or just the **Android SDK**. The Gradle plugin downloads
+  the compile platform (API 37) and build tools itself on the first build if they are missing,
+  as long as the SDK licences are accepted (`sdkmanager --licenses`).
+- Nothing else: the Gradle wrapper (9.7.1, checksum pinned in
+  `gradle/wrapper/gradle-wrapper.properties`) fetches Gradle, and every library version is in
+  `gradle/libs.versions.toml`.
+
 `local.properties` (the SDK path) is written by Android Studio and is git-ignored — it is the
-one file that legitimately contains an absolute path.
+one file that legitimately contains an absolute path. Written by hand on Windows, escape the
+colon and the backslashes, or Lint's `PropertyEscape` check fails the build:
+
+```
+sdk.dir=C\:\\Users\\you\\AppData\\Local\\Android\\Sdk
+```
+
+On Linux it is simply `sdk.dir=/home/you/Android/Sdk`.
+
+## What the build is made of
+
+| | |
+|---|---|
+| Gradle / AGP / Kotlin | 9.7.1 / 9.4.1 / 2.4.20 (AGP's built-in Kotlin, plus the Compose compiler plugin) |
+| SDK levels | minSdk 26, compileSdk and targetSdk 37 |
+| UI | Jetpack Compose (BoM), Material 3, Navigation Compose, single activity |
+| Firebase | BoM with `auth`, `database`, `messaging`; configured from the committed `app/google-services.json` |
+| Checks | Android Lint with warnings as errors; Kotlin `allWarningsAsErrors` |
+
+Versions are pinned in `gradle/libs.versions.toml` and recorded in STATE.md (decision 26).
+Lint does not complain about newer library versions (decision 29): dependabot proposes them
+once a month.
+
+**Version numbers come from git** (decision 28). `versionName` is `git describe --tags` without
+the `v` (`1.2.0`, or `1.2.0-3-gabc1234` three commits later, `-dirty` with uncommitted changes);
+before the first tag it is `0.0.0-dev`. `versionCode` is `X·1 000 000 + Y·10 000 + Z·100` for
+`vX.Y.Z`, plus the number of commits since the tag (at most 99). A shallow clone without tags
+builds as `0.0.0-dev`, which is why CI checks out the full history.
 
 ## Gradle tasks — the interface to the project
 
@@ -33,8 +67,8 @@ one file that legitimately contains an absolute path.
 | `npm run changelog` | Regenerate `CHANGELOG.md` from commits (git-cliff) |
 | `npm --prefix firebase test` | Realtime Database rules tests against the Firebase emulator (from Phase 5) |
 
-CI runs `lint testDebugUnitTest assembleDebug`, the rules tests and the instrumented suite on
-every push to `dev`. Run the same before pushing.
+CI runs `lint testDebugUnitTest assembleDebug` on every push to `dev`; the instrumented suite
+joins it in Phase 3 and the rules tests in Phase 5. Run the same before pushing.
 
 ## Google Sign-In on a debug build
 
@@ -50,6 +84,15 @@ keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -sto
 the Firebase console → Project settings → Your apps → Android app → *Add fingerprint*, then
 download the refreshed `google-services.json` and commit it. Both machines' fingerprints stay
 registered; a fingerprint is not a secret.
+
+Registered so far: the Windows machine (`5A:DB:9A:F8:…:52:8D`). **The Linux machine's SHA-1 is
+still to be added** at its first build (STATE.md open question 2). Until then a debug build
+from Linux runs, but sign-in from it will fail — and nothing signs in before Phase 4.
+
+`google-services.json` holds only public identifiers (project id, app id, the Android API key,
+OAuth client ids). PLAN.md's *Security* section wants the API key restricted in Google Cloud
+to this package and the registered SHA-1s; either way, what protects the data is the Realtime
+Database rules.
 
 ## Signing a release locally (Phase 10)
 
@@ -72,8 +115,9 @@ CI reads the same four values from GitHub Secrets (the keystore as base64).
 - **No platform-only scripts in the build path.** Anything that has to run on both machines is
   a Gradle task or a Node script.
 - **File names are case-sensitive** on Linux and in CI; Windows will not tell you.
-- The emulator: one AVD per machine, API 34, Google APIs image (Play services are needed for
-  Sign-In and FCM). CI uses the same image.
+- The emulator: one AVD per machine with a **Google APIs / Play Store image** (Play services
+  are needed for Sign-In and FCM), API 34 or newer — the Windows machine uses API 35. Phase 3
+  pins the image CI uses for `connectedDebugAndroidTest`.
 
 ## Reference material
 

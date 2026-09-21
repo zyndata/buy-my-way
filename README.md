@@ -10,13 +10,17 @@ brought in from [Eat My Way](https://github.com/zyndata/eat-my-way) with one sha
 
 The interface is in **Polish**. The code, comments and documentation are in English.
 
-> **Status: planned, nothing built yet.** [PLAN.md](PLAN.md) holds the specification and the
-> phases (Phase 11, Google Play, was dropped); [STATE.md](STATE.md) records what has been
-> decided and what is still open.
+> **Status: early development — nothing usable yet.** [PLAN.md](PLAN.md) holds the
+> specification and the phases (Phase 11, Google Play, was dropped); [STATE.md](STATE.md)
+> records what has been decided and what is still open.
 > Phase 0, a spike on Drive sharing and the Google project, is done. Its verdict: another
 > member cannot read a shared Drive file under the `drive.file` scope, so shared lists live in
 > Firebase Realtime Database instead (STATE.md decisions 19–24). A change reached the other
-> phone in ~0.1 s, and a push reached a closed app in under 3 s. Phase 1, the scaffold, is next.
+> phone in ~0.1 s, and a push reached a closed app in under 3 s.
+> Phase 1 is done: the app builds (`./gradlew assembleDebug`, see
+> [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)) and opens on placeholder screens with their
+> Polish titles, with lint, a unit test and the debug build running in CI. Phase 2, the local
+> data layer and the merge, is next.
 
 ## What makes it different
 
