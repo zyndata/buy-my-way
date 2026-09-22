@@ -26,12 +26,12 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-java@v5
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: 21
 
-      - uses: gradle/actions/setup-gradle@v5
+      - uses: gradle/actions/setup-gradle@v6
 
       - name: Lint, unit tests, debug build
         run: ./gradlew lint testDebugUnitTest assembleDebug --no-daemon
@@ -61,12 +61,12 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-java@v5
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: 21
 
-      - uses: gradle/actions/setup-gradle@v5
+      - uses: gradle/actions/setup-gradle@v6
 
       # The hosted runner has KVM, but only root may use it until this rule is added.
       - name: Enable KVM
@@ -134,7 +134,7 @@ jobs:
           cache-dependency-path: firebase/package-lock.json
 
       # The database emulator is a Java program.
-      - uses: actions/setup-java@v5
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: 21
