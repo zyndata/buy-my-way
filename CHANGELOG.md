@@ -16,6 +16,7 @@ project adheres to [Semantic Versioning](https://semver.org).
 - Record pre-phase-2 decisions (tests, public repo, invite host, expiry)
 - Record pre-phase-3 decisions (undo, list order, drag, icons, device checks)
 - Record Phase 3 CI time
+- Plan item dates and three list sort views for phase 5
 
 ### Features
 
@@ -24,11 +25,13 @@ project adheres to [Semantic Versioning](https://semver.org).
 - Phase 2 — local data layer & the merge
 - Phase 3 — lists & items on screen
 - Phase 4 — Google sign-in & cloud persistence
+- Phase 5 — sharing & real-time
 
 ### Miscellaneous
 
 - Plan, workflow and repository hygiene
 - **spike:** Phase 0 spike app and push sender skeleton
+- Update CHANGELOG
 - Update CHANGELOG
 - Update CHANGELOG
 - Update CHANGELOG
