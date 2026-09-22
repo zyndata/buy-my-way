@@ -169,8 +169,11 @@ there were no sync duplicates (every repeated name was typed separately on one p
 tick was lost. **Not verified:** mobile data (neither phone was on it); the full ten minutes
 offline (the offline edits spanned about two minutes; the ten-minute case ran only on the fake
 server); photos seen by a new member (Phase 6 adds photos; the rules test covers the read);
-the App Link verified by Android (it needs the Eat My Way release, owner); the Linux machine
-(open question 2). One mistake on the way: the first rules published were the Phase 4 file.
+the Linux machine (open question 2). **After the phase (2026-09-22):** the owner released Eat
+My Way with the invite page and `assetlinks.json`. On the S10e, `pm verify-app-links
+--re-verify` then gave `eatmyway.gorny.dev: verified`, and an `https://eatmyway.gorny.dev/bmw/i/…`
+link opened `MainActivity` directly, with no browser. Only the debug key is listed so far
+(decision 63). One mistake on the way: the first rules published were the Phase 4 file.
 It was the one on GitHub, since the Phase 5 rules were not pushed yet. Sharing was refused
 until the right file was published.
 
