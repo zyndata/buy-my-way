@@ -172,7 +172,8 @@ data class Item(
   val createdAt: Long, val createdBy: String?,
   val updatedAt: Long, val updatedBy: String?,
   val deletedAt: Long?,                        // tombstone, kept 30 days
-  val sortKey: Double                          // manual order within a category
+  val sortKey: Double,                         // manual order within a category
+  val manualKey: Double                        // order in the „Ręcznie" view, across categories (Phase 5, STATE.md decision 62)
 )
 
 data class Category(val id: String, val listId: String, val name: String, val builtin: Boolean)
@@ -389,8 +390,15 @@ All copy in Polish. Navigation Compose, single activity, predictive back.
   with the actor's initial, holds 1.5 s, then slides — the feedback the requirement asks for.
   Bottom add bar: text field with autocomplete from the dictionary and this user's history,
   mic button, „+". Long-press or swipe on a row opens the **edit sheet**: name, quantity +
-  unit, category, note, photo (camera / gallery / remove). Toolbar: Udostępnij, Kolejność
-  kategorii, Zaznacz wszystko, Odznacz wszystko.
+  unit, category, note, photo (camera / gallery / remove), and under them, read-only, when it
+  was last edited („Edytowano 22.09.2026, 08:56", from `updatedAt`) and, for a bought item,
+  when it was ticked („Kupiono …", from `checkedAt`). Toolbar: Udostępnij, Kolejność
+  kategorii, Sortowanie, Zaznacz wszystko, Odznacz wszystko.
+  **Sortowanie** (STATE.md decision 62) has three views of the items still to buy:
+  „Według działów" (as above, the default), „Alfabetycznie" (A–Z by the Polish collation, one
+  flat list) and „Ręcznie" (one flat list in the order the user dragged it, by `manualKey`).
+  The two flat views show no category headings. „Kupione" stays at the bottom in every view.
+  An item added in „Ręcznie" goes to the end.
 - **Udostępnianie**: members with roles, „Zaproś linkiem", „Zaproś e-mailem", role menu,
   remove; „Uczyń prywatną".
 - **Import**: preview from the share sheet or the clipboard.
@@ -614,6 +622,16 @@ measured.
    deleted one fades out. Never a full-list refresh.
 6. Tombstones older than 30 days removed by the owner's device, with their photos.
 7. Removed-member and permission-denied handling: the list is dropped locally with a sentence.
+8. Item dates in the edit sheet: „Edytowano <date, time>" from `updatedAt` and, for a bought
+   item, „Kupiono <date, time>" from `checkedAt`, formatted in Polish (`pl-PL`, the phone's
+   time zone). Phase 5 adds who did it where the member is known („Kupiono … · Ania").
+9. „Sortowanie" on the Lista toolbar (STATE.md decision 62): „Według działów", „Alfabetycznie",
+   „Ręcznie". The flat views have no category headings. „Ręcznie" drags any item anywhere
+   with the existing handle and move actions. The chosen view is this user's, per list
+   (DataStore, then `/users/{uid}/prefs/listSort/{listId}`). The manual order is the list's:
+   a new content field `manualKey` (Room schema v2 with its migration and migration test,
+   `NodeCodec`, the rules' shape and content-group checks), seeded from the department order
+   the first time „Ręcznie" is chosen. Pure ordering in `core/model` with unit tests.
 
 ### Acceptance criteria
 
@@ -626,6 +644,10 @@ measured.
       without the owner's phone doing anything.
 - [ ] Airplane mode on one phone for ten minutes of edits on both: reconnect converges, no
       duplicates, no lost checks.
+- [ ] The edit sheet shows the last edit and, for a bought item, when it was bought.
+- [ ] Each of the three views sorts as described. The flat ones show no headings. A manual
+      order survives process death, reaches the other member's phone, and does not change
+      that member's chosen view.
 
 ## Phase 6 — Photos
 

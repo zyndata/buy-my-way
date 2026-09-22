@@ -668,7 +668,22 @@ Newest last. Every deviation from PLAN.md lands here **before** it is acted on.
     the alternative. The CI `rules` job tests the file against the emulator, never the real
     project.
 
-## Open questions
+### 2026-09-22 — After Phase 4
+
+62. **Item dates in the edit sheet, and three ways to sort a list (owner, 2026-09-22).** Asked
+    after Phase 4. Neither existed, so they were added to PLAN.md, to **Phase 5** (tasks 8–9
+    and two acceptance criteria). Phase 5 rewrites the rules anyway, and the manual order
+    needs a new item field that the rules must accept.
+    - The edit sheet shows „Edytowano …" (`updatedAt`) and, for a bought item, „Kupiono …"
+      (`checkedAt`). Both fields already exist, so no data change is needed.
+    - „Sortowanie": „Według działów" (today's view, the default), „Alfabetycznie", „Ręcznie".
+      The last two are one flat list with no category headings. „Kupione" stays at the bottom.
+    - Chosen defaults, open to change when Phase 5 starts: the **view is personal**, per list
+      (like the home screen's order, decision 44), so one member's „A–Z" does not change
+      another's screen. The **manual order belongs to the list**, like its department order:
+      a new content field `manualKey`, last-writer-wins with the rest of the content. That
+      means Room schema v2 and its migration. The existing `sortKey` stays the order within
+      a department.
 
 1. ~~Where do shared lists live, now that `drive.file` cannot cross users?~~ Answered by
    decisions 19–21: in RTDB, and Drive leaves the app.
