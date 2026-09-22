@@ -46,7 +46,7 @@ The interface is in **Polish**. The code, comments and documentation are in Engl
 <p>
   <img src="docs/screenshots/lists.png" width="240" alt="Listy: one shared list, „Zakupy na sobote”, 6 of 13 bought, with „… ogląda” (the name hidden) under its name">
   <img src="docs/screenshots/list-checking.png" width="240" alt="The list by department, with the share icon in the top bar and „… ogląda” (the name hidden) under the list's name">
-  <img src="docs/screenshots/list-bought.png" width="240" alt="The bottom of the list: „Kupione (6)” expanded, with „Wyczyść kupione”">
+  <img src="docs/screenshots/list-bought.png" width="240" alt="The bottom of the list: „Kupione (4)” expanded, with „Wyczyść kupione”">
 </p>
 
 ## What makes it different
