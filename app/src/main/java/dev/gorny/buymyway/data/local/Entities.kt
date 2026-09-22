@@ -75,7 +75,7 @@ data class MemberEntity(
     val photoUrl: String?,
 )
 
-/** An op waiting to be written to RTDB (Phase 5). `seq` keeps the order they were made in. */
+/** An op waiting to be written to RTDB (`data/sync`). `seq` keeps the order they were made in. */
 @Entity(tableName = "outbox_ops", indices = [Index(value = ["opId"], unique = true), Index("listId")])
 data class OutboxOpEntity(
     @PrimaryKey(autoGenerate = true) val seq: Long = 0,

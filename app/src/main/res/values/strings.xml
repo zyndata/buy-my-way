@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<!-- The default resources are Polish: the app has no other language (CLAUDE.md). -->
+<resources xmlns:tools="http://schemas.android.com/tools" tools:locale="pl">
     <string name="app_name" translatable="false">Buy My Way</string>
 
     <string name="title_lists">Listy</string>
@@ -82,4 +83,36 @@
     <string name="settings_version">Wersja</string>
     <string name="settings_icons">Ikony</string>
     <string name="settings_icons_value">Material Symbols, licencja Apache 2.0</string>
+
+    <!-- Konto (Phase 4) -->
+    <string name="settings_account">Konto</string>
+    <string name="action_sign_in">Zaloguj się przez Google</string>
+    <string name="action_sign_in_again">Zaloguj się ponownie</string>
+    <string name="action_sign_out">Wyloguj się</string>
+    <string name="account_sign_in_hint">Listy zapiszą się w chmurze i będą na każdym telefonie, na którym się zalogujesz. Aplikacja dostaje od Google tylko imię i adres e-mail.</string>
+    <string name="account_signed_in">Zalogowano</string>
+    <string name="account_all_sent">Wszystkie zmiany są w chmurze</string>
+    <plurals name="pending_changes">
+        <item quantity="one">%d zmiana czeka na wysłanie</item>
+        <item quantity="few">%d zmiany czekają na wysłanie</item>
+        <item quantity="many">%d zmian czeka na wysłanie</item>
+        <item quantity="other">%d zmiany czeka na wysłanie</item>
+    </plurals>
+    <string name="account_session_lost">Sesja konta %1$s wygasła. Listy są na telefonie, a zmiany poczekają na wysłanie.</string>
+    <string name="account_session_lost_generic">Sesja konta wygasła. Listy są na telefonie, a zmiany poczekają na wysłanie.</string>
+    <string name="session_lost_banner">Zaloguj się ponownie jako %1$s, aby wysłać zmiany do chmury. Listy są bezpieczne na telefonie.</string>
+    <string name="session_lost_banner_generic">Zaloguj się ponownie, aby wysłać zmiany do chmury. Listy są bezpieczne na telefonie.</string>
+    <string name="sign_in_other_account">Na tym telefonie są listy konta %1$s. Zaloguj się tym kontem albo najpierw się wyloguj.</string>
+    <string name="sign_in_other_account_generic">Na tym telefonie są listy innego konta. Zaloguj się nim albo najpierw się wyloguj.</string>
+    <string name="sign_in_no_account">Na telefonie nie ma konta Google. Dodaj je w ustawieniach systemu.</string>
+    <string name="sign_in_failed">Nie udało się zalogować. Sprawdź połączenie i spróbuj ponownie.</string>
+    <string name="sign_out_title">Wylogować się?</string>
+    <string name="sign_out_body">Listy znikną z tego telefonu. Zostaną w chmurze i wrócą, gdy znów zalogujesz się tym kontem. Aby użyć innego konta, najpierw się wyloguj.</string>
+    <plurals name="sign_out_pending">
+        <item quantity="one">%d zmiana nie została jeszcze wysłana i przepadnie.</item>
+        <item quantity="few">%d zmiany nie zostały jeszcze wysłane i przepadną.</item>
+        <item quantity="many">%d zmian nie zostało jeszcze wysłanych i przepadnie.</item>
+        <item quantity="other">%d zmiany nie zostało jeszcze wysłanych i przepadnie.</item>
+    </plurals>
+    <string name="refresh_failed">Nie udało się pobrać zmian. Sprawdź połączenie.</string>
 </resources>

@@ -25,13 +25,25 @@ updates:
     commit-message:
       prefix: build
 
-  # git-cliff and, from Phase 5, the Firebase rules tests.
+  # git-cliff.
   - package-ecosystem: npm
     directory: /
     schedule:
       interval: monthly
     groups:
       npm-minor-patch:
+        update-types: [minor, patch]
+    commit-message:
+      prefix: build
+      prefix-development: build
+
+  # The Firebase rules tests (emulator, rules-unit-testing).
+  - package-ecosystem: npm
+    directory: /firebase
+    schedule:
+      interval: monthly
+    groups:
+      firebase-minor-patch:
         update-types: [minor, patch]
     commit-message:
       prefix: build

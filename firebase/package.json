@@ -1,0 +1,19 @@
+{
+  "name": "buy-my-way-firebase",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Realtime Database rules for Buy My Way and their tests against the Firebase emulator (STATE.md decisions 53 and 56).",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "firebase emulators:exec --only database --project demo-buy-my-way \"node --test test/rules.test.mjs\""
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "5.0.2",
+    "firebase": "12.19.0",
+    "firebase-tools": "15.30.2"
+  }
+}

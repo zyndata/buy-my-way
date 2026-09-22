@@ -66,11 +66,16 @@ builds as `0.0.0-dev`, which is why CI checks out the full history.
 | `./gradlew connectedDebugAndroidTest` | Instrumented tests (Room DAOs, the repository, migrations, the Compose screen flows) on every device `adb` sees: a connected phone, the emulator, or both. It uninstalls the app afterwards, so the debug build's lists are gone; `installDebug` again to keep using it |
 | `./gradlew assembleRelease` | Signed release APK — needs the signing properties below (Phase 10) |
 | `npm run changelog` | Regenerate `CHANGELOG.md` from commits (git-cliff) |
-| `npm --prefix firebase test` | Realtime Database rules tests against the Firebase emulator (from Phase 5) |
+| `npm --prefix firebase test` | Realtime Database rules tests against the Firebase emulator (`firebase/test/rules.test.mjs`). Run `npm --prefix firebase ci` once first |
 
-CI runs `lint testDebugUnitTest assembleDebug` and, in a second job, `connectedDebugAndroidTest`
-on an API 35 emulator on every push to `dev`; the rules tests join in Phase 5. Run the same
-before pushing.
+CI runs `lint testDebugUnitTest assembleDebug`, `connectedDebugAndroidTest` on an API 35
+emulator, and the rules tests, as three jobs, on every push to `dev`. Run the same before
+pushing.
+
+The rules tests need Node 22+ and a Java runtime (the database emulator is a Java program;
+the JDK that builds the app will do). `firebase emulators:exec` downloads the emulator on the
+first run and starts it under the project id `demo-buy-my-way`: a demo id needs no login and
+never reaches the real project. Nothing in `firebase/` needs a Firebase account.
 
 ## Google Sign-In on a debug build
 
@@ -89,7 +94,8 @@ registered; a fingerprint is not a secret.
 
 Registered so far: the Windows machine (`5A:DB:9A:F8:…:52:8D`). **The Linux machine's SHA-1 is
 still to be added** at its first build (STATE.md open question 2). Until then a debug build
-from Linux runs, but sign-in from it will fail — and nothing signs in before Phase 4.
+from Linux runs, but „Zaloguj się przez Google" in Ustawienia fails with „Nie udało się
+zalogować" on it. Everything that works signed out still works.
 
 `google-services.json` holds only public identifiers (project id, app id, the Android API key,
 OAuth client ids). PLAN.md's *Security* section wants the API key restricted in Google Cloud

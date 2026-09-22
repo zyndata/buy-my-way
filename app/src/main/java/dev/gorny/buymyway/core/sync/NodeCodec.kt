@@ -130,6 +130,38 @@ object NodeCodec {
             photoUrl = profile?.string("photoUrl"),
         )
 
+    /** The server time of a node's last write (decision 54); null for a node without one. */
+    fun changedAt(node: Map<String, Any?>): Long? = node.long(RemoteWrites.CHANGED_AT)
+
+    // --- /users/{uid}/prefs (decision 59) -------------------------------------------------
+
+    /** A preference that is one value and the time it was set, such as the default order. */
+    data class Stamped(val value: String, val updatedAt: Long)
+
+    fun stampedToNode(stamped: Stamped): Map<String, Any> = mapOf("value" to stamped.value, "updatedAt" to stamped.updatedAt)
+
+    fun stampedFromNode(node: Map<String, Any?>): Stamped? {
+        val value = node.string("value") ?: return null
+        val at = node.long("updatedAt") ?: return null
+        return Stamped(value, at)
+    }
+
+    /** The category a name was last filed under, keyed by the folded name. */
+    data class Memory(val key: String, val name: String, val categoryId: String, val at: Long)
+
+    fun memoryToNode(memory: Memory): Map<String, Any> = mapOf(
+        "name" to memory.name,
+        "categoryId" to memory.categoryId,
+        "at" to memory.at,
+        RemoteWrites.CHANGED_AT to RemoteWrites.SERVER_TIME,
+    )
+
+    fun memoryFromNode(key: String, node: Map<String, Any?>): Memory? {
+        val name = node.string("name")?.takeIf { it.isNotEmpty() } ?: return null
+        val categoryId = node.string("categoryId")?.takeIf { it.isNotEmpty() } ?: return null
+        return Memory(key, name, categoryId, node.long("at") ?: 0)
+    }
+
     // --- Lenient readers ------------------------------------------------------------------
 
     private fun Map<String, Any?>.string(key: String): String? = this[key] as? String

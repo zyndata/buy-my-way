@@ -10,8 +10,9 @@ brought in from [Eat My Way](https://github.com/zyndata/eat-my-way) with one sha
 
 The interface is in **Polish**. The code, comments and documentation are in English.
 
-> **Status: early development. It works as a private shopping list on one phone; nothing is
-> shared yet.** [PLAN.md](PLAN.md) holds the specification and the phases (Phase 11, Google
+> **Status: early development. It works as a private shopping list, and after signing in the
+> lists are kept in the cloud and on every phone of that account; sharing with other people
+> comes next.** [PLAN.md](PLAN.md) holds the specification and the phases (Phase 11, Google
 > Play, was dropped); [STATE.md](STATE.md) records what has been decided and what is still
 > open.
 > Phase 0, a spike on Drive sharing and the Google project, is done. Its verdict: another
@@ -26,8 +27,12 @@ The interface is in **Polish**. The code, comments and documentation are in Engl
 > order. Type „2 kg ziemniaki, mleko" to add two items, each under its part of the shop. A tap
 > strikes an item through and moves it to „Kupione". Items and departments can be dragged
 > into the order you walk the shop, and a deleted list or item comes back with „Cofnij".
-> Everything works offline and without an account. Phase 4, Google sign-in and the lists in
-> the cloud, is next.
+> Everything works offline and without an account.
+> Phase 4 is done: sign in with Google in Ustawienia, and your lists, including the ones made
+> before, go to Firebase Realtime Database. Another phone signed in to the same account gets
+> them, and edits made on both, even offline, settle the same way on both. Pull down on Listy
+> to fetch changes. The database rules keep each user's lists to that user and refuse a write
+> older than the stored one. Phase 5, sharing with other people and live changes, is next.
 
 ## Screenshots
 

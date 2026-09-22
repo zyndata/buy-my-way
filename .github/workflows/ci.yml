@@ -116,4 +116,34 @@ jobs:
             app/build/outputs/androidTest-results/
           retention-days: 7
 
-  # Phase 5 adds `rules` (Firebase emulator, database rules tests).
+  # The Realtime Database rules against the Firebase emulator (PLAN.md Phase 4, task 3). A demo
+  # project id: no login, no secret, never the real project (STATE.md decision 53).
+  rules:
+    name: Database rules tests (emulator)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: firebase
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: firebase/package-lock.json
+
+      # The database emulator is a Java program.
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: actions/cache@v6
+        with:
+          path: ~/.cache/firebase/emulators
+          key: firebase-emulators-${{ hashFiles('firebase/package-lock.json') }}
+
+      - run: npm ci --no-audit --no-fund
+
+      - run: npm test

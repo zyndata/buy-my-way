@@ -21,6 +21,7 @@ import dev.gorny.buymyway.ui.list.ListViewModel
 import dev.gorny.buymyway.ui.lists.ListsScreen
 import dev.gorny.buymyway.ui.lists.ListsViewModel
 import dev.gorny.buymyway.ui.settings.SettingsScreen
+import dev.gorny.buymyway.ui.settings.SettingsViewModel
 import kotlinx.coroutines.flow.map
 
 /** The app's routes, as PLAN.md's "Screens & navigation" names them. */
@@ -46,7 +47,7 @@ fun BuyMyWayNavHost() {
     NavHost(navController = nav, startDestination = Routes.LISTS) {
         composable(Routes.LISTS) {
             ListsScreen(
-                vm = viewModel { ListsViewModel(container.lists, container.listOrder, container.appScope) },
+                vm = viewModel { ListsViewModel(container.lists, container.listOrder, container.appScope, container.listsSync) },
                 onOpenList = { nav.navigate(Routes.list(it)) },
                 onOpenSettings = { nav.navigate(Routes.SETTINGS) },
             )
@@ -69,6 +70,14 @@ fun BuyMyWayNavHost() {
         }
         composable(Routes.SETTINGS) {
             SettingsScreen(
+                vm = viewModel {
+                    SettingsViewModel(
+                        account = container.account.state,
+                        pendingOps = container.pendingOps,
+                        signInWith = container::signIn,
+                        signOutAll = container::signOut,
+                    )
+                },
                 onBack = { nav.popBackStack(Routes.SETTINGS, inclusive = true) },
                 onOpenDefaultOrder = { nav.navigate(Routes.DEFAULT_ORDER) },
             )

@@ -13,6 +13,7 @@ import dev.gorny.buymyway.core.model.ShoppingList
 import dev.gorny.buymyway.core.sync.ListState
 import dev.gorny.buymyway.core.sync.Merge
 import dev.gorny.buymyway.core.text.TextKey
+import dev.gorny.buymyway.core.text.TextLimits
 import dev.gorny.buymyway.data.local.AppDatabase
 import dev.gorny.buymyway.data.local.ListSyncEntity
 import dev.gorny.buymyway.data.local.NameHistoryEntity
@@ -33,9 +34,10 @@ data class NameSuggestion(val name: String, val categoryId: String)
 /**
  * The one way the app changes its lists (PLAN.md Phase 2, task 3).
  *
- * Every mutation is an [Op]: merged into Room through the same [Merge] that will merge remote
+ * Every mutation is an [Op]: merged into Room through the same [Merge] that merges remote
  * nodes, and put in the outbox, in one transaction, so a change is either on screen *and*
- * waiting to be sent, or neither. No network here: until Phase 5 the outbox only accumulates.
+ * waiting to be sent, or neither. No network here: the sync layer (`data/sync`) empties the
+ * outbox into RTDB and merges what it reads back through [applyRemote].
  * Screens read the `observe…` flows, which Room re-emits after every commit.
  */
 class ListRepository(
@@ -44,8 +46,8 @@ class ListRepository(
     private val categorize: suspend (String) -> String,
     private val clock: () -> Long = System::currentTimeMillis,
     private val newId: () -> String = { UUID.randomUUID().toString() },
-    /** The Firebase uid; null while signed out (sign-in arrives in Phase 4). */
-    private val actor: () -> String? = { null },
+    /** The Firebase uid; null while signed out (STATE.md decision 57). */
+    private val actor: suspend () -> String? = { null },
 ) {
     sealed interface AddResult {
         val itemId: String
@@ -109,14 +111,15 @@ class ListRepository(
 
     /** A new private list with the nine departments, in the user's preferred order. */
     suspend fun createList(name: String): String {
-        val listName = cleanName(name)
+        val listName = cleanName(name, TextLimits.LIST_NAME)
         val order = BuiltinCategories.completeOrder(categoryOrder.defaultOrder())
         val listId = newId()
         val at = nextAt()
+        val uid = actor()
         val ops = buildList {
-            add(Op.ListPut(newId(), listId, actor(), at, listName, order))
+            add(Op.ListPut(newId(), listId, uid, at, listName, order, ownerUid = uid))
             BuiltinCategories.ALL.forEach { (id, label) ->
-                add(Op.CategoryPut(newId(), listId, actor(), at, id, label, builtin = true))
+                add(Op.CategoryPut(newId(), listId, uid, at, id, label, builtin = true))
             }
         }
         commit(ops)
@@ -125,7 +128,7 @@ class ListRepository(
 
     suspend fun renameList(listId: String, name: String) = db.withTransaction {
         val list = liveList(listId)
-        commit(listOf(Op.ListPut(newId(), listId, actor(), nextAt(), cleanName(name), list.categoryOrder)))
+        commit(listOf(Op.ListPut(newId(), listId, actor(), nextAt(), cleanName(name, TextLimits.LIST_NAME), list.categoryOrder)))
     }
 
     suspend fun setCategoryOrder(listId: String, order: List<String>) = db.withTransaction {
@@ -155,7 +158,7 @@ class ListRepository(
         categoryId: String? = null,
         note: String? = null,
     ): AddResult = db.withTransaction {
-        val itemName = cleanName(name)
+        val itemName = cleanName(name, TextLimits.ITEM_NAME)
         val list = liveList(listId)
         val items = db.items().getAllForList(listId).map { it.toDomain() }
         val at = nextAt()
@@ -172,9 +175,9 @@ class ListRepository(
         val content = ItemContent(
             name = itemName,
             quantity = quantity,
-            unit = unit?.trim()?.ifEmpty { null },
+            unit = cleanOptional(unit, TextLimits.UNIT),
             categoryId = category,
-            note = note?.trim()?.ifEmpty { null },
+            note = cleanOptional(note, TextLimits.NOTE),
             sortKey = ListViews.nextSortKey(list, items, category),
         )
         commit(listOf(Op.ItemPut(newId(), listId, actor(), at, itemId, content)))
@@ -186,9 +189,9 @@ class ListRepository(
     suspend fun updateItem(itemId: String, content: ItemContent) = db.withTransaction {
         val item = liveItem(itemId)
         val cleaned = content.copy(
-            name = cleanName(content.name),
-            unit = content.unit?.trim()?.ifEmpty { null },
-            note = content.note?.trim()?.ifEmpty { null },
+            name = cleanName(content.name, TextLimits.ITEM_NAME),
+            unit = cleanOptional(content.unit, TextLimits.UNIT),
+            note = cleanOptional(content.note, TextLimits.NOTE),
         )
         if (cleaned == item.content) return@withTransaction
         val at = nextAt()
@@ -240,7 +243,7 @@ class ListRepository(
         val at = nextAt()
         commit(
             listOf(
-                Op.CategoryPut(newId(), listId, actor(), at, categoryId, cleanName(name), builtin = false),
+                Op.CategoryPut(newId(), listId, actor(), at, categoryId, cleanName(name, TextLimits.CATEGORY_NAME), builtin = false),
                 Op.ListPut(newId(), listId, actor(), at, list.name, list.categoryOrder + categoryId),
             ),
         )
@@ -250,7 +253,7 @@ class ListRepository(
     suspend fun renameCategory(listId: String, categoryId: String, name: String) = db.withTransaction {
         val category = db.categories().get(listId, categoryId)?.toDomain()?.takeIf { Merge.isVisible(it) }
             ?: throw NoSuchElementException("category $categoryId")
-        commit(listOf(Op.CategoryPut(newId(), listId, actor(), nextAt(), categoryId, cleanName(name), category.builtin)))
+        commit(listOf(Op.CategoryPut(newId(), listId, actor(), nextAt(), categoryId, cleanName(name, TextLimits.CATEGORY_NAME), category.builtin)))
     }
 
     /**
@@ -285,11 +288,7 @@ class ListRepository(
 
         val purge = Merge.purgeable(loadState(listId), now)
         if (purge.wholeList) {
-            db.items().deleteForList(listId)
-            db.categories().deleteForList(listId)
-            db.members().deleteForList(listId)
-            db.lists().delete(listId)
-            db.listSync().delete(listId)
+            forget(listId)
             return@withTransaction true
         }
         if (purge.itemIds.isNotEmpty()) db.items().deleteByIds(purge.itemIds)
@@ -302,8 +301,8 @@ class ListRepository(
     // --- Remote ---------------------------------------------------------------------------
 
     /**
-     * Merges nodes read from RTDB into Room (the sync layer's entry, Phase 5). Nothing goes to
-     * the outbox: these changes are already on the server. [serverTime] is the newest change
+     * Merges nodes read from RTDB into Room (the sync layer's entry). Nothing goes to the
+     * outbox: these changes are already on the server. [serverTime] is the newest `changedAt`
      * the read covered; `seenUpTo` only moves forward.
      */
     suspend fun applyRemote(listId: String, remote: ListState, serverTime: Long?) = db.withTransaction {
@@ -312,6 +311,52 @@ class ListRepository(
         db.listSync().upsert(
             sync.copy(synced = true, seenUpTo = maxOf(sync.seenUpTo, serverTime ?: 0)),
         )
+    }
+
+    /**
+     * Sign-in (decision 57): every list made while signed out gets [uid] as its owner and as
+     * the author of everything done to it, so it can go to RTDB under the rules. Their queued
+     * ops are dropped: the lists go up whole ([ListSyncEntity.synced] is still false), and that
+     * upload carries everything the ops did. Returns the adopted list ids.
+     */
+    suspend fun adoptOwnerless(uid: String): List<String> = db.withTransaction {
+        val ids = db.lists().ownerlessIds()
+        for (listId in ids) {
+            db.lists().adopt(listId, uid)
+            db.categories().stampActors(listId, uid)
+            db.items().stampActors(listId, uid)
+            db.outbox().deleteForList(listId)
+            val sync = db.listSync().get(listId) ?: newSync(listId)
+            db.listSync().upsert(sync.copy(synced = false, dirty = false))
+        }
+        ids
+    }
+
+    /** The list is in RTDB now; [dirty] says whether the outbox still holds ops for it. */
+    suspend fun markSynced(listId: String, dirty: Boolean) = db.withTransaction {
+        val sync = db.listSync().get(listId) ?: newSync(listId)
+        db.listSync().upsert(sync.copy(synced = true, dirty = dirty))
+    }
+
+    /** Removes every trace of a list from the phone: a purge, not a delete op. */
+    suspend fun forget(listId: String) = db.withTransaction {
+        db.items().deleteForList(listId)
+        db.categories().deleteForList(listId)
+        db.members().deleteForList(listId)
+        db.outbox().deleteForList(listId)
+        db.lists().delete(listId)
+        db.listSync().delete(listId)
+    }
+
+    /** Sign-out: nothing of this account stays on the phone. RTDB keeps the lists. */
+    suspend fun clearAll() = db.withTransaction {
+        db.lists().deleteAll()
+        db.items().deleteAll()
+        db.categories().deleteAll()
+        db.members().deleteAll()
+        db.outbox().deleteAll()
+        db.listSync().deleteAll()
+        db.nameHistory().deleteAll()
     }
 
     /** The whole of one list as the merge sees it, tombstones included. */
@@ -387,9 +432,11 @@ class ListRepository(
 
     private fun newSync(listId: String) = ListSyncEntity(listId, seenUpTo = 0, synced = false, dirty = false, sweptAt = 0)
 
-    private fun cleanName(name: String): String {
-        val cleaned = name.trim().replace(Regex("\\s+"), " ")
+    private fun cleanName(name: String, limit: Int): String {
+        val cleaned = name.trim().replace(Regex("\\s+"), " ").take(limit).trimEnd()
         require(cleaned.isNotEmpty()) { "a name cannot be empty" }
         return cleaned
     }
+
+    private fun cleanOptional(text: String?, limit: Int): String? = text?.trim()?.take(limit)?.trimEnd()?.ifEmpty { null }
 }

@@ -15,7 +15,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -27,11 +30,16 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.pullToRefresh
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -49,12 +57,14 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.gorny.buymyway.R
 import dev.gorny.buymyway.core.model.ListSummary
+import dev.gorny.buymyway.data.auth.AccountState
 import dev.gorny.buymyway.ui.common.DragHandle
 import dev.gorny.buymyway.ui.common.NameDialog
 import dev.gorny.buymyway.ui.common.ReorderState
 import dev.gorny.buymyway.ui.common.moveActions
 import dev.gorny.buymyway.ui.common.rememberReorderState
 import dev.gorny.buymyway.ui.common.reorderableItem
+import kotlinx.coroutines.launch
 
 /** Listy, the home screen (PLAN.md *Screens*). */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -65,7 +75,10 @@ fun ListsScreen(
     onOpenSettings: () -> Unit,
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
+    val account by vm.account.collectAsStateWithLifecycle()
+    val refreshing by vm.refreshing.collectAsStateWithLifecycle()
     val resources = LocalResources.current
+    val messages = rememberCoroutineScope()
     var creating by rememberSaveable { mutableStateOf(false) }
     var renaming by rememberSaveable { mutableStateOf<String?>(null) }
 
@@ -89,49 +102,47 @@ fun ListsScreen(
         },
         snackbarHost = { SnackbarHost(vm.held.snackbar) },
     ) { padding ->
-        val lists = state.lists
-        when {
-            lists == null -> Unit
-            lists.isEmpty() -> EmptyLists(Modifier.padding(padding))
-            else -> {
-                val listState = rememberLazyListState()
-                val reorder = rememberReorderState(
-                    listState,
-                    canMove = { _, _ -> true },
-                    onMove = { from, to -> vm.move(from as String, to as String) },
-                    onDrop = { vm.drop() },
-                )
-                LazyColumn(
-                    state = listState,
-                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 96.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(padding)
-                        .testTag("lists"),
-                ) {
-                    items(lists, key = { it.list.id }) { summary ->
-                        val id = summary.list.id
-                        val index = lists.indexOf(summary)
-                        ListCard(
-                            summary = summary,
-                            reorder = reorder,
-                            onOpen = { onOpenList(id) },
-                            onRename = { renaming = id },
-                            onDelete = {
-                                vm.delete(
-                                    id,
-                                    resources.getString(R.string.deleted_list, summary.list.name),
-                                    resources.getString(R.string.action_undo),
-                                )
-                            },
-                            onMoveUp = if (index > 0) ({ vm.moveBy(id, -1) }) else null,
-                            onMoveDown = if (index < lists.lastIndex) ({ vm.moveBy(id, 1) }) else null,
-                            modifier = Modifier.reorderableItem(this, reorder, id),
-                        )
-                    }
+        val pull = rememberPullToRefreshState()
+        Box(
+            Modifier
+                .fillMaxSize()
+                .padding(padding)
+                // Only a signed-in phone has anywhere to refresh from.
+                .pullToRefresh(
+                    isRefreshing = refreshing,
+                    state = pull,
+                    enabled = account is AccountState.SignedIn,
+                    onRefresh = {
+                        vm.refresh {
+                            messages.launch { vm.held.snackbar.showSnackbar(resources.getString(R.string.refresh_failed)) }
+                        }
+                    },
+                ),
+        ) {
+            Column(Modifier.fillMaxSize()) {
+                (account as? AccountState.SessionLost)?.let { lost ->
+                    SessionLostBanner(lost.email, onSignIn = onOpenSettings)
+                }
+                val lists = state.lists
+                when {
+                    lists == null -> Unit
+                    lists.isEmpty() -> EmptyLists(Modifier)
+                    else -> ListCards(
+                        vm = vm,
+                        lists = lists,
+                        onOpenList = onOpenList,
+                        onRename = { renaming = it },
+                        onDelete = { summary ->
+                            vm.delete(
+                                summary.list.id,
+                                resources.getString(R.string.deleted_list, summary.list.name),
+                                resources.getString(R.string.action_undo),
+                            )
+                        },
+                    )
                 }
             }
+            PullToRefreshDefaults.Indicator(state = pull, isRefreshing = refreshing, modifier = Modifier.align(Alignment.TopCenter))
         }
     }
 
@@ -164,10 +175,73 @@ fun ListsScreen(
 }
 
 @Composable
+private fun ListCards(
+    vm: ListsViewModel,
+    lists: List<ListSummary>,
+    onOpenList: (String) -> Unit,
+    onRename: (String) -> Unit,
+    onDelete: (ListSummary) -> Unit,
+) {
+    val listState = rememberLazyListState()
+    val reorder = rememberReorderState(
+        listState,
+        canMove = { _, _ -> true },
+        onMove = { from, to -> vm.move(from as String, to as String) },
+        onDrop = { vm.drop() },
+    )
+    LazyColumn(
+        state = listState,
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 96.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .testTag("lists"),
+    ) {
+        items(lists, key = { it.list.id }) { summary ->
+            val id = summary.list.id
+            val index = lists.indexOf(summary)
+            ListCard(
+                summary = summary,
+                reorder = reorder,
+                onOpen = { onOpenList(id) },
+                onRename = { onRename(id) },
+                onDelete = { onDelete(summary) },
+                onMoveUp = if (index > 0) ({ vm.moveBy(id, -1) }) else null,
+                onMoveDown = if (index < lists.lastIndex) ({ vm.moveBy(id, 1) }) else null,
+                modifier = Modifier.reorderableItem(this, reorder, id),
+            )
+        }
+    }
+}
+
+/** Decision 23: the session is gone, the lists are not; say so and offer the way back. */
+@Composable
+private fun SessionLostBanner(email: String?, onSignIn: () -> Unit) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 16.dp, top = 8.dp),
+    ) {
+        Column(Modifier.padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 4.dp)) {
+            Text(
+                if (email != null) stringResource(R.string.session_lost_banner, email) else stringResource(R.string.session_lost_banner_generic),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onErrorContainer,
+            )
+            TextButton(onClick = onSignIn, modifier = Modifier.align(Alignment.End)) {
+                Text(stringResource(R.string.action_sign_in_again))
+            }
+        }
+    }
+}
+
+@Composable
 private fun EmptyLists(modifier: Modifier) {
     Column(
         modifier = modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(32.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,

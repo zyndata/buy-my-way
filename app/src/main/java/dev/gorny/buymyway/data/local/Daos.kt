@@ -44,11 +44,24 @@ interface ListDao {
     @Query("SELECT id FROM lists")
     suspend fun allIds(): List<String>
 
+    @Query("SELECT * FROM lists")
+    suspend fun getAll(): List<ListEntity>
+
+    /** Lists made while signed out, which sign-in adopts (STATE.md decision 57). */
+    @Query("SELECT id FROM lists WHERE ownerUid IS NULL ORDER BY createdAt, id")
+    suspend fun ownerlessIds(): List<String>
+
+    @Query("UPDATE lists SET ownerUid = :uid, updatedBy = COALESCE(updatedBy, :uid) WHERE id = :id")
+    suspend fun adopt(id: String, uid: String)
+
     @Upsert
     suspend fun upsert(list: ListEntity)
 
     @Query("DELETE FROM lists WHERE id = :id")
     suspend fun delete(id: String)
+
+    @Query("DELETE FROM lists")
+    suspend fun deleteAll()
 }
 
 @Dao
@@ -79,6 +92,21 @@ interface ItemDao {
 
     @Query("DELETE FROM items WHERE listId = :listId")
     suspend fun deleteForList(listId: String)
+
+    @Query("DELETE FROM items")
+    suspend fun deleteAll()
+
+    /** Sign-in: what was done signed out is signed with the uid (decision 57). */
+    @Query(
+        """
+        UPDATE items SET
+            createdBy = CASE WHEN createdAt > 0 THEN COALESCE(createdBy, :uid) ELSE createdBy END,
+            updatedBy = CASE WHEN updatedAt > 0 THEN COALESCE(updatedBy, :uid) ELSE updatedBy END,
+            checkedBy = CASE WHEN checkedAt IS NOT NULL THEN COALESCE(checkedBy, :uid) ELSE checkedBy END
+        WHERE listId = :listId
+        """,
+    )
+    suspend fun stampActors(listId: String, uid: String)
 }
 
 @Dao
@@ -101,6 +129,12 @@ interface CategoryDao {
 
     @Query("DELETE FROM categories WHERE listId = :listId")
     suspend fun deleteForList(listId: String)
+
+    @Query("DELETE FROM categories")
+    suspend fun deleteAll()
+
+    @Query("UPDATE categories SET updatedBy = COALESCE(updatedBy, :uid) WHERE listId = :listId AND updatedAt > 0")
+    suspend fun stampActors(listId: String, uid: String)
 }
 
 @Dao
@@ -122,6 +156,9 @@ interface MemberDao {
 
     @Query("DELETE FROM members WHERE listId = :listId")
     suspend fun deleteForList(listId: String)
+
+    @Query("DELETE FROM members")
+    suspend fun deleteAll()
 }
 
 @Dao
@@ -136,12 +173,28 @@ interface OutboxDao {
     @Query("SELECT COUNT(*) FROM outbox_ops")
     fun observeCount(): Flow<Int>
 
+    @Query("SELECT COUNT(*) FROM outbox_ops")
+    suspend fun count(): Int
+
     @Query("SELECT COUNT(*) FROM outbox_ops WHERE listId = :listId")
     suspend fun countForList(listId: String): Int
 
-    /** Called once RTDB has acknowledged the write (Phase 5). */
+    @Query("SELECT MAX(seq) FROM outbox_ops WHERE listId = :listId")
+    suspend fun maxSeqForList(listId: String): Long?
+
+    /** Called once RTDB has acknowledged the write, or the rules refused it (decision 56). */
     @Query("DELETE FROM outbox_ops WHERE opId IN (:opIds)")
     suspend fun delete(opIds: List<String>)
+
+    @Query("DELETE FROM outbox_ops WHERE listId = :listId")
+    suspend fun deleteForList(listId: String)
+
+    /** After a whole-list upload: the ops it already carried. */
+    @Query("DELETE FROM outbox_ops WHERE listId = :listId AND seq <= :seq")
+    suspend fun deleteForListUpTo(listId: String, seq: Long)
+
+    @Query("DELETE FROM outbox_ops")
+    suspend fun deleteAll()
 }
 
 @Dao
@@ -157,6 +210,9 @@ interface ListSyncDao {
 
     @Query("DELETE FROM list_sync WHERE listId = :listId")
     suspend fun delete(listId: String)
+
+    @Query("DELETE FROM list_sync")
+    suspend fun deleteAll()
 }
 
 @Dao
@@ -176,6 +232,13 @@ interface NameHistoryDao {
     @Query("SELECT * FROM name_history WHERE `key` = :key")
     suspend fun get(key: String): NameHistoryEntity?
 
+    /** Entries used after [at]: what the category memory has not sent yet (decision 59). */
+    @Query("SELECT * FROM name_history WHERE lastUsedAt > :at ORDER BY lastUsedAt LIMIT :limit")
+    suspend fun usedAfter(at: Long, limit: Int): List<NameHistoryEntity>
+
     @Upsert
     suspend fun upsert(entry: NameHistoryEntity)
+
+    @Query("DELETE FROM name_history")
+    suspend fun deleteAll()
 }

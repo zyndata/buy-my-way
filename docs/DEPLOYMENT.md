@@ -22,8 +22,8 @@ buymyway.gorny.dev    a static page for invite App Links + assetlinks.json (Phas
 
 One project, `buy-my-way-c3949` (the plain id was taken), on the **Spark** (free) plan. It holds:
 
-- **Realtime Database** in `europe-west1`, rules from `firebase/database.rules.json`
-  (deployed with `firebase deploy --only database` — Phase 5).
+- **Realtime Database** in `europe-west1`, rules from `firebase/database.rules.json` (see
+  *Database rules* below).
 - **Authentication** with the Google provider.
 - **Cloud Messaging** — nothing to configure; tokens are registered by the app.
 - **OAuth consent screen**: External, Eat My Way's branding (support group, home page and
@@ -39,6 +39,28 @@ One project, `buy-my-way-c3949` (the plain id was taken), on the **Spark** (free
 
 Public ids (`google-services.json`, the Web client id, the Apps Script URL) are committed.
 Nothing here is a secret; what protects the data is the database rules.
+
+## Database rules
+
+`firebase/database.rules.json` is the only authorization layer for the lists (PLAN.md
+*Security*). CI tests it against the emulator on every push; what the real project runs is
+whatever was last put there by hand. Phase 4 wrote the first version (a user's own lists,
+their profile and preferences); Phase 5 extends it to members, roles and invites.
+
+To put a new version live (STATE.md decision 61):
+
+1. Wait for the push's CI run to be green: its `rules` job has tested exactly that file.
+2. Firebase console → Realtime Database → *Rules*. Replace the whole text with the file's
+   content, *Publish*.
+3. Check it took: the console's *Rules playground*, a read of `/lists` as an unauthenticated
+   user → denied.
+
+Or with the CLI, from `firebase/` (it needs a `firebase login` of the owner's account, which is
+never stored in the repository): `npx firebase deploy --only database --project buy-my-way-c3949`.
+
+Rules and app go out together: an app that writes a field the live rules do not know is
+refused (unknown fields are rejected), so publish the rules **before** installing a build
+that needs them.
 
 ## The push sender (Phase 9)
 

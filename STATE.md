@@ -11,7 +11,7 @@ Any deviation from [PLAN.md](PLAN.md) must be recorded here before proceeding.
 | 1     | Scaffold & CI                          | done    | 2026-09-21 |
 | 2     | Local data layer & the merge           | done    | 2026-09-21 |
 | 3     | Lists & items on screen                | done    | 2026-09-21 |
-| 4     | Google sign-in & Drive persistence     | pending |           |
+| 4     | Google sign-in & cloud persistence     | done    | 2026-09-22 |
 | 5     | Sharing & real-time                    | pending |           |
 | 6     | Photos                                 | pending |           |
 | 7     | Voice input                            | pending |           |
@@ -25,7 +25,8 @@ decision).
 
 The repository holds the plan, the workflow files, the repository hygiene (2026-09-18), the
 push sender's skeleton (`push/`, deployed), from Phase 1 the Android app's scaffold, from
-Phase 2 its local data layer and, from Phase 3, its screens for private lists.
+Phase 2 its local data layer, from Phase 3 its screens for private lists and, from Phase 4,
+Google sign-in with the lists kept in Firebase Realtime Database.
 
 **Phase 0 done (2026-09-21).** Under `drive.file`, a shared file is invisible to the other
 member's copy of the app. So shared lists and photos move to Firebase Realtime Database and
@@ -85,6 +86,44 @@ in again). CI time: 6 min 44 s for the whole run (instrumented job 6 min 41 s,
 lint + unit tests + build 3 min 49 s, in parallel), run 35654135415, green. The next run (35654876097, a docs-only commit) failed once:
 a UI test typed into the add bar before the list had loaded on the slower CI emulator. The
 test now waits for the bar. Phase 4 is next.
+
+**Phase 4 done (2026-09-22).** Sign in with Google lives in Ustawienia (account, „N zmian
+czeka na wysłanie", „Wyloguj się" with a warning when changes are unsent). On sign-in, the
+lists made signed out are adopted and uploaded whole. After that every change goes to RTDB
+as one multi-path update of its field group, and is removed from the outbox once
+acknowledged. A write the rules refuse makes the phone read the list and adopt the newer
+state. A catch-up (on opening the app, at most every 30 s, and pull-to-refresh on Listy)
+reads `/userLists` and then each list, with items by a server-stamped `changedAt` (decision
+54). `/users/{uid}/prefs` carries the default order, the list order and the category memory.
+A lost session shows „Zaloguj się ponownie" and keeps everything (decision 23). Signing in
+with another account while the phone holds one's lists is refused with a sentence. The first
+`firebase/database.rules.json` covers a user's own lists, profile, email index and prefs, and
+the CI `rules` job tests it. The owner published it in the console. Decisions 53–61.
+**What wakes the device:** only the one-shot `OutboxWorker`, and only when changes were
+left unsent as the app left the foreground (decision 58). Nothing periodic.
+Verified: 33 rules tests on the Firebase emulator. A deliberately loosened item-ordering rule
+made 2 of them fail. 64 JVM tests (10 new, for the write shapes). 27 instrumented tests on the
+API 35 emulator, 6 of them new sync scenarios over an in-memory server that mirrors the
+rules: two phones on one account converging after edits on both while one was offline (Room
+states equal); an older write refused and the newer state adopted; a lost acknowledgement
+resent harmlessly; adoption at sign-in; a deleted list gone on the other phone and removed
+from RTDB after 30 days; preferences following the account. Skipping the adopt step made
+the "older write" test fail. **By hand on the physical S10e against the real project:** the
+Phase 3 build was upgraded in place, and signing in adopted and uploaded its 13-item list
+(owner and authors set, outbox empty, `seenUpTo` read back from the server). A tick made with
+Wi-Fi and mobile data off waited in the outbox and was sent 11 s after the network came back.
+„Wyloguj się" emptied the phone. Signing in again brought the list back from RTDB with that
+tick („3 / 13"). The app's Room database, its DataStore and a full logcat hold no ID token (no
+`eyJ…`). The Firebase session is only in Firebase Auth's own store. The only log line the app
+writes names an exception class. **Not verified:** two *physical* phones at once (the
+emulator has no Google account, and the S10e alone stood in for the second phone by signing
+out and in). The rules refusing a write on the real server, as opposed to on the emulator.
+The `OutboxWorker` running after the app left the foreground (the foreground retry sent the
+tick). A lost session on a device. The Linux machine (open question 2 still stands). One
+flake: after the emulator's system server died and the emulator was rebooted, the Phase 3
+strike-through test missed its 1 s window once, and it passed on the rerun. Also found: when
+the emulator cannot install anything, `connectedDebugAndroidTest` reports success with **zero
+tests**, so a local run is only evidence together with its test count. Phase 5 is next.
 
 ## Decisions
 
@@ -542,6 +581,93 @@ Newest last. Every deviation from PLAN.md lands here **before** it is acted on.
     mic that types the spoken name into the add field, as in Listonic. The owner chose to keep
     Phase 7 as planned (dictation, the parser, the review sheet), so Phase 3 has no mic.
 
+### 2026-09-22 — Phase 4 (Google sign-in & cloud persistence)
+
+53. **Phase 4 libraries.** From the stack list: `androidx.credentials:credentials` with
+    `credentials-play-services-auth`, and `googleid` (Sign in with Google), and
+    `androidx.work:work-runtime-ktx` (the `OutboxWorker`). Also `androidx.lifecycle:lifecycle-process`
+    at the Lifecycle version already pinned (2.11.0): `ProcessLifecycleOwner` is how the app
+    knows it left the foreground, which starts the 30 s grace before `goOffline()`. Not added:
+    `kotlinx-coroutines-play-services`, which decision 15 left to this phase. A 15-line
+    `Task.await()` does the same. The Web client id (`serverClientId`) is read from
+    `R.string.default_web_client_id`, which the google-services plugin generates from the
+    committed `google-services.json`, not from `gradle.properties` as PLAN.md's *Google
+    identity* says. That is one copy of the id instead of two. The rules tests get their own
+    `firebase/package.json` with `firebase-tools` (the emulator and `emulators:exec`),
+    `@firebase/rules-unit-testing` and its peer `firebase`, all dev-only, on Node's built-in
+    `node:test` runner (no mocha). They run under a `demo-` project id, so they need no login
+    and never touch the real project.
+54. **Catching up reads items by a server-stamped `changedAt`, not by `updatedAt`.** PLAN.md
+    queries `items` by `updatedAt` from `seenUpTo`. But `updatedAt` moves only with an item's
+    content: a tick or a delete leaves it where it was, so a device would never learn of them,
+    and it is a device's clock, not the server's. So every item write also sets
+    `changedAt: ServerValue.TIMESTAMP`, the rules require it to be `now`, `items` is indexed on
+    it, and `seenUpTo` is the largest `changedAt` applied, which is server time, as the data
+    model says. The meta and the categories are small and are read whole.
+55. **In Phase 4 a list's owner is `meta/ownerUid`; there is no members node yet.** Task 5 says
+    to upload a private list "with the owner as the only member". But a list with a members
+    node is a *shared* list (`NodeCodec`, and PLAN.md: „Udostępnij" creates that node). So
+    Phase 4 writes `meta.ownerUid` and `/userLists/{uid}/{listId} = "owner"`, and the rules
+    take ownership from `meta.ownerUid`. Phase 5 adds members and roles on top.
+56. **How a change reaches RTDB, and what the rules enforce.** Each outbox op becomes one
+    multi-path update of the field group it changes (plus `changedAt`), and its outbox entry is
+    removed when the write is acknowledged. A list that is not in RTDB yet (created here, or
+    adopted at sign-in) goes up whole, in one update, and the ops queued for it are dropped
+    because the upload already carries them. A write the rules reject makes the device read
+    that node, merge it into Room and drop the op: it adopts the newer state. The rules,
+    per node: every stamp (`updatedAt`, `checkedAt`, `deletedAt`, `clearedAt`) only moves
+    forward; a changed field group needs a newer stamp; `createdAt`/`createdBy` are
+    written once; `ownerUid` never changes; a tombstone is final (content and tick frozen);
+    nothing is written under a deleted list; unknown fields are rejected; strings are capped.
+    The device trims text to the same caps, so the server never refuses a local change for
+    its shape. Two gaps are accepted. Equal stamps from two devices: the server keeps the later
+    write, where the merge would pick by actor. That needs the same millisecond on two
+    phones. And the rules cannot compare arrays, so a change of `categoryOrder` is guarded
+    only by `updatedAt` moving forward. Deleting a list writes `meta.deletedAt` and removes
+    its items and categories in the same update (decision 36). The meta stays as the
+    tombstone, and the owner's device removes it and the `/userLists` entry 30 days later,
+    when a catch-up finds it.
+57. **Sign-in, a lost session, another account.** Credential Manager → `GoogleIdTokenCredential`
+    → `FirebaseAuth.signInWithCredential`. The Google ID token is passed from one call to the
+    next and never stored or logged. Then `/users/{uid}` (`name`, `email`, `photoUrl`,
+    `updatedAt`) and `/emailIndex/{sha256(lower-case email)} = uid` are written. The uid and
+    email of the signed-in account are kept in DataStore (an id, not a token). That is what
+    makes decision 23 work: when the Firebase session is gone without a sign-out
+    (`FirebaseAuthInvalidUserException`, or no current user), the app says „Zaloguj się
+    ponownie", keeps every list, and keeps making ops under that uid. Signing in with a
+    different account while the phone holds another account's lists is refused with a
+    sentence that says why and what to do. Sign-out warns when changes are still unsent, then
+    clears Room, DataStore, the Firebase session and Credential Manager's state. On sign-in,
+    every list without an owner is adopted: it gets the uid as owner, and as the author of
+    everything done while signed out. The rules cannot hash, so they cannot check that an
+    `/emailIndex` key really is the writer's email. A user could claim another person's
+    hash. That only blocks an e-mail invite to that person, and the link still works.
+    Recorded as open question 10 for Phase 5.
+58. **The connection and the background (what wakes the device).** The RTDB connection is on
+    only while the app is in the foreground (plus 30 s) or while an `OutboxWorker` runs. It is
+    counted, so the two do not switch each other off. In the foreground: every list is
+    caught up at most once per 30 s, and the outbox is flushed on every change. When the app
+    goes to the background with unsent changes, one unique one-shot `OutboxWorker` is
+    enqueued (`NetworkType.CONNECTED`, exponential backoff). It goes online, sends, and goes
+    offline. **That worker is the only thing Phase 4 adds that can wake the device.** It
+    runs only when changes were left unsent, and only until they are sent. No periodic work
+    (Phase 9), no listener, and no Firebase disk persistence: Room is the truth.
+59. **`/users/{uid}/prefs` holds three things, each last-writer-wins by its own stamp.**
+    `defaultOrder` and `listOrder` (`{value, updatedAt}`; the home screen's order moves here,
+    as decision 44 said), and `categoryMemory/{folded name}` (`{name, categoryId, at,
+    changedAt}`). The category memory is the `name_history` table: the category each name
+    was last filed under. So a correction made on one phone is used on the other, and so is
+    the autocomplete history. A catch-up reads the memory entries by `changedAt` since the
+    last read.
+60. **No household allow-list (owner, 2026-09-22, answers open question 9).** Any Google account
+    that signs in through our signed APK can keep its own lists. Spark cannot bill, and a
+    rebuild with another key cannot sign in (decision 34). An allow-list later would change
+    only the rules.
+61. **The owner pastes the rules into the Firebase console (owner, 2026-09-22).** The file is
+    `firebase/database.rules.json`, and `firebase deploy --only database` stays documented as
+    the alternative. The CI `rules` job tests the file against the emulator, never the real
+    project.
+
 ## Open questions
 
 1. ~~Where do shared lists live, now that `drive.file` cannot cross users?~~ Answered by
@@ -598,4 +724,9 @@ Newest last. Every deviation from PLAN.md lands here **before** it is acted on.
 9. **Limit sign-in to the household?** The RTDB rules (Phase 4) could accept writes only
    from uids listed under an `/allowed` node that only the owner can edit in the console.
    That would stop a stranger's Google account from using the quota even through our own
-   APK, but every new user would need a manual step. Phase 4 decides.
+   APK, but every new user would need a manual step. ~~Phase 4 decides.~~ No allow-list
+   (decision 60).
+10. **Can `/emailIndex` be squatted?** The rules cannot hash, so they cannot check that a key
+    is the sha256 of the writer's own email (decision 57). Phase 5, which reads the index for
+    e-mail invites, decides whether that matters. One option: key by the email itself (dots
+    encoded) and compare with `auth.token.email`.
