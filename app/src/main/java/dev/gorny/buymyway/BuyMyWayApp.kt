@@ -8,11 +8,17 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.FirebaseDatabase
 import dev.gorny.buymyway.core.categorize.Categorizer
 import dev.gorny.buymyway.core.model.SortView
+import dev.gorny.buymyway.core.sync.RemoteWrites
 import dev.gorny.buymyway.data.ListRepository
 import dev.gorny.buymyway.data.auth.AccountRepository
 import dev.gorny.buymyway.data.auth.AccountState
 import dev.gorny.buymyway.data.auth.SignInResult
 import dev.gorny.buymyway.data.local.AppDatabase
+import dev.gorny.buymyway.data.photo.PhotoCache
+import dev.gorny.buymyway.data.photo.PhotoLoader
+import dev.gorny.buymyway.data.photo.PhotoOutbox
+import dev.gorny.buymyway.data.photo.PhotoWorker
+import dev.gorny.buymyway.data.photo.Photos
 import dev.gorny.buymyway.data.prefs.AccountRecord
 import dev.gorny.buymyway.data.prefs.CategoryOrderPreferences
 import dev.gorny.buymyway.data.prefs.ListOrderPreferences
@@ -21,6 +27,7 @@ import dev.gorny.buymyway.data.prefs.SyncMarks
 import dev.gorny.buymyway.data.prefs.settingsDataStore
 import dev.gorny.buymyway.data.remote.FirebaseLiveSource
 import dev.gorny.buymyway.data.remote.FirebaseRemoteLists
+import dev.gorny.buymyway.data.remote.RemoteDenied
 import dev.gorny.buymyway.data.remote.RemoteFailure
 import dev.gorny.buymyway.data.share.Sharing
 import dev.gorny.buymyway.data.sync.Connection
@@ -39,6 +46,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+import java.io.File
 import java.security.SecureRandom
 
 class BuyMyWayApp : Application() {
@@ -150,6 +159,32 @@ class AppContainer(context: Context) {
         )
     }
 
+    /** Items' photos (Phase 6, decisions 70–72). */
+    val photos: Photos by lazy {
+        val outbox = PhotoOutbox(File(appContext.filesDir, "photo-outbox"))
+        val cache = PhotoCache(File(appContext.cacheDir, "photos"))
+        Photos(
+            repo = lists,
+            remote = remote,
+            outbox = outbox,
+            cache = cache,
+            loader = PhotoLoader(cache, outbox, ::fetchPhoto),
+            schedule = { PhotoWorker.enqueue(appContext) },
+            sessionValid = { account.checkSession() },
+        )
+    }
+
+    /** One photo node, read for a row on screen; null signed out, offline or when it is not there. */
+    private suspend fun fetchPhoto(listId: String, itemId: String) = account.syncUid()?.let {
+        try {
+            connection.hold {
+                withTimeoutOrNull(SyncEngine.DEFAULT_TIMEOUT_MS) { Photos.decode(remote.read(RemoteWrites.photo(listId, itemId))) }
+            }
+        } catch (_: RemoteDenied) {
+            null
+        }
+    }
+
     /** What the list screen needs besides the repository. */
     val listLive: ListLive = object : ListLive {
         override suspend fun myUid(): String? = account.actorUid()
@@ -169,6 +204,8 @@ class AppContainer(context: Context) {
             connection = connection,
             pendingOps = lists.observePendingOps(),
             scheduleOutbox = { OutboxWorker.enqueue(appContext) },
+            // A list just uploaded may have photos waiting for it (decision 71).
+            afterFlush = { if (photos.ready()) PhotoWorker.enqueue(appContext) },
         )
     }
 
@@ -203,8 +240,10 @@ class AppContainer(context: Context) {
     suspend fun signOut() {
         account.endSession(appContext)
         OutboxWorker.cancel(appContext)
+        PhotoWorker.cancel(appContext)
         sync.exclusive {
             lists.clearAll()
+            photos.clear()
             appContext.settingsDataStore.edit { it.clear() }
         }
     }
@@ -218,6 +257,24 @@ class AppContainer(context: Context) {
             false // no answer: WorkManager tries again later
         } catch (_: SyncEngine.SessionLost) {
             true // waits for the next sign-in
+        }
+    }
+
+    /**
+     * [PhotoWorker]'s work: the photos, then the `photoAt` changes they lead to. True when
+     * nothing is left to retry.
+     */
+    suspend fun sendPhotosInBackground(): Boolean {
+        val uid = account.syncUid() ?: return true // waits for the next sign-in
+        return try {
+            connection.hold {
+                photos.send(uid)
+                sync.flush(uid)
+            } == 0
+        } catch (_: RemoteFailure) {
+            false
+        } catch (_: SyncEngine.SessionLost) {
+            true
         }
     }
 

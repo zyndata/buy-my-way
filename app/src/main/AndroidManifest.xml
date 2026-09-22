@@ -38,6 +38,19 @@
                 <data android:scheme="buymyway" android:host="i" />
             </intent-filter>
         </activity>
+
+        <!-- The camera app writes the photo it takes through this (PLAN.md Phase 6, task 1).
+             TakePicture and the Photo Picker need no permission, and none is declared: no
+             camera, no storage, no media (STATE.md decision 71). -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.photos"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/photo_paths" />
+        </provider>
     </application>
 
 </manifest>

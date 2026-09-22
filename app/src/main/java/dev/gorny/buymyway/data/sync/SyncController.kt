@@ -43,6 +43,8 @@ class SyncController(
     private val connection: Connection,
     private val pendingOps: Flow<Int>,
     private val scheduleOutbox: () -> Unit,
+    /** Run after every successful flush: starts what waited for a list's upload (photos). */
+    private val afterFlush: suspend () -> Unit = {},
     private val clock: () -> Long = System::currentTimeMillis,
 ) : DefaultLifecycleObserver {
 
@@ -122,6 +124,7 @@ class SyncController(
                 profileSentFor = uid
             }
             engine.flush(uid)
+            afterFlush()
             if (catchUp) {
                 engine.catchUp(uid)
                 lastCatchUp = clock()

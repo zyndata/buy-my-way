@@ -1,6 +1,9 @@
 package dev.gorny.buymyway.ui
 
+import android.graphics.Bitmap
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.state.ToggleableState
@@ -30,6 +33,8 @@ import dev.gorny.buymyway.core.sync.ListState
 import dev.gorny.buymyway.ui.list.ListLive
 import dev.gorny.buymyway.data.ListRepository
 import dev.gorny.buymyway.data.local.AppDatabase
+import dev.gorny.buymyway.data.photo.ItemPhotos
+import dev.gorny.buymyway.data.photo.PhotoRef
 import dev.gorny.buymyway.data.prefs.ListOrderPreferences
 import dev.gorny.buymyway.ui.categories.CategoryOrderScreen
 import dev.gorny.buymyway.ui.categories.CategoryOrderViewModel
@@ -57,12 +62,14 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.File
+import java.io.InputStream
 import java.util.UUID
 
 /**
  * The screen flows (PLAN.md Phase 3, task 6, and Phase 5), on the real screens and view models
  * over an in-memory Room: add → check → „Kupione" → back; category reorder persists; delete +
- * „Cofnij"; someone else's tick with their initial; the sort views; the item dates.
+ * „Cofnij"; someone else's tick with their initial; the sort views; the item dates; photos in
+ * the rows, full screen and in the edit sheet (Phase 6).
  */
 @OptIn(ExperimentalTestApi::class)
 @RunWith(AndroidJUnit4::class)
@@ -325,6 +332,68 @@ class ScreenFlowsTest {
         compose.onNodeWithTag("item:mleko").performClick()
         compose.waitForIdle()
         assertEquals(false, runBlocking { repo.loadState(listId).items.values.single().checked })
+    }
+
+    /** Photos played by the test: a blue square for any photo, and what was asked of it. */
+    private class FakePhotos : ItemPhotos {
+        val removed = mutableListOf<String>()
+        override val pending = MutableStateFlow<Map<String, Long>>(emptyMap())
+
+        override suspend fun set(listId: String, itemId: String, open: () -> InputStream) = Unit
+
+        override suspend fun remove(listId: String, itemId: String) {
+            removed += itemId
+        }
+
+        override suspend fun load(ref: PhotoRef, maxPx: Int): ImageBitmap =
+            Bitmap.createBitmap(64, 48, Bitmap.Config.ARGB_8888).apply { eraseColor(android.graphics.Color.BLUE) }.asImageBitmap()
+    }
+
+    @Test
+    fun aPhotoShowsInItsRowOpensFullScreenAndIsRemovedFromTheEditSheet() {
+        val listId = runBlocking { repo.createList("Sobota") }
+        val itemId = runBlocking {
+            repo.addItem(listId, "chleb")
+            repo.addItem(listId, "mleko").itemId.also { repo.setPhotoAt(it, 1_000) }
+        }
+        val photos = FakePhotos()
+        val vm = ListViewModel(repo, listId, { _, _ -> emptyList() }, scope, photos = photos)
+        compose.setContent { BuyMyWayTheme { ListScreen(vm, onBack = {}, onOpenCategoryOrder = {}, onOpenShare = {}) } }
+        waitFor { exists(hasTestTag("photo:mleko")) }
+        assertEquals("only the item with a photo has one", false, exists(hasTestTag("photo:chleb")))
+
+        // A tap on the thumbnail opens it full screen, and does not tick the item.
+        compose.onNodeWithTag("photo:mleko").performClick()
+        waitFor { exists(hasTestTag("photoViewer")) }
+        assertEquals(false, runBlocking { repo.loadState(listId).items.getValue(itemId).checked })
+        compose.onNodeWithContentDescription(text(R.string.action_close)).performClick()
+        waitFor { !exists(hasTestTag("photoViewer")) }
+
+        // The edit sheet shows it too, and removes it.
+        compose.onNodeWithTag("item:mleko").performSemanticsAction(SemanticsActions.OnLongClick)
+        waitFor { exists(hasTestTag("photoSlot")) }
+        compose.onNodeWithText(text(R.string.action_take_photo)).assertIsDisplayed()
+        compose.onNodeWithText(text(R.string.action_pick_photo)).assertIsDisplayed()
+        compose.onNodeWithText(text(R.string.action_remove_photo)).performClick()
+        waitFor { photos.removed == listOf(itemId) }
+
+        // A photo still on the phone (not sent yet) is shown the same way.
+        photos.pending.value = mapOf(runBlocking { repo.loadState(listId).items.values.first { it.name == "chleb" }.id } to 2_000L)
+        waitFor { exists(hasTestTag("photo:chleb")) }
+    }
+
+    @Test
+    fun aViewerOpensAPhotoButGetsNoEditSheet() {
+        val listId = runBlocking { repo.createList("Wspólna") }
+        runBlocking {
+            repo.addItem(listId, "mleko").itemId.also { repo.setPhotoAt(it, 1_000) }
+            db.lists().upsert(db.lists().get(listId)!!.copy(ownerUid = ANIA))
+        }
+        val vm = ListViewModel(repo, listId, { _, _ -> emptyList() }, scope, photos = FakePhotos())
+        compose.setContent { BuyMyWayTheme { ListScreen(vm, onBack = {}, onOpenCategoryOrder = {}, onOpenShare = {}) } }
+        waitFor { exists(hasTestTag("readOnly")) && exists(hasTestTag("photo:mleko")) }
+        compose.onNodeWithTag("photo:mleko").performClick()
+        waitFor { exists(hasTestTag("photoViewer")) }
     }
 
     private fun shownItems(): List<String> = compose.onAllNodes(

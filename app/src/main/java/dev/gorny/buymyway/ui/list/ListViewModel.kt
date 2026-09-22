@@ -13,7 +13,10 @@ import dev.gorny.buymyway.core.model.SortView
 import dev.gorny.buymyway.core.parse.ItemParser
 import dev.gorny.buymyway.core.text.TextKey
 import dev.gorny.buymyway.data.ListRepository
+import dev.gorny.buymyway.data.photo.ItemPhotos
+import dev.gorny.buymyway.data.photo.PhotoRef
 import dev.gorny.buymyway.ui.common.HeldDeletes
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.Channel
@@ -34,6 +37,8 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import androidx.compose.ui.graphics.ImageBitmap
+import java.io.InputStream
 
 /**
  * Null [detail] with [loading] false: the list is gone (deleted, here or elsewhere, or no
@@ -77,8 +82,9 @@ class ListViewModel(
     private val repo: ListRepository,
     val listId: String,
     private val dictionary: suspend (typed: String, limit: Int) -> List<String>,
-    commitScope: CoroutineScope,
+    private val commitScope: CoroutineScope,
     private val live: ListLive? = null,
+    private val photos: ItemPhotos? = null,
 ) : ViewModel() {
 
     val held = HeldDeletes(commitScope) { repo.deleteItem(it) }
@@ -253,6 +259,57 @@ class ListViewModel(
     }
 
     fun delete(itemId: String, message: String, undoLabel: String) = held.hold(viewModelScope, itemId, message, undoLabel)
+
+    // --- Photos (Phase 6, decision 71) ----------------------------------------------------
+
+    /** Photos set here and not sent yet (item id → `at`): a row shows these first. */
+    val pendingPhotos: StateFlow<Map<String, Long>> = (photos?.pending ?: flowOf(emptyMap()))
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), emptyMap())
+
+    /** Items whose new photo is being prepared, for a progress indicator. */
+    private val _photoBusy = MutableStateFlow<Set<String>>(emptySet())
+    val photoBusy: StateFlow<Set<String>> = _photoBusy
+
+    private val photoErrors = Channel<Unit>(Channel.CONFLATED)
+
+    /** A chosen image could not be read or turned into a photo. */
+    val photoFailed: Flow<Unit> = photoErrors.receiveAsFlow()
+
+    /** Whether photos can be shown at all (not in a test without them). */
+    val hasPhotos: Boolean get() = photos != null
+
+    /** The photo a row shows: one waiting to be sent, else the item's `photoAt`. */
+    fun photoOf(item: Item, pending: Map<String, Long>): PhotoRef? = PhotoRef.of(listId, item.id, item.photoAt, pending[item.id])
+
+    suspend fun loadPhoto(ref: PhotoRef, maxPx: Int): ImageBitmap? = photos?.load(ref, maxPx)
+
+    /**
+     * A photo from the camera or the gallery. It is prepared in the app's scope, so leaving the
+     * screen does not lose it; [done] runs afterwards either way (the camera's file is deleted).
+     */
+    fun setPhoto(itemId: String, open: () -> InputStream, done: () -> Unit = {}) {
+        val photos = photos ?: return done()
+        if (!state.value.canEdit) return done()
+        _photoBusy.update { it + itemId }
+        commitScope.launch {
+            try {
+                photos.set(listId, itemId, open)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                photoErrors.trySend(Unit) // not an image, or the file could not be read
+            } finally {
+                _photoBusy.update { it - itemId }
+                done()
+            }
+        }
+    }
+
+    fun removePhoto(itemId: String) {
+        val photos = photos ?: return
+        if (!state.value.canEdit) return
+        commitScope.launch { runCatching { photos.remove(listId, itemId) } }
+    }
 
     // --- Sorting (decision 67) ------------------------------------------------------------
 

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The one place the camera app may write to: the photo it takes for an item (PLAN.md Phase 6,
+     task 1). It is read, turned into a small WebP and deleted at once (STATE.md decision 71). -->
+<paths>
+    <cache-path name="camera" path="camera/" />
+</paths>

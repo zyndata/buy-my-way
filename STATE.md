@@ -13,7 +13,7 @@ Any deviation from [PLAN.md](PLAN.md) must be recorded here before proceeding.
 | 3     | Lists & items on screen                | done    | 2026-09-21 |
 | 4     | Google sign-in & cloud persistence     | done    | 2026-09-22 |
 | 5     | Sharing & real-time                    | done    | 2026-09-22 |
-| 6     | Photos                                 | pending |           |
+| 6     | Photos                                 | in-progress |           |
 | 7     | Voice input                            | pending |           |
 | 8     | Import from Eat My Way                 | pending |           |
 | 9     | Background, notifications & battery    | pending |           |
@@ -834,6 +834,72 @@ Newest last. Every deviation from PLAN.md lands here **before** it is acted on.
       both phones: A ticks „ping N", B answers with „pong N", A times the round trip (the echo
       of decision 16). It is skipped without its argument, so CI never runs it. How to run it
       is in docs/DEVELOPMENT.md.
+
+### 2026-09-22 — Phase 6 (photos)
+
+70. **No image library: an in-house cache instead of Coil (PLAN.md Phase 6, task 3).** A
+    photo reaches the phone as base64 inside an RTDB node, not as a URL. So Coil would need a
+    custom fetcher, and it would still bring its own disk cache and network stack to decode
+    ~80 kB WebPs that `BitmapFactory` already decodes. The in-house part is two small caches.
+    One is on disk, in `cacheDir/photos`, one file per `{itemId}-{photoAt}`, capped at 50 MB
+    and trimmed oldest-used first. The other is in memory, for decoded bitmaps, by byte size.
+    A cached photo is never read from RTDB again. Nothing new on the dependency list:
+    `FileProvider` (the camera's output `Uri`) is in `androidx.core`, which Activity already
+    brings; base64 is `java.util.Base64` (API 26+, and the JVM tests can use it). EXIF: see
+    decision 73. The full-screen viewer's pinch-zoom is written on `detectTransformGestures`.
+71. **How a photo is made and sent (tasks 1–2).**
+    - **Made on the phone:** the camera writes to a file under `cacheDir/camera` through the
+      `FileProvider`, and the gallery is the Photo Picker. Neither needs a permission, so the
+      manifest declares no camera or storage permission. The image is decoded at a power-of-two
+      sample size, scaled so its longer side is at most 800 px, turned by its EXIF
+      orientation, and encoded as WebP. The quality steps down from 80 until the file is at
+      most 80 kB (81 920 bytes). If quality 30 is still too big, the image shrinks by 15 % and
+      the steps start again. Re-encoding a bitmap writes no EXIF, so location and camera
+      data never leave the phone.
+    - **Sent by `PhotoWorker`:** until it is in RTDB, a photo waits in `filesDir/photo-outbox`,
+      not in Room (so no schema change), and the phone shows it from there. The worker writes
+      `/photos/{listId}/{itemId}` = `{webp, w, h, by, at}`. Only once that is acknowledged
+      does it set `photoAt = at` on the item, with an ordinary `item.put` through the outbox,
+      so another phone never sees a `photoAt` whose photo is not there yet. The bytes it sent
+      go into the cache, so the phone that took the photo never downloads it back. A photo on
+      a list that is not in RTDB yet (signed out, or not uploaded yet) waits. After a flush
+      that uploaded a list, sync starts the worker again.
+    - **Removing** writes `photoAt = null` at once, as an `item.put`. The worker then removes
+      the node, but only if its `at` is not newer than the photo removed: a photo that someone
+      else put there in the meantime stays. **Replacing** overwrites the node. The rules let
+      `at` only move forward.
+    - **The edit sheet's „Zapisz" no longer writes `photoAt`**: the repository keeps the
+      stored one. Otherwise a sheet opened before an upload finished could put the old
+      value back.
+    - **A viewer** sees photos (thumbnail and full screen) and cannot set or remove them.
+    - **Sign-out** empties the photo outbox and the cache with the rest of the account's data.
+    - **What wakes the device:** `PhotoWorker`, one-shot and unique (`APPEND_OR_REPLACE`), with
+      `NetworkType.CONNECTED`, and only after a photo was set or removed and not yet sent. It
+      holds the connection while it sends, as `OutboxWorker` does. Nothing periodic.
+      Downloads happen only for a row that is on screen, while the list is open.
+72. **The `/photos` rules, and the rest of the orphan cleanup (task 4).** A photo node is
+    written by the list's owner or an editor, and only for an item that exists and is not
+    deleted, under a list that is not deleted. It has exactly `webp` (a non-empty string of
+    at most 110 000 characters, which is 80 kB in base64 with room to spare), `w` and `h`
+    (1–800), `by` (the writer's uid) and `at`, which never goes back. Members read it, as in
+    Phase 5. Removing a single photo stays with the owner and editors. The owner can also remove a
+    list's whole `/photos/{listId}`. **Two gaps from Phase 5 are closed:** deleting a list now
+    removes its photos at once, as decision 36 says (Phase 5's `list.delete` removed only the
+    items and categories), and so does the final removal 30 days later. Photos of items gone
+    for 30 days were already removed with them (decision 66). **Not done: a scan for orphan
+    nodes.** Listing `/photos/{listId}` would download every photo, and the SDK has no
+    shallow read. An orphan can only come from a replace and a remove made at the same moment
+    on two phones. It then stays until its item is removed for good.
+
+73. **`androidx.exifinterface` 1.4.2 is added, for the EXIF orientation (changes decision 70).**
+    The plan was the framework's `android.media.ExifInterface`. Lint refuses it (`ExifInterface`,
+    an error under `warningsAsErrors`): the platform class has known security bugs on older
+    Android versions, and the AndroidX one is the maintained copy. The EXIF parser reads
+    whatever image a user picks, so this is the one lint check that should not be suppressed
+    (decision 29 keeps every check but the version ones). It is one AndroidX artifact, and it
+    brings only `annotation` and `jspecify`. It also reads orientation from more formats (WebP,
+    PNG, HEIF) on every API level. The app uses it only to read `TAG_ORIENTATION`, and the
+    tests use it to write the EXIF they check is gone.
 
 ## Open questions
 

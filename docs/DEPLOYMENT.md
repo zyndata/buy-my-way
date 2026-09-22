@@ -45,7 +45,8 @@ Nothing here is a secret; what protects the data is the database rules.
 `firebase/database.rules.json` is the only authorization layer for the lists (PLAN.md
 *Security*). CI tests it against the emulator on every push; what the real project runs is
 whatever was last put there by hand. Phase 4 wrote the first version (a user's own lists,
-their profile and preferences); Phase 5 extends it to members, roles and invites.
+their profile and preferences); Phase 5 extends it to members, roles and invites; Phase 6 to
+photos.
 
 To put a new version live (STATE.md decision 61):
 
@@ -67,6 +68,11 @@ the address itself (STATE.md decision 63), so a Phase 4 build's profile write (a
 is refused, and that build then fails every sync. So: publish the rules, then install the
 Phase 5 build on every phone straight away. The sha256 entries under `/emailIndex` that Phase 4
 wrote are no longer used, and can be deleted in the console (the 64-character hex keys).
+
+**Publish Phase 6's rules before installing the Phase 6 build.** Under the Phase 5 rules a
+photo write is refused, and the build then gives up on that photo. Deleting a list is refused
+too, because the delete now also removes `/photos/{listId}`, which the Phase 5 rules do not
+allow. The Phase 5 build works under the Phase 6 rules: it writes no photos.
 
 ## Invite links (Phase 5)
 

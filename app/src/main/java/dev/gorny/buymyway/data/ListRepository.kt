@@ -213,13 +213,17 @@ class ListRepository(
         AddResult.Added(itemId)
     }
 
-    /** The edit sheet's „Zapisz". */
+    /**
+     * The edit sheet's „Zapisz". The photo is not the sheet's to write: the stored `photoAt` is
+     * kept, so a sheet opened before an upload finished cannot put the old one back (decision 71).
+     */
     suspend fun updateItem(itemId: String, content: ItemContent) = db.withTransaction {
         val item = liveItem(itemId)
         val cleaned = content.copy(
             name = cleanName(content.name, TextLimits.ITEM_NAME),
             unit = cleanOptional(content.unit, TextLimits.UNIT),
             note = cleanOptional(content.note, TextLimits.NOTE),
+            photoAt = item.photoAt,
         )
         if (cleaned == item.content) return@withTransaction
         val at = nextAt()
@@ -261,6 +265,32 @@ class ListRepository(
         }
         commit(ops)
     }
+
+    /**
+     * The item's photo is in RTDB now, as of [at] (decision 71): `PhotoWorker` calls this only
+     * after `/photos` acknowledged the write. An older photo never replaces a newer one.
+     */
+    suspend fun setPhotoAt(itemId: String, at: Long) = db.withTransaction {
+        val item = liveItem(itemId)
+        if ((item.photoAt ?: Long.MIN_VALUE) >= at) return@withTransaction
+        commit(listOf(Op.ItemPut(newId(), item.listId, actor(), nextAt(), itemId, item.content.copy(photoAt = at))))
+    }
+
+    /** „Usuń zdjęcie": the item names no photo from now on. Returns whether it named one. */
+    suspend fun clearPhoto(itemId: String): Boolean = db.withTransaction {
+        val item = liveItem(itemId)
+        if (item.photoAt == null) return@withTransaction false
+        commit(listOf(Op.ItemPut(newId(), item.listId, actor(), nextAt(), itemId, item.content.copy(photoAt = null))))
+        true
+    }
+
+    /** An item still shown on its list (its content known, not deleted or cleared). */
+    suspend fun isLive(itemId: String): Boolean {
+        val item = db.items().get(itemId)?.toDomain() ?: return false
+        return Merge.isVisible(item, db.lists().get(item.listId)?.toDomain())
+    }
+
+    suspend fun isSynced(listId: String): Boolean = db.listSync().get(listId)?.synced == true
 
     suspend fun setChecked(itemId: String, checked: Boolean) = db.withTransaction {
         val item = liveItem(itemId)

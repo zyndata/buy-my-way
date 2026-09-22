@@ -251,9 +251,26 @@ class FakeServer {
             }
             "users" -> listId == uid
             "emailIndex" -> true
-            "photos" -> get(proposed, parts) == null && (ownerOf(listId) == uid || role(uid, listId!!) == "editor")
+            "photos" -> photoWritable(uid, parts, proposed)
             else -> false
         }
+    }
+
+    /** `/photos` (decision 72): owner or editor, a live item, a newer `at`, the writer's own name. */
+    private fun photoWritable(uid: String, parts: List<String>, proposed: Map<String, Any?>): Boolean {
+        val listId = parts.getOrNull(1) ?: return false
+        val itemId = parts.getOrNull(2)
+        val node = map(get(proposed, listOf("photos", listId) + listOfNotNull(itemId)))
+        if (itemId == null) return node == null && ownerOf(listId) == uid
+        if (ownerOf(listId) != uid && role(uid, listId) != "editor") return false
+        if (node == null) return true
+        if (map(get(root, listOf("lists", listId, "meta")))?.get("deletedAt") != null) return false
+        val item = map(get(proposed, listOf("lists", listId, "items", itemId))) ?: return false
+        if (item["updatedAt"] == null || item["deletedAt"] != null) return false
+        if (node.keys != setOf("webp", "w", "h", "by", "at") || node["by"] != uid) return false
+        if (((node["webp"] as? String)?.length ?: 0) !in 1..110_000) return false
+        val before = map(get(root, listOf("photos", listId, itemId)))
+        return before == null || (stampOf(node["at"]) ?: 0.0) >= (stampOf(before["at"]) ?: 0.0)
     }
 
     private fun membersWritable(uid: String, listId: String, member: String?, proposed: Map<String, Any?>): Boolean {
@@ -284,6 +301,7 @@ class FakeServer {
             "userLists" -> parts.getOrNull(1) == uid
             "users" -> parts.getOrNull(1) == uid || parts.getOrNull(2) in setOf("name", "email", "photoUrl")
             "invites" -> parts.size >= 2
+            "photos" -> parts.size >= 2 && (ownerOf(parts[1]) == uid || role(uid, parts[1]) != null)
             else -> true
         }
         if (!readable) throw RemoteDenied("not readable")

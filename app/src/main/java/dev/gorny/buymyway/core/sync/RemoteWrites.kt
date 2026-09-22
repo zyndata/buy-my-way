@@ -53,6 +53,8 @@ object RemoteWrites {
     /** The owner's own index of the invites they made, so expired ones can be found (decision 64). */
     fun userInvites(uid: String) = "users/$uid/invites"
 
+    fun photos(listId: String) = "photos/$listId"
+
     fun photo(listId: String, itemId: String) = "photos/$listId/$itemId"
 
     fun emailIndex(key: String) = "emailIndex/$key"
@@ -126,11 +128,13 @@ object RemoteWrites {
                     "$base/createdAt" to (local?.createdAt ?: op.at),
                 ) + if (owner == uid) mapOf("${userLists(uid)}/${op.listId}" to OWNER) else emptyMap()
             }
-            // Decision 36: the items and categories go with the list; the meta is the tombstone.
+            // Decision 36: the items, categories and photos go with the list; the meta is the
+            // tombstone. Phase 6 added the photos (decision 72).
             is Op.ListDelete -> mapOf(
                 "${meta(op.listId)}/deletedAt" to op.at,
                 items(op.listId) to null,
                 categories(op.listId) to null,
+                photos(op.listId) to null,
             )
             is Op.ClearChecked -> mapOf("${meta(op.listId)}/clearedAt" to op.at)
             is Op.CategoryPut -> {
@@ -174,6 +178,7 @@ object RemoteWrites {
      */
     fun removeList(listId: String, uid: String, memberUids: Collection<String> = emptyList()): Map<String, Any?> = buildMap {
         put(list(listId), null)
+        put(photos(listId), null)
         for (member in (memberUids + uid).distinct().sorted()) put("${userLists(member)}/$listId", null)
     }
 
@@ -185,6 +190,12 @@ object RemoteWrites {
         }
         for (categoryId in categoryIds.sorted()) put(category(listId, categoryId), null)
     }
+
+    /** A photo, written before the item's `photoAt` names it (decision 71). */
+    fun putPhoto(listId: String, itemId: String, photo: NodeCodec.Photo): Map<String, Any?> =
+        mapOf(photo(listId, itemId) to NodeCodec.photoToNode(photo))
+
+    fun removePhoto(listId: String, itemId: String): Map<String, Any?> = mapOf(photo(listId, itemId) to null)
 
     /** `/users/{uid}` and `/emailIndex/{key}`, written at every sign-in (decisions 57 and 63). */
     fun profile(uid: String, name: String?, email: String?, photoUrl: String?, at: Long): Map<String, Any?> = buildMap {

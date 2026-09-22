@@ -334,12 +334,14 @@ describe('meta and categories', () => {
     await assertFails(db(ALICE).ref(cat).update({ deletedAt: null }));
   });
 
-  test('deleting a list marks the meta and removes items and categories in one update', async () => {
+  test('deleting a list marks the meta and removes items, categories and photos in one update', async () => {
+    await seed(`photos/${LIST}/${ITEM}`, { webp: 'UklGRg==', w: 1, h: 1, by: ALICE, at: T0 });
     await assertSucceeds(
       db(ALICE).ref().update({
         [`lists/${LIST}/meta/deletedAt`]: T0 + 10,
         [`lists/${LIST}/items`]: null,
         [`lists/${LIST}/categories`]: null,
+        [`photos/${LIST}`]: null,
       }),
     );
     // Nothing is written under a deleted list, and it is not renamed either.
@@ -347,7 +349,11 @@ describe('meta and categories', () => {
     await assertFails(db(ALICE).ref(`lists/${LIST}/meta`).update({ name: 'Nowa', updatedAt: T0 + 30 }));
     // Thirty days later the owner removes what is left.
     await assertSucceeds(
-      db(ALICE).ref().update({ [`lists/${LIST}`]: null, [`userLists/${ALICE}/${LIST}`]: null }),
+      db(ALICE).ref().update({
+        [`lists/${LIST}`]: null,
+        [`photos/${LIST}`]: null,
+        [`userLists/${ALICE}/${LIST}`]: null,
+      }),
     );
   });
 
@@ -663,6 +669,79 @@ describe('cleanup', () => {
         [`userLists/${CAROL}/${LIST}`]: null,
       }),
     );
+  });
+});
+
+// --- Phase 6: photos (STATE.md decisions 71 and 72) -------------------------------------------
+
+/** A photo node as `PhotoSync` writes it; `webp` is base64. */
+function photo(overrides = {}) {
+  return { webp: 'UklGRiQAAABXRUJQVlA4IBgAAAAwAQCdASoBAAEAAwA0JaQAA3AA/vuUAAA=', w: 800, h: 600, by: ALICE, at: T0 + 10, ...overrides };
+}
+
+const photoPath = (item = ITEM) => `photos/${LIST}/${item}`;
+
+describe('photos', () => {
+  beforeEach(seedShared);
+
+  test('the owner and an editor put a photo; a viewer and a stranger cannot', async () => {
+    await assertSucceeds(db(ALICE).ref(photoPath()).set(photo()));
+    await assertSucceeds(db(BOB).ref(photoPath()).set(photo({ by: BOB, at: T0 + 20 })));
+    await assertFails(db(CAROL).ref(photoPath()).set(photo({ by: CAROL, at: T0 + 30 })));
+    await assertFails(db(DAVE).ref(photoPath()).set(photo({ by: DAVE, at: T0 + 30 })));
+  });
+
+  test('members read a photo; a stranger does not', async () => {
+    await seed(photoPath(), photo());
+    for (const uid of [ALICE, BOB, CAROL]) await assertSucceeds(db(uid).ref(photoPath()).get());
+    await assertFails(db(DAVE).ref(photoPath()).get());
+  });
+
+  test('a photo is capped at 110 000 base64 characters and 800 px', async () => {
+    await assertSucceeds(db(ALICE).ref(photoPath()).set(photo({ webp: 'A'.repeat(110000) })));
+    await assertFails(db(ALICE).ref(photoPath()).set(photo({ webp: 'A'.repeat(110001), at: T0 + 20 })));
+    await assertFails(db(ALICE).ref(photoPath()).set(photo({ w: 801, at: T0 + 20 })));
+    await assertFails(db(ALICE).ref(photoPath()).set(photo({ h: 0, at: T0 + 20 })));
+    await assertFails(db(ALICE).ref(photoPath()).set(photo({ webp: '', at: T0 + 20 })));
+  });
+
+  test('a photo has exactly its five fields, and is signed by its writer', async () => {
+    await assertFails(db(ALICE).ref(photoPath()).set({ ...photo(), exif: 'GPS' }));
+    const { at, ...withoutAt } = photo();
+    await assertFails(db(ALICE).ref(photoPath()).set(withoutAt));
+    await assertFails(db(BOB).ref(photoPath()).set(photo({ by: ALICE })));
+  });
+
+  test('a replacement is newer; an older photo never overwrites a newer one', async () => {
+    await assertSucceeds(db(ALICE).ref(photoPath()).set(photo({ at: T0 + 20 })));
+    await assertFails(db(BOB).ref(photoPath()).set(photo({ by: BOB, at: T0 + 10 })));
+    await assertSucceeds(db(BOB).ref(photoPath()).set(photo({ by: BOB, at: T0 + 30 })));
+  });
+
+  test('a photo belongs to a live item of a live list', async () => {
+    await assertFails(db(ALICE).ref(photoPath('no-such-item')).set(photo()));
+    await seed(`${itemPath()}/deletedAt`, T0 + 5);
+    await assertFails(db(ALICE).ref(photoPath()).set(photo()));
+  });
+
+  test('the item and its photo can be written in one update', async () => {
+    await assertSucceeds(
+      db(ALICE).ref().update({ ...contentWrite(T0 + 10, { name: 'kefir', photoAt: T0 + 10 }), [photoPath()]: photo() }),
+    );
+  });
+
+  test('nothing is written under a deleted list', async () => {
+    await seed(`lists/${LIST}/meta/deletedAt`, T0 + 5);
+    await assertFails(db(ALICE).ref(photoPath()).set(photo()));
+  });
+
+  test('an editor removes one photo, never all; the owner removes all', async () => {
+    await seed(photoPath(), photo());
+    await assertFails(db(BOB).ref(`photos/${LIST}`).remove());
+    await assertFails(db(CAROL).ref(photoPath()).remove());
+    await assertSucceeds(db(BOB).ref(photoPath()).remove());
+    await seed(photoPath(), photo());
+    await assertSucceeds(db(ALICE).ref(`photos/${LIST}`).remove());
   });
 });
 

@@ -150,6 +150,13 @@ can show is measured by hand:
   its own clock, 20 times (the echo of STATE.md decision 16). The `RESULT` line gives the
   median and p95.
 - **Invite link, airplane mode, the animation**: by hand, and recorded in STATE.md.
+- **Photos (Phase 6)**: `PhotoSyncTest` covers them between phones on the fake server, and
+  `PhotoProcessorTest` turns a 12-megapixel JPEG with EXIF into the stored WebP. By hand, on two
+  phones: a photo taken on A shows in B's row, full screen too, and „Usuń zdjęcie" removes
+  `/photos/{listId}/{itemId}` (check in the console). The emulator's camera app works for the
+  camera path; the Photo Picker needs an image in the emulator's gallery first
+  (`adb push some.jpg /sdcard/Pictures/`, then open Google Photos or reboot so MediaStore
+  sees it).
 
 `ANDROID_SERIAL` picks one device when several are connected. Without it, Gradle's
 connected tasks use every device `adb` sees.

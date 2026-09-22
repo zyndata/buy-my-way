@@ -312,8 +312,28 @@
     "photos": {
       "$listId": {
         ".read": "auth != null && (root.child('lists').child($listId).child('meta/ownerUid').val() === auth.uid || root.child('lists').child($listId).child('members').child(auth.uid).exists())",
+        ".write": "auth != null && !newData.exists() && root.child('lists').child($listId).child('meta/ownerUid').val() === auth.uid",
         "$itemId": {
-          ".write": "auth != null && !newData.exists() && (root.child('lists').child($listId).child('meta/ownerUid').val() === auth.uid || root.child('lists').child($listId).child('members').child(auth.uid).child('role').val() === 'editor')"
+          ".write": "auth != null && (root.child('lists').child($listId).child('meta/ownerUid').val() === auth.uid || root.child('lists').child($listId).child('members').child(auth.uid).child('role').val() === 'editor') && (!newData.exists() || (!root.child('lists').child($listId).child('meta/deletedAt').exists() && newData.parent().parent().parent().child('lists').child($listId).child('items').child($itemId).child('updatedAt').exists() && !newData.parent().parent().parent().child('lists').child($listId).child('items').child($itemId).child('deletedAt').exists()))",
+          ".validate": "$itemId.length <= 64 && newData.hasChildren(['webp', 'w', 'h', 'by', 'at']) && (!data.exists() || newData.child('at').val() >= data.child('at').val())",
+          "webp": {
+            ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 110000"
+          },
+          "w": {
+            ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 800"
+          },
+          "h": {
+            ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 800"
+          },
+          "by": {
+            ".validate": "newData.isString() && newData.val() === auth.uid"
+          },
+          "at": {
+            ".validate": "newData.isNumber()"
+          },
+          "$other": {
+            ".validate": false
+          }
         }
       }
     }

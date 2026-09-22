@@ -1,12 +1,14 @@
 package dev.gorny.buymyway.ui.list
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
@@ -20,7 +22,7 @@ import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -44,12 +46,15 @@ import dev.gorny.buymyway.core.model.Item
 import dev.gorny.buymyway.core.model.ItemContent
 import dev.gorny.buymyway.core.text.DateText
 import dev.gorny.buymyway.core.text.QuantityFormat
+import dev.gorny.buymyway.data.photo.PhotoRef
+import androidx.compose.ui.graphics.ImageBitmap
 
 /**
- * The edit sheet (PLAN.md Phase 3, task 4): name, quantity and unit, category, note, delete.
- * The photo slot is there but disabled until Phase 6. Below them, read-only, when the item was
- * last edited and, if bought, when it was ticked, with who did it where they are known
- * (Phase 5, task 8). [nameOf] names a member by uid, or gives null.
+ * The edit sheet (PLAN.md Phase 3, task 4): name, quantity and unit, category, note, photo
+ * (Phase 6: camera, gallery, remove; [photo] is null where photos are not available), delete.
+ * Below them, read-only, when the item was last edited and, if bought, when it was ticked, with
+ * who did it where they are known (Phase 5, task 8). [nameOf] names a member by uid, or gives
+ * null. The photo changes at once, not with „Zapisz" (STATE.md decision 71).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -57,6 +62,7 @@ fun EditItemSheet(
     item: Item,
     categories: List<CategoryInfo>,
     nameOf: (String?) -> String?,
+    photo: PhotoActions?,
     onSave: (ItemContent) -> Unit,
     onDelete: () -> Unit,
     onDismiss: () -> Unit,
@@ -145,11 +151,7 @@ fun EditItemSheet(
                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
                 modifier = Modifier.fillMaxWidth(),
             )
-            OutlinedButton(onClick = {}, enabled = false, modifier = Modifier.fillMaxWidth()) {
-                Icon(painterResource(R.drawable.ic_photo_camera), contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text(stringResource(R.string.photo_soon))
-            }
+            if (photo != null) PhotoSlot(item.name, photo)
             ItemDates(item, nameOf)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 TextButton(onClick = onDelete) {
@@ -199,3 +201,52 @@ private fun DateLine(text: String, by: String?) {
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
 }
+
+/** What the edit sheet's photo slot shows and does (PLAN.md Phase 6). */
+class PhotoActions(
+    val ref: PhotoRef?,
+    /** A new photo is being prepared. */
+    val busy: Boolean,
+    val load: suspend (PhotoRef, Int) -> ImageBitmap?,
+    val onTake: () -> Unit,
+    val onPick: () -> Unit,
+    val onRemove: () -> Unit,
+    val onOpen: () -> Unit,
+)
+
+@Composable
+private fun PhotoSlot(name: String, photo: PhotoActions) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.testTag("photoSlot")) {
+        val ref = photo.ref
+        when {
+            photo.busy -> Box(contentAlignment = Alignment.Center, modifier = Modifier.size(THUMBNAIL)) {
+                CircularProgressIndicator(Modifier.size(32.dp))
+            }
+            ref != null -> PhotoThumbnail(ref, name, THUMBNAIL, photo.load, photo.onOpen)
+        }
+        Column(Modifier.weight(1f).padding(start = if (photo.busy || ref != null) 12.dp else 0.dp)) {
+            if (photo.busy) {
+                Text(
+                    stringResource(R.string.photo_preparing),
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                )
+            } else {
+                PhotoButton(R.drawable.ic_photo_camera, R.string.action_take_photo, photo.onTake)
+                PhotoButton(R.drawable.ic_image, R.string.action_pick_photo, photo.onPick)
+                if (ref != null) PhotoButton(R.drawable.ic_delete, R.string.action_remove_photo, photo.onRemove)
+            }
+        }
+    }
+}
+
+@Composable
+private fun PhotoButton(icon: Int, label: Int, onClick: () -> Unit) {
+    TextButton(onClick = onClick) {
+        Icon(painterResource(icon), contentDescription = null)
+        Spacer(Modifier.width(8.dp))
+        Text(stringResource(label))
+    }
+}
+
+private val THUMBNAIL = 72.dp

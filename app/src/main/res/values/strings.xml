@@ -66,7 +66,18 @@
     <string name="field_unit">Jednostka</string>
     <string name="field_category">Kategoria</string>
     <string name="field_note">Notatka</string>
-    <string name="photo_soon">Zdjęcia będą dostępne wkrótce</string>
+
+    <!-- Zdjęcia (Phase 6) -->
+    <string name="action_take_photo">Zrób zdjęcie</string>
+    <string name="action_pick_photo">Wybierz z galerii</string>
+    <string name="action_remove_photo">Usuń zdjęcie</string>
+    <string name="action_show_photo">Pokaż zdjęcie</string>
+    <string name="action_close">Zamknij</string>
+    <string name="photo_description">Zdjęcie: %1$s</string>
+    <string name="photo_preparing">Przygotowuję zdjęcie…</string>
+    <string name="photo_failed">Nie udało się wczytać zdjęcia.</string>
+    <string name="photo_no_camera">Nie znaleziono aplikacji aparatu.</string>
+    <string name="photo_unavailable">Zdjęcie jest teraz niedostępne. Sprawdź połączenie.</string>
 
     <!-- Kategorie -->
     <string name="category_order_hint">Ustaw kategorie w kolejności, w jakiej chodzisz po sklepie. Przeciągnij za uchwyt po prawej.</string>

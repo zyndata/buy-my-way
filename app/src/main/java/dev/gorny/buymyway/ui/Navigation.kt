@@ -142,6 +142,7 @@ private fun listViewModel(container: AppContainer, listId: String) = ListViewMod
     dictionary = container::suggestNames,
     commitScope = container.appScope,
     live = container.listLive,
+    photos = container.photos,
 )
 
 private fun listCategoryOrder(container: AppContainer, listId: String): CategoryOrderViewModel {

@@ -1,5 +1,11 @@
 package dev.gorny.buymyway.ui.list
 
+import android.content.ActivityNotFoundException
+import android.content.Context
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -39,6 +45,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -46,6 +53,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
@@ -67,12 +76,18 @@ import dev.gorny.buymyway.core.model.Item
 import dev.gorny.buymyway.core.model.ListDetail
 import dev.gorny.buymyway.core.model.SortView
 import dev.gorny.buymyway.core.text.QuantityFormat
+import dev.gorny.buymyway.data.photo.PhotoRef
 import dev.gorny.buymyway.ui.common.DragHandle
 import dev.gorny.buymyway.ui.common.NameDialog
 import dev.gorny.buymyway.ui.common.ReorderState
 import dev.gorny.buymyway.ui.common.moveActions
 import dev.gorny.buymyway.ui.common.rememberReorderState
 import dev.gorny.buymyway.ui.common.reorderableItem
+import androidx.core.content.FileProvider
+import kotlinx.coroutines.launch
+import java.io.File
+import java.io.IOException
+import java.io.InputStream
 
 /** Lista (PLAN.md *Screens*): the items to buy by department, „Kupione" below, the add bar. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -93,6 +108,26 @@ fun ListScreen(
     var renaming by rememberSaveable { mutableStateOf(false) }
     var editing by rememberSaveable { mutableStateOf<String?>(null) }
     var boughtOpen by rememberSaveable { mutableStateOf(false) }
+    val pendingPhotos by vm.pendingPhotos.collectAsStateWithLifecycle()
+    val photoBusy by vm.photoBusy.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    // Which item the camera or the gallery is choosing for: kept across process death, since
+    // the camera app may be in front long enough for Android to end this one.
+    var cameraFor by rememberSaveable { mutableStateOf<String?>(null) }
+    var galleryFor by rememberSaveable { mutableStateOf<String?>(null) }
+    var viewing by rememberSaveable { mutableStateOf<String?>(null) }
+    val takePicture = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { taken ->
+        val itemId = cameraFor
+        cameraFor = null
+        val file = CameraFile.file(context)
+        if (taken && itemId != null) vm.setPhoto(itemId, { file.inputStream() }, done = { file.delete() }) else file.delete()
+    }
+    val pickPhoto = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        val itemId = galleryFor
+        galleryFor = null
+        if (uri != null && itemId != null) vm.setPhoto(itemId, opener(context, uri))
+    }
 
     // Leaves the screen when the list is deleted, here or by someone else, or taken away.
     LaunchedEffect(state) {
@@ -100,6 +135,9 @@ fun ListScreen(
     }
     LaunchedEffect(vm) {
         vm.revived.collect { name -> vm.held.snackbar.showSnackbar(resources.getString(R.string.revived, name)) }
+    }
+    LaunchedEffect(vm) {
+        vm.photoFailed.collect { vm.held.snackbar.showSnackbar(resources.getString(R.string.photo_failed)) }
     }
 
     val detail = state.detail
@@ -170,6 +208,8 @@ fun ListScreen(
                 boughtOpen = boughtOpen,
                 onToggleBought = { boughtOpen = !boughtOpen },
                 onEdit = { editing = it.id },
+                photoOf = { vm.photoOf(it, pendingPhotos) },
+                onOpenPhoto = { viewing = it.id },
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding),
@@ -199,12 +239,38 @@ fun ListScreen(
         )
     }
 
-    val edited = editing?.let { id -> detail?.let { d -> (d.sections.flatMap { it.items } + d.bought).firstOrNull { it.id == id } } }
+    val allItems = detail?.let { d -> d.sections.flatMap { it.items } + d.bought }.orEmpty()
+    val edited = editing?.let { id -> allItems.firstOrNull { it.id == id } }
     if (edited != null && detail != null) {
+        val photoActions = if (vm.hasPhotos && state.canEdit) {
+            PhotoActions(
+                ref = vm.photoOf(edited, pendingPhotos),
+                busy = edited.id in photoBusy,
+                load = vm::loadPhoto,
+                onTake = {
+                    cameraFor = edited.id
+                    try {
+                        takePicture.launch(CameraFile.uri(context))
+                    } catch (_: ActivityNotFoundException) {
+                        cameraFor = null
+                        scope.launch { vm.held.snackbar.showSnackbar(resources.getString(R.string.photo_no_camera)) }
+                    }
+                },
+                onPick = {
+                    galleryFor = edited.id
+                    pickPhoto.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                },
+                onRemove = { vm.removePhoto(edited.id) },
+                onOpen = { viewing = edited.id },
+            )
+        } else {
+            null
+        }
         EditItemSheet(
             item = edited,
             categories = detail.categories,
             nameOf = { uid -> uid?.let { ListViewModel.displayName(state.members[it]) }?.ifEmpty { null } },
+            photo = photoActions,
             onSave = { content ->
                 editing = null
                 vm.update(edited.id, content)
@@ -220,6 +286,28 @@ fun ListScreen(
             onDismiss = { editing = null },
         )
     }
+
+    val viewed = viewing?.let { id -> allItems.firstOrNull { it.id == id } }
+    val viewedRef = viewed?.let { vm.photoOf(it, pendingPhotos) }
+    if (viewed != null && viewedRef != null) {
+        PhotoViewer(viewedRef, viewed.name, vm::loadPhoto, onDismiss = { viewing = null })
+    }
+}
+
+/**
+ * Where the camera app writes the photo it takes (`res/xml/photo_paths.xml`, STATE.md decision
+ * 71). One file: it is read and deleted as soon as the camera returns.
+ */
+private object CameraFile {
+    fun file(context: Context): File = File(context.cacheDir, "camera/photo.jpg").also { it.parentFile?.mkdirs() }
+
+    fun uri(context: Context): Uri = FileProvider.getUriForFile(context, "${context.packageName}.photos", file(context))
+}
+
+/** Reads a picked image with the application's resolver: it is read after the screen may be gone. */
+private fun opener(context: Context, uri: Uri): () -> InputStream {
+    val resolver = context.applicationContext.contentResolver
+    return { resolver.openInputStream(uri) ?: throw IOException("the picked image cannot be read") }
 }
 
 @Composable
@@ -294,6 +382,8 @@ private fun ListContent(
     boughtOpen: Boolean,
     onToggleBought: () -> Unit,
     onEdit: (Item) -> Unit,
+    photoOf: (Item) -> PhotoRef?,
+    onOpenPhoto: (Item) -> Unit,
     modifier: Modifier,
 ) {
     if (detail.sections.isEmpty() && detail.bought.isEmpty()) {
@@ -330,7 +420,7 @@ private fun ListContent(
                     SectionHeader(category.name, Modifier.animateItem())
                 }
             }
-            itemsWithMoves(section.items, state, reorder, vm, onEdit)
+            itemsWithMoves(section.items, state, reorder, vm, onEdit, photoOf, onOpenPhoto)
         }
         if (detail.bought.isNotEmpty()) {
             item(key = "bought") {
@@ -348,6 +438,9 @@ private fun ListContent(
                         item = item,
                         onToggle = if (state.canEdit) ({ vm.toggle(item) }) else null,
                         onEdit = if (state.canEdit) ({ onEdit(item) }) else null,
+                        photo = photoOf(item),
+                        loadPhoto = vm::loadPhoto,
+                        onOpenPhoto = { onOpenPhoto(item) },
                         modifier = Modifier.animateItem(),
                     )
                 }
@@ -362,6 +455,8 @@ private fun LazyListScope.itemsWithMoves(
     reorder: ReorderState,
     vm: ListViewModel,
     onEdit: (Item) -> Unit,
+    photoOf: (Item) -> PhotoRef?,
+    onOpenPhoto: (Item) -> Unit,
 ) {
     items.forEachIndexed { index, item ->
         item(key = item.id) {
@@ -371,6 +466,9 @@ private fun LazyListScope.itemsWithMoves(
                 initial = state.remoteTicks[item.id],
                 onToggle = if (state.canEdit) ({ vm.toggle(item) }) else null,
                 onEdit = if (state.canEdit) ({ onEdit(item) }) else null,
+                photo = photoOf(item),
+                loadPhoto = vm::loadPhoto,
+                onOpenPhoto = { onOpenPhoto(item) },
                 reorder = if (movable) reorder else null,
                 onMoveUp = if (movable && index > 0) ({ vm.moveBy(item.id, -1) }) else null,
                 onMoveDown = if (movable && index < items.lastIndex && !items[index + 1].checked) ({ vm.moveBy(item.id, 1) }) else null,
@@ -447,7 +545,8 @@ private fun BoughtHeader(count: Int, open: Boolean, onToggle: () -> Unit, onClea
 /**
  * One item. A tap ticks it (or, in „Kupione", brings it back); a long press edits it. A ticked
  * row is struck through, and TalkBack hears „kupione" (PLAN.md Phase 3, task 7). [initial] is
- * shown on a tick someone else just made (Phase 5, task 5). A viewer gets neither action.
+ * shown on a tick someone else just made (Phase 5, task 5). A viewer gets neither action. A
+ * [photo] shows as a thumbnail that opens full screen, for a viewer too (Phase 6).
  */
 @Composable
 private fun ItemRow(
@@ -455,6 +554,9 @@ private fun ItemRow(
     onToggle: (() -> Unit)?,
     onEdit: (() -> Unit)?,
     modifier: Modifier = Modifier,
+    photo: PhotoRef? = null,
+    loadPhoto: suspend (PhotoRef, Int) -> ImageBitmap? = { _, _ -> null },
+    onOpenPhoto: () -> Unit = {},
     initial: String? = null,
     reorder: ReorderState? = null,
     onMoveUp: (() -> Unit)? = null,
@@ -532,6 +634,9 @@ private fun ItemRow(
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
+            }
+            if (photo != null) {
+                PhotoThumbnail(photo, item.name, 40.dp, loadPhoto, onOpenPhoto, Modifier.padding(start = 8.dp))
             }
         }
         if (reorder != null) {

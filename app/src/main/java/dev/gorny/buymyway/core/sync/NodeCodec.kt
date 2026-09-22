@@ -6,6 +6,7 @@ import dev.gorny.buymyway.core.model.Item
 import dev.gorny.buymyway.core.model.Member
 import dev.gorny.buymyway.core.model.Role
 import dev.gorny.buymyway.core.model.ShoppingList
+import java.util.Base64
 
 /**
  * Domain types ↔ the RTDB node shapes of PLAN.md *Storage layout*: maps of primitives, which is
@@ -134,6 +135,35 @@ object NodeCodec {
 
     /** The server time of a node's last write (decision 54); null for a node without one. */
     fun changedAt(node: Map<String, Any?>): Long? = node.long(RemoteWrites.CHANGED_AT)
+
+    // --- /photos/{listId}/{itemId} (decisions 71 and 72) ----------------------------------
+
+    /** A stored photo: WebP bytes, their size, who took it and when (its `photoAt`). */
+    class Photo(val webp: ByteArray, val width: Int, val height: Int, val by: String, val at: Long)
+
+    fun photoToNode(photo: Photo): Map<String, Any> = mapOf(
+        "webp" to Base64.getEncoder().encodeToString(photo.webp),
+        "w" to photo.width,
+        "h" to photo.height,
+        "by" to photo.by,
+        "at" to photo.at,
+    )
+
+    /** Null for a node that is not a photo, or whose base64 does not decode. */
+    fun photoFromNode(node: Map<String, Any?>): Photo? {
+        val encoded = node.string("webp")?.takeIf { it.isNotEmpty() } ?: return null
+        val bytes = runCatching { Base64.getDecoder().decode(encoded) }.getOrNull() ?: return null
+        return Photo(
+            webp = bytes,
+            width = node.long("w")?.toInt() ?: 0,
+            height = node.long("h")?.toInt() ?: 0,
+            by = node.string("by").orEmpty(),
+            at = node.long("at") ?: 0,
+        )
+    }
+
+    /** A photo node's `at` alone, without decoding it. */
+    fun photoAt(node: Map<String, Any?>): Long? = node.long("at")
 
     // --- /users/{uid}/prefs (decision 59) -------------------------------------------------
 

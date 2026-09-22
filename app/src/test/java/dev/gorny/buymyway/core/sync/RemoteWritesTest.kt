@@ -82,10 +82,15 @@ class RemoteWritesTest {
     }
 
     @Test
-    fun deletingAListRemovesItsItemsAndCategoriesAndKeepsTheMetaAsTheTombstone() {
+    fun deletingAListRemovesItsItemsCategoriesAndPhotosAndKeepsTheMetaAsTheTombstone() {
         val paths = RemoteWrites.forOp(Op.ListDelete("op", "list-1", uid, 600), uid, known)
         assertEquals(
-            mapOf("lists/list-1/meta/deletedAt" to 600L, "lists/list-1/items" to null, "lists/list-1/categories" to null),
+            mapOf(
+                "lists/list-1/meta/deletedAt" to 600L,
+                "lists/list-1/items" to null,
+                "lists/list-1/categories" to null,
+                "photos/list-1" to null,
+            ),
             paths,
         )
     }
@@ -126,7 +131,10 @@ class RemoteWritesTest {
 
     @Test
     fun removingAListAfterThirtyDays() {
-        assertEquals(mapOf("lists/list-1" to null, "userLists/$uid/list-1" to null), RemoteWrites.removeList("list-1", uid))
+        assertEquals(
+            mapOf("lists/list-1" to null, "photos/list-1" to null, "userLists/$uid/list-1" to null),
+            RemoteWrites.removeList("list-1", uid),
+        )
     }
 
     @Test
@@ -212,8 +220,35 @@ class RemoteWritesTest {
             RemoteWrites.purge("list-1", listOf("i1"), listOf("c1")),
         )
         assertEquals(
-            mapOf("lists/list-1" to null, "userLists/$uid/list-1" to null, "userLists/uid-b/list-1" to null),
+            mapOf("lists/list-1" to null, "photos/list-1" to null, "userLists/$uid/list-1" to null, "userLists/uid-b/list-1" to null),
             RemoteWrites.removeList("list-1", uid, listOf(uid, "uid-b")),
         )
+    }
+
+    @Test
+    fun aPhotoIsOneNodeWithItsBytesInBase64() {
+        val bytes = byteArrayOf(0x52, 0x49, 0x46, 0x46, 0, -1, 7)
+        val paths = RemoteWrites.putPhoto("list-1", "item-1", NodeCodec.Photo(bytes, 800, 600, uid, 700))
+        @Suppress("UNCHECKED_CAST")
+        val node = paths.getValue("photos/list-1/item-1") as Map<String, Any?>
+        assertEquals(setOf("webp", "w", "h", "by", "at"), node.keys)
+        assertEquals(uid, node["by"])
+        assertEquals(700L, node["at"])
+        val back = NodeCodec.photoFromNode(node)!!
+        assertTrue(bytes.contentEquals(back.webp))
+        assertEquals(800 to 600, back.width to back.height)
+        assertEquals(700L, back.at)
+        assertEquals(mapOf("photos/list-1/item-1" to null), RemoteWrites.removePhoto("list-1", "item-1"))
+    }
+
+    @Test
+    fun aPhotoNodeReadLeniently() {
+        // Numbers come back as Long or Double; bad base64 or no bytes is not a photo.
+        val node = mapOf("webp" to "AAEC", "w" to 3.0, "h" to 2L, "by" to uid, "at" to 9.0)
+        val photo = NodeCodec.photoFromNode(node)!!
+        assertEquals(3 to 2, photo.width to photo.height)
+        assertEquals(9L, NodeCodec.photoAt(node))
+        assertNull(NodeCodec.photoFromNode(node + ("webp" to "not base64!")))
+        assertNull(NodeCodec.photoFromNode(node - "webp"))
     }
 }

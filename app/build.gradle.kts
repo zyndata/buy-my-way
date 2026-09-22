@@ -105,6 +105,8 @@ dependencies {
     implementation(libs.androidx.credentials.play.services.auth)
     implementation(libs.googleid)
     implementation(libs.androidx.work.runtime)
+    // A photo's EXIF orientation (STATE.md decision 73).
+    implementation(libs.androidx.exifinterface)
 
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
