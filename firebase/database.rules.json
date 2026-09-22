@@ -2,125 +2,319 @@
   "rules": {
     ".read": false,
     ".write": false,
-
     "users": {
       "$uid": {
         ".read": "auth != null && auth.uid === $uid",
         ".write": "auth != null && auth.uid === $uid",
-        "name": { ".validate": "newData.isString() && newData.val().length <= 200" },
-        "email": { ".validate": "newData.isString() && newData.val().length <= 320" },
-        "photoUrl": { ".validate": "newData.isString() && newData.val().length <= 2000" },
-        "updatedAt": { ".validate": "newData.isNumber()" },
+        "name": {
+          ".validate": "newData.isString() && newData.val().length <= 200",
+          ".read": "auth != null"
+        },
+        "email": {
+          ".validate": "newData.isString() && newData.val().length <= 320",
+          ".read": "auth != null"
+        },
+        "photoUrl": {
+          ".validate": "newData.isString() && newData.val().length <= 2000",
+          ".read": "auth != null"
+        },
+        "updatedAt": {
+          ".validate": "newData.isNumber()"
+        },
         "prefs": {
           "defaultOrder": {
             ".validate": "newData.hasChildren(['value', 'updatedAt']) && (!data.exists() || newData.child('updatedAt').val() >= data.child('updatedAt').val())",
-            "value": { ".validate": "newData.isString() && newData.val().length <= 2000" },
-            "updatedAt": { ".validate": "newData.isNumber()" },
-            "$other": { ".validate": false }
+            "value": {
+              ".validate": "newData.isString() && newData.val().length <= 2000"
+            },
+            "updatedAt": {
+              ".validate": "newData.isNumber()"
+            },
+            "$other": {
+              ".validate": false
+            }
           },
           "listOrder": {
             ".validate": "newData.hasChildren(['value', 'updatedAt']) && (!data.exists() || newData.child('updatedAt').val() >= data.child('updatedAt').val())",
-            "value": { ".validate": "newData.isString() && newData.val().length <= 40000" },
-            "updatedAt": { ".validate": "newData.isNumber()" },
-            "$other": { ".validate": false }
-          },
-          "categoryMemory": {
-            ".indexOn": ["changedAt"],
-            "$key": {
-              ".validate": "$key.length <= 200 && newData.hasChildren(['name', 'categoryId', 'at', 'changedAt']) && newData.child('changedAt').val() === now && (!data.exists() || newData.child('at').val() >= data.child('at').val())",
-              "name": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 200" },
-              "categoryId": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 64" },
-              "at": { ".validate": "newData.isNumber()" },
-              "changedAt": { ".validate": "newData.isNumber()" },
-              "$other": { ".validate": false }
+            "value": {
+              ".validate": "newData.isString() && newData.val().length <= 40000"
+            },
+            "updatedAt": {
+              ".validate": "newData.isNumber()"
+            },
+            "$other": {
+              ".validate": false
             }
           },
-          "$other": { ".validate": false }
+          "categoryMemory": {
+            ".indexOn": [
+              "changedAt"
+            ],
+            "$key": {
+              ".validate": "$key.length <= 200 && newData.hasChildren(['name', 'categoryId', 'at', 'changedAt']) && newData.child('changedAt').val() === now && (!data.exists() || newData.child('at').val() >= data.child('at').val())",
+              "name": {
+                ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 200"
+              },
+              "categoryId": {
+                ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 64"
+              },
+              "at": {
+                ".validate": "newData.isNumber()"
+              },
+              "changedAt": {
+                ".validate": "newData.isNumber()"
+              },
+              "$other": {
+                ".validate": false
+              }
+            }
+          },
+          "listSort": {
+            "$listId": {
+              ".validate": "$listId.length <= 64 && newData.hasChildren(['value', 'updatedAt']) && (!data.exists() || newData.child('updatedAt').val() >= data.child('updatedAt').val())",
+              "value": {
+                ".validate": "newData.isString() && (newData.val() === 'departments' || newData.val() === 'alphabetical' || newData.val() === 'manual')"
+              },
+              "updatedAt": {
+                ".validate": "newData.isNumber()"
+              },
+              "$other": {
+                ".validate": false
+              }
+            }
+          },
+          "$other": {
+            ".validate": false
+          }
         },
-        "$other": { ".validate": false }
+        "invites": {
+          "$token": {
+            ".validate": "newData.hasChildren(['listId', 'expiresAt'])",
+            "listId": {
+              ".validate": "newData.isString() && newData.val().length <= 64"
+            },
+            "expiresAt": {
+              ".validate": "newData.isNumber()"
+            },
+            "$other": {
+              ".validate": false
+            }
+          }
+        },
+        "$other": {
+          ".validate": false
+        }
       }
     },
-
     "emailIndex": {
-      "$hash": {
-        ".write": "auth != null && ((newData.val() === auth.uid && (!data.exists() || data.val() === auth.uid)) || (!newData.exists() && data.val() === auth.uid))",
-        ".validate": "$hash.matches(/^[0-9a-f]{64}$/) && newData.isString()"
+      "$key": {
+        ".read": "auth != null",
+        ".write": "auth != null && auth.token.email != null && auth.token.email_verified === true && $key === auth.token.email.toLowerCase().replace('.', ',') && (!newData.exists() || newData.val() === auth.uid)",
+        ".validate": "newData.isString()"
       }
     },
-
     "userLists": {
       "$uid": {
         ".read": "auth != null && auth.uid === $uid",
         "$listId": {
-          ".write": "auth != null && auth.uid === $uid && (!newData.exists() || newData.parent().parent().parent().child('lists').child($listId).child('meta/ownerUid').val() === auth.uid)",
-          ".validate": "newData.val() === 'owner'"
+          ".write": "auth != null && (auth.uid === $uid || root.child('lists').child($listId).child('meta/ownerUid').val() === auth.uid || newData.parent().parent().parent().child('lists').child($listId).child('meta/ownerUid').val() === auth.uid)",
+          ".validate": "(newData.val() === 'owner' && newData.parent().parent().parent().child('lists').child($listId).child('meta/ownerUid').val() === $uid) || ((newData.val() === 'editor' || newData.val() === 'viewer') && newData.parent().parent().parent().child('lists').child($listId).child('members').child($uid).child('role').val() === newData.val())"
         }
       }
     },
-
     "lists": {
       "$listId": {
-        ".read": "auth != null && data.child('meta/ownerUid').val() === auth.uid",
+        ".read": "auth != null && (data.child('meta/ownerUid').val() === auth.uid || data.child('members').child(auth.uid).exists())",
         ".write": "auth != null && !newData.exists() && data.child('meta/ownerUid').val() === auth.uid",
-
         "meta": {
-          ".write": "auth != null && ((data.exists() && data.child('ownerUid').val() === auth.uid) || (!data.exists() && newData.child('ownerUid').val() === auth.uid))",
+          ".write": "auth != null && ((data.exists() && (data.child('ownerUid').val() === auth.uid || (newData.exists() && root.child('lists').child($listId).child('members').child(auth.uid).child('role').val() === 'editor' && newData.child('deletedAt').val() === data.child('deletedAt').val()))) || (!data.exists() && newData.child('ownerUid').val() === auth.uid))",
           ".validate": "newData.hasChildren(['name', 'ownerUid', 'categoryOrder', 'createdAt', 'updatedAt']) && (!data.exists() || (newData.child('updatedAt').val() >= data.child('updatedAt').val() && (newData.child('updatedAt').val() > data.child('updatedAt').val() || (newData.child('name').val() === data.child('name').val() && newData.child('updatedBy').val() === data.child('updatedBy').val())) && (!data.child('clearedAt').exists() || newData.child('clearedAt').val() >= data.child('clearedAt').val()) && (!data.child('deletedAt').exists() || (newData.child('deletedAt').val() >= data.child('deletedAt').val() && newData.child('updatedAt').val() === data.child('updatedAt').val()))))",
-          "name": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 100" },
-          "ownerUid": { ".validate": "newData.isString() && (!data.exists() || newData.val() === data.val())" },
-          "categoryOrder": {
-            "$i": { ".validate": "newData.isString() && newData.val().length <= 64" }
+          "name": {
+            ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 100"
           },
-          "createdAt": { ".validate": "newData.isNumber() && (!data.exists() || newData.val() === data.val())" },
-          "updatedAt": { ".validate": "newData.isNumber()" },
-          "updatedBy": { ".validate": "newData.isString() && (newData.val() === auth.uid || newData.val() === data.val())" },
-          "clearedAt": { ".validate": "newData.isNumber()" },
-          "deletedAt": { ".validate": "newData.isNumber()" },
-          "$other": { ".validate": false }
+          "ownerUid": {
+            ".validate": "newData.isString() && (!data.exists() || newData.val() === data.val())"
+          },
+          "categoryOrder": {
+            "$i": {
+              ".validate": "newData.isString() && newData.val().length <= 64"
+            }
+          },
+          "createdAt": {
+            ".validate": "newData.isNumber() && (!data.exists() || newData.val() === data.val())"
+          },
+          "updatedAt": {
+            ".validate": "newData.isNumber()"
+          },
+          "updatedBy": {
+            ".validate": "newData.isString() && (newData.val() === auth.uid || (newData.val() === data.val() && newData.parent().child('updatedAt').val() === data.parent().child('updatedAt').val()))"
+          },
+          "clearedAt": {
+            ".validate": "newData.isNumber()"
+          },
+          "deletedAt": {
+            ".validate": "newData.isNumber()"
+          },
+          "$other": {
+            ".validate": false
+          }
         },
-
+        "members": {
+          ".write": "auth != null && !newData.exists() && root.child('lists').child($listId).child('meta/ownerUid').val() === auth.uid",
+          "$uid": {
+            ".write": "auth != null && (root.child('lists').child($listId).child('meta/ownerUid').val() === auth.uid || ($uid === auth.uid && (!newData.exists() || (!data.exists() && !root.child('lists').child($listId).child('meta/deletedAt').exists() && newData.child('invite').isString() && root.child('invites').child(newData.child('invite').val()).child('listId').val() === $listId && root.child('invites').child(newData.child('invite').val()).child('role').val() === newData.child('role').val() && root.child('invites').child(newData.child('invite').val()).child('expiresAt').val() > now))))",
+            ".validate": "newData.hasChildren(['role', 'since']) && (newData.child('role').val() === 'owner' || newData.child('role').val() === 'editor' || newData.child('role').val() === 'viewer') && ((newData.child('role').val() === 'owner') === ($uid === newData.parent().parent().child('meta/ownerUid').val()))",
+            "role": {
+              ".validate": "newData.isString()"
+            },
+            "since": {
+              ".validate": "newData.isNumber()"
+            },
+            "invite": {
+              ".validate": "newData.isString() && newData.val().length <= 64"
+            },
+            "$other": {
+              ".validate": false
+            }
+          }
+        },
         "categories": {
           ".write": "auth != null && !newData.exists() && root.child('lists').child($listId).child('meta/ownerUid').val() === auth.uid",
           "$categoryId": {
-            ".write": "auth != null && newData.parent().parent().child('meta/ownerUid').val() === auth.uid && (!newData.exists() || !root.child('lists').child($listId).child('meta/deletedAt').exists())",
+            ".write": "auth != null && ((newData.parent().parent().child('meta/ownerUid').val() === auth.uid && (!newData.exists() || !root.child('lists').child($listId).child('meta/deletedAt').exists())) || (newData.exists() && !root.child('lists').child($listId).child('meta/deletedAt').exists() && root.child('lists').child($listId).child('members').child(auth.uid).child('role').val() === 'editor'))",
             ".validate": "$categoryId.length <= 64 && newData.hasChildren(['name', 'builtin', 'updatedAt']) && (!data.exists() || (newData.child('updatedAt').val() >= data.child('updatedAt').val() && (newData.child('updatedAt').val() > data.child('updatedAt').val() || (newData.child('name').val() === data.child('name').val() && newData.child('builtin').val() === data.child('builtin').val() && newData.child('updatedBy').val() === data.child('updatedBy').val())) && (!data.child('deletedAt').exists() || (newData.child('deletedAt').isNumber() && (newData.child('deletedAt').val() > data.child('deletedAt').val() || (newData.child('deletedAt').val() === data.child('deletedAt').val() && newData.child('moveItemsTo').val() === data.child('moveItemsTo').val()))))))",
-            "name": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 60" },
-            "builtin": { ".validate": "newData.isBoolean()" },
-            "updatedAt": { ".validate": "newData.isNumber()" },
-            "updatedBy": { ".validate": "newData.isString() && (newData.val() === auth.uid || newData.val() === data.val())" },
-            "deletedAt": { ".validate": "newData.isNumber()" },
-            "moveItemsTo": { ".validate": "newData.isString() && newData.val().length <= 64" },
-            "$other": { ".validate": false }
+            "name": {
+              ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 60"
+            },
+            "builtin": {
+              ".validate": "newData.isBoolean()"
+            },
+            "updatedAt": {
+              ".validate": "newData.isNumber()"
+            },
+            "updatedBy": {
+              ".validate": "newData.isString() && (newData.val() === auth.uid || (newData.val() === data.val() && newData.parent().child('updatedAt').val() === data.parent().child('updatedAt').val()))"
+            },
+            "deletedAt": {
+              ".validate": "newData.isNumber()"
+            },
+            "moveItemsTo": {
+              ".validate": "newData.isString() && newData.val().length <= 64"
+            },
+            "$other": {
+              ".validate": false
+            }
           }
         },
-
         "items": {
-          ".indexOn": ["changedAt"],
+          ".indexOn": [
+            "changedAt"
+          ],
           ".write": "auth != null && !newData.exists() && root.child('lists').child($listId).child('meta/ownerUid').val() === auth.uid",
           "$itemId": {
-            ".write": "auth != null && newData.parent().parent().child('meta/ownerUid').val() === auth.uid && (!newData.exists() || !root.child('lists').child($listId).child('meta/deletedAt').exists())",
-            ".validate": "$itemId.length <= 64 && newData.child('changedAt').val() === now && (!data.exists() || ((!data.child('updatedAt').exists() || newData.child('updatedAt').isNumber()) && (!data.child('checkedAt').exists() || newData.child('checkedAt').isNumber()) && (!data.child('deletedAt').exists() || newData.child('deletedAt').isNumber()) && ((!data.child('updatedAt').exists() && (newData.child('updatedAt').exists() || (newData.child('name').val() === data.child('name').val() && newData.child('quantity').val() === data.child('quantity').val() && newData.child('unit').val() === data.child('unit').val() && newData.child('categoryId').val() === data.child('categoryId').val() && newData.child('note').val() === data.child('note').val() && newData.child('photoAt').val() === data.child('photoAt').val() && newData.child('sortKey').val() === data.child('sortKey').val() && newData.child('updatedBy').val() === data.child('updatedBy').val()))) || (data.child('updatedAt').exists() && (newData.child('updatedAt').val() > data.child('updatedAt').val() || (newData.child('updatedAt').val() === data.child('updatedAt').val() && newData.child('name').val() === data.child('name').val() && newData.child('quantity').val() === data.child('quantity').val() && newData.child('unit').val() === data.child('unit').val() && newData.child('categoryId').val() === data.child('categoryId').val() && newData.child('note').val() === data.child('note').val() && newData.child('photoAt').val() === data.child('photoAt').val() && newData.child('sortKey').val() === data.child('sortKey').val() && newData.child('updatedBy').val() === data.child('updatedBy').val())))) && ((!data.child('checkedAt').exists() && (newData.child('checkedAt').exists() || (newData.child('checked').val() === data.child('checked').val() && newData.child('checkedBy').val() === data.child('checkedBy').val()))) || (data.child('checkedAt').exists() && (newData.child('checkedAt').val() > data.child('checkedAt').val() || (newData.child('checkedAt').val() === data.child('checkedAt').val() && newData.child('checked').val() === data.child('checked').val() && newData.child('checkedBy').val() === data.child('checkedBy').val())))) && (!data.child('deletedAt').exists() || (newData.child('deletedAt').val() >= data.child('deletedAt').val() && newData.child('updatedAt').val() === data.child('updatedAt').val() && newData.child('name').val() === data.child('name').val() && newData.child('quantity').val() === data.child('quantity').val() && newData.child('unit').val() === data.child('unit').val() && newData.child('categoryId').val() === data.child('categoryId').val() && newData.child('note').val() === data.child('note').val() && newData.child('photoAt').val() === data.child('photoAt').val() && newData.child('sortKey').val() === data.child('sortKey').val() && newData.child('checkedAt').val() === data.child('checkedAt').val() && newData.child('checked').val() === data.child('checked').val())) && (!data.child('createdAt').exists() || (newData.child('createdAt').val() === data.child('createdAt').val() && newData.child('createdBy').val() === data.child('createdBy').val()))))",
-            "name": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 200" },
-            "quantity": { ".validate": "newData.isNumber()" },
-            "unit": { ".validate": "newData.isString() && newData.val().length <= 20" },
-            "categoryId": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 64" },
-            "note": { ".validate": "newData.isString() && newData.val().length <= 2000" },
-            "photoAt": { ".validate": "newData.isNumber()" },
-            "sortKey": { ".validate": "newData.isNumber()" },
-            "checked": { ".validate": "newData.isBoolean()" },
-            "checkedAt": { ".validate": "newData.isNumber()" },
-            "checkedBy": { ".validate": "newData.isString() && (newData.val() === auth.uid || newData.val() === data.val())" },
-            "createdAt": { ".validate": "newData.isNumber()" },
-            "createdBy": { ".validate": "newData.isString() && (newData.val() === auth.uid || newData.val() === data.val())" },
-            "updatedAt": { ".validate": "newData.isNumber()" },
-            "updatedBy": { ".validate": "newData.isString() && (newData.val() === auth.uid || newData.val() === data.val())" },
-            "deletedAt": { ".validate": "newData.isNumber()" },
-            "changedAt": { ".validate": "newData.isNumber()" },
-            "$other": { ".validate": false }
+            ".write": "auth != null && ((newData.parent().parent().child('meta/ownerUid').val() === auth.uid && (!newData.exists() || !root.child('lists').child($listId).child('meta/deletedAt').exists())) || (newData.exists() && !root.child('lists').child($listId).child('meta/deletedAt').exists() && root.child('lists').child($listId).child('members').child(auth.uid).child('role').val() === 'editor'))",
+            ".validate": "$itemId.length <= 64 && newData.child('changedAt').val() === now && (!data.exists() || ((!data.child('updatedAt').exists() || newData.child('updatedAt').isNumber()) && (!data.child('checkedAt').exists() || newData.child('checkedAt').isNumber()) && (!data.child('deletedAt').exists() || newData.child('deletedAt').isNumber()) && ((!data.child('updatedAt').exists() && (newData.child('updatedAt').exists() || (newData.child('name').val() === data.child('name').val() && newData.child('quantity').val() === data.child('quantity').val() && newData.child('unit').val() === data.child('unit').val() && newData.child('categoryId').val() === data.child('categoryId').val() && newData.child('note').val() === data.child('note').val() && newData.child('photoAt').val() === data.child('photoAt').val() && newData.child('sortKey').val() === data.child('sortKey').val() && newData.child('manualKey').val() === data.child('manualKey').val() && newData.child('updatedBy').val() === data.child('updatedBy').val()))) || (data.child('updatedAt').exists() && (newData.child('updatedAt').val() > data.child('updatedAt').val() || (newData.child('updatedAt').val() === data.child('updatedAt').val() && newData.child('name').val() === data.child('name').val() && newData.child('quantity').val() === data.child('quantity').val() && newData.child('unit').val() === data.child('unit').val() && newData.child('categoryId').val() === data.child('categoryId').val() && newData.child('note').val() === data.child('note').val() && newData.child('photoAt').val() === data.child('photoAt').val() && newData.child('sortKey').val() === data.child('sortKey').val() && newData.child('manualKey').val() === data.child('manualKey').val() && newData.child('updatedBy').val() === data.child('updatedBy').val())))) && ((!data.child('checkedAt').exists() && (newData.child('checkedAt').exists() || (newData.child('checked').val() === data.child('checked').val() && newData.child('checkedBy').val() === data.child('checkedBy').val()))) || (data.child('checkedAt').exists() && (newData.child('checkedAt').val() > data.child('checkedAt').val() || (newData.child('checkedAt').val() === data.child('checkedAt').val() && newData.child('checked').val() === data.child('checked').val() && newData.child('checkedBy').val() === data.child('checkedBy').val())))) && (!data.child('deletedAt').exists() || (newData.child('deletedAt').val() >= data.child('deletedAt').val() && newData.child('updatedAt').val() === data.child('updatedAt').val() && newData.child('name').val() === data.child('name').val() && newData.child('quantity').val() === data.child('quantity').val() && newData.child('unit').val() === data.child('unit').val() && newData.child('categoryId').val() === data.child('categoryId').val() && newData.child('note').val() === data.child('note').val() && newData.child('photoAt').val() === data.child('photoAt').val() && newData.child('sortKey').val() === data.child('sortKey').val() && newData.child('manualKey').val() === data.child('manualKey').val() && newData.child('checkedAt').val() === data.child('checkedAt').val() && newData.child('checked').val() === data.child('checked').val())) && (!data.child('createdAt').exists() || (newData.child('createdAt').val() === data.child('createdAt').val() && newData.child('createdBy').val() === data.child('createdBy').val()))))",
+            "name": {
+              ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 200"
+            },
+            "quantity": {
+              ".validate": "newData.isNumber()"
+            },
+            "unit": {
+              ".validate": "newData.isString() && newData.val().length <= 20"
+            },
+            "categoryId": {
+              ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 64"
+            },
+            "note": {
+              ".validate": "newData.isString() && newData.val().length <= 2000"
+            },
+            "photoAt": {
+              ".validate": "newData.isNumber()"
+            },
+            "sortKey": {
+              ".validate": "newData.isNumber()"
+            },
+            "manualKey": {
+              ".validate": "newData.isNumber()"
+            },
+            "checked": {
+              ".validate": "newData.isBoolean()"
+            },
+            "checkedAt": {
+              ".validate": "newData.isNumber()"
+            },
+            "checkedBy": {
+              ".validate": "newData.isString() && (newData.val() === auth.uid || (newData.val() === data.val() && newData.parent().child('checkedAt').val() === data.parent().child('checkedAt').val()))"
+            },
+            "createdAt": {
+              ".validate": "newData.isNumber()"
+            },
+            "createdBy": {
+              ".validate": "newData.isString() && (newData.val() === auth.uid || newData.val() === data.val())"
+            },
+            "updatedAt": {
+              ".validate": "newData.isNumber()"
+            },
+            "updatedBy": {
+              ".validate": "newData.isString() && (newData.val() === auth.uid || (newData.val() === data.val() && newData.parent().child('updatedAt').val() === data.parent().child('updatedAt').val()))"
+            },
+            "deletedAt": {
+              ".validate": "newData.isNumber()"
+            },
+            "changedAt": {
+              ".validate": "newData.isNumber()"
+            },
+            "$other": {
+              ".validate": false
+            }
           }
         },
-
-        "$other": { ".validate": false }
+        "presence": {
+          "$uid": {
+            ".write": "auth != null && ((auth.uid === $uid && (root.child('lists').child($listId).child('meta/ownerUid').val() === auth.uid || root.child('lists').child($listId).child('members').child(auth.uid).exists())) || (!newData.exists() && root.child('lists').child($listId).child('meta/ownerUid').val() === auth.uid))",
+            ".validate": "newData.isNumber() && newData.val() === now"
+          }
+        },
+        "$other": {
+          ".validate": false
+        }
+      }
+    },
+    "invites": {
+      "$token": {
+        ".read": "auth != null",
+        ".write": "auth != null && ((data.exists() && root.child('lists').child(data.child('listId').val()).child('meta/ownerUid').val() === auth.uid) || (!data.exists() && newData.child('by').val() === auth.uid && newData.child('listId').isString() && root.child('lists').child(newData.child('listId').val()).child('meta/ownerUid').val() === auth.uid))",
+        ".validate": "$token.matches(/^[A-Za-z0-9_-]{22}$/) && newData.hasChildren(['listId', 'role', 'by', 'expiresAt', 'listName']) && newData.child('expiresAt').val() <= now + 691200000",
+        "listId": {
+          ".validate": "newData.isString() && newData.val().length <= 64"
+        },
+        "role": {
+          ".validate": "newData.val() === 'editor' || newData.val() === 'viewer'"
+        },
+        "by": {
+          ".validate": "newData.isString()"
+        },
+        "expiresAt": {
+          ".validate": "newData.isNumber()"
+        },
+        "listName": {
+          ".validate": "newData.isString() && newData.val().length <= 100"
+        },
+        "byName": {
+          ".validate": "newData.isString() && newData.val().length <= 200"
+        },
+        "$other": {
+          ".validate": false
+        }
+      }
+    },
+    "photos": {
+      "$listId": {
+        ".read": "auth != null && (root.child('lists').child($listId).child('meta/ownerUid').val() === auth.uid || root.child('lists').child($listId).child('members').child(auth.uid).exists())",
+        "$itemId": {
+          ".write": "auth != null && !newData.exists() && (root.child('lists').child($listId).child('meta/ownerUid').val() === auth.uid || root.child('lists').child($listId).child('members').child(auth.uid).child('role').val() === 'editor')"
+        }
       }
     }
   }

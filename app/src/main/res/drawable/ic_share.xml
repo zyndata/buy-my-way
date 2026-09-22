@@ -1,0 +1,14 @@
+<!-- Drawn for this app (three linked nodes), not taken from an icon set. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+  <path
+      android:strokeColor="#FF000000"
+      android:strokeWidth="1.8"
+      android:pathData="M6,12L18,5M6,12L18,19" />
+  <path
+      android:fillColor="#FF000000"
+      android:pathData="M18,2a3,3 0,1 1,0 6a3,3 0,1 1,0 -6zM6,9a3,3 0,1 1,0 6a3,3 0,1 1,0 -6zM18,16a3,3 0,1 1,0 6a3,3 0,1 1,0 -6z" />
+</vector>

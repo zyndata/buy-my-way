@@ -11,12 +11,31 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.BuyMyWay">
 
+        <!-- singleTop: an invite link opened while the app runs reaches onNewIntent. -->
         <activity
             android:name=".MainActivity"
-            android:exported="true">
+            android:exported="true"
+            android:launchMode="singleTop">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- Invite links (PLAN.md Phase 5; STATE.md decisions 35 and 63). The host's
+                 /.well-known/assetlinks.json lets Android open them here directly. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" />
+                <data android:host="eatmyway.gorny.dev" />
+                <data android:pathPrefix="/bmw/i/" />
+            </intent-filter>
+            <!-- The fallback the host's page opens when the App Link is not verified. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="buymyway" android:host="i" />
             </intent-filter>
         </activity>
     </application>

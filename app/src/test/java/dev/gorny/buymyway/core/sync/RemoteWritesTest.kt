@@ -3,6 +3,7 @@ package dev.gorny.buymyway.core.sync
 import dev.gorny.buymyway.core.model.Category
 import dev.gorny.buymyway.core.model.ItemContent
 import dev.gorny.buymyway.core.model.Op
+import dev.gorny.buymyway.core.model.Role
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -138,5 +139,81 @@ class RemoteWritesTest {
         assertEquals(memory, NodeCodec.memoryFromNode("mleko", node))
         assertNull(NodeCodec.memoryFromNode("x", mapOf("name" to "x")))
         assertEquals(1234L, NodeCodec.changedAt(mapOf("changedAt" to 1234L)))
+    }
+
+    // --- Phase 5 -------------------------------------------------------------------------
+
+    @Test
+    fun anEditorsRenameDoesNotClaimTheListInUserLists() {
+        val op = Op.ListPut("op", "list-1", "uid-b", 300, "Biedronka", list.categoryOrder)
+        val paths = RemoteWrites.forOp(op, "uid-b", known)
+        assertEquals(uid, paths["lists/list-1/meta/ownerUid"])
+        assertEquals("uid-b", paths["lists/list-1/meta/updatedBy"])
+        assertFalse(paths.keys.any { it.startsWith("userLists/") })
+        // The owner's own rename still names the list in their userLists.
+        assertEquals("owner", RemoteWrites.forOp(op.copy(actor = uid), uid, known)["userLists/$uid/list-1"])
+    }
+
+    @Test
+    fun theManualOrderTravelsWithTheContent() {
+        val op = Op.ItemPut("op", "list-1", uid, 300, "item-1", item.content.copy(manualKey = 2.5))
+        val paths = RemoteWrites.forOp(op, uid, known)
+        assertEquals(2.5, paths["lists/list-1/items/item-1/manualKey"])
+        val unplaced = RemoteWrites.forOp(op.copy(content = item.content), uid, known)
+        assertTrue(unplaced.containsKey("lists/list-1/items/item-1/manualKey"))
+        assertNull(unplaced["lists/list-1/items/item-1/manualKey"])
+    }
+
+    @Test
+    fun theEmailIndexIsKeyedByTheAddressItself() {
+        assertEquals("alice,smith@example,com", RemoteWrites.emailKey(" Alice.Smith@Example.com "))
+        assertNull(RemoteWrites.emailKey("no-at-sign"))
+        assertNull(RemoteWrites.emailKey("we#ird@example.com"))
+        assertNull(RemoteWrites.emailKey("a/b@example.com"))
+        val paths = RemoteWrites.profile(uid, "Alice", "alice.smith@example.com", null, 5)
+        assertEquals(uid, paths["emailIndex/alice,smith@example,com"])
+        assertEquals(5L, paths["users/$uid/updatedAt"])
+        assertFalse(RemoteWrites.profile(uid, "Alice", null, null, 5).keys.any { it.startsWith("emailIndex/") })
+    }
+
+    @Test
+    fun sharingActsWriteTheMemberAndTheUserListsEntryTogether() {
+        val invite = RemoteWrites.invite("t".repeat(22), "list-1", Role.VIEWER, uid, "Alice", "Sobota", 999)
+        @Suppress("UNCHECKED_CAST")
+        val node = invite["invites/${"t".repeat(22)}"] as Map<String, Any?>
+        assertEquals(mapOf("listId" to "list-1", "role" to "viewer", "by" to uid, "expiresAt" to 999L, "listName" to "Sobota", "byName" to "Alice"), node)
+        assertEquals(mapOf("listId" to "list-1", "expiresAt" to 999L), invite["users/$uid/invites/${"t".repeat(22)}"])
+
+        val accept = RemoteWrites.accept("tok", "list-1", Role.EDITOR, "uid-b")
+        assertEquals(mapOf("role" to "editor", "since" to RemoteWrites.SERVER_TIME, "invite" to "tok"), accept["lists/list-1/members/uid-b"])
+        assertEquals("editor", accept["userLists/uid-b/list-1"])
+
+        val change = RemoteWrites.setMember("list-1", "uid-b", Role.VIEWER, isNew = false)
+        assertEquals(mapOf("lists/list-1/members/uid-b/role" to "viewer", "userLists/uid-b/list-1" to "viewer"), change)
+
+        assertEquals(
+            mapOf("lists/list-1/members/uid-b" to null, "userLists/uid-b/list-1" to null, "lists/list-1/presence/uid-b" to null),
+            RemoteWrites.removeMember("list-1", "uid-b"),
+        )
+        assertEquals(
+            mapOf("lists/list-1/members" to null, "userLists/uid-b/list-1" to null),
+            RemoteWrites.makePrivate("list-1", uid, listOf(uid, "uid-b")),
+        )
+    }
+
+    @Test
+    fun theOwnersCleanupRemovesNodesTheirPhotosAndEveryMembersEntry() {
+        assertEquals(
+            mapOf(
+                "lists/list-1/items/i1" to null,
+                "photos/list-1/i1" to null,
+                "lists/list-1/categories/c1" to null,
+            ),
+            RemoteWrites.purge("list-1", listOf("i1"), listOf("c1")),
+        )
+        assertEquals(
+            mapOf("lists/list-1" to null, "userLists/$uid/list-1" to null, "userLists/uid-b/list-1" to null),
+            RemoteWrites.removeList("list-1", uid, listOf(uid, "uid-b")),
+        )
     }
 }

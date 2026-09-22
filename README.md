@@ -10,9 +10,10 @@ brought in from [Eat My Way](https://github.com/zyndata/eat-my-way) with one sha
 
 The interface is in **Polish**. The code, comments and documentation are in English.
 
-> **Status: early development. It works as a private shopping list, and after signing in the
-> lists are kept in the cloud and on every phone of that account; sharing with other people
-> comes next.** [PLAN.md](PLAN.md) holds the specification and the phases (Phase 11, Google
+> **Status: early development. It works as a shopping list you can share: invite someone
+> by link or e-mail, and each of you sees the other's changes on the open list in about half
+> a second. Photos, dictation, the Eat My Way import and notifications for a closed app come
+> next.** [PLAN.md](PLAN.md) holds the specification and the phases (Phase 11, Google
 > Play, was dropped); [STATE.md](STATE.md) records what has been decided and what is still
 > open.
 > Phase 0, a spike on Drive sharing and the Google project, is done. Its verdict: another
@@ -32,20 +33,26 @@ The interface is in **Polish**. The code, comments and documentation are in Engl
 > before, go to Firebase Realtime Database. Another phone signed in to the same account gets
 > them, and edits made on both, even offline, settle the same way on both. Pull down on Listy
 > to fetch changes. The database rules keep each user's lists to that user and refuse a write
-> older than the stored one. Phase 5, sharing with other people and live changes, is next.
+> older than the stored one.
+> Phase 5 is done: „Udostępnij" invites by link or e-mail, as an editor or read-only; the owner
+> can change roles, remove people or make the list private, and anyone else can leave it. An
+> open list is live: someone else's tick shows their initial and slides into „Kupione", and
+> „Ania ogląda" says who is looking. The edit sheet says when an item was edited and bought,
+> and „Sortowanie" shows a list by department, A–Z, or in your own order. Measured on two
+> phones: a tick reached the other in ≈ 0.5 s (p95). Phase 6, photos, is next.
 
 ## Screenshots
 
 <p>
-  <img src="docs/screenshots/lists.png" width="240" alt="Listy: one list, „Zakupy na sobote”, 2 of 10 bought">
-  <img src="docs/screenshots/list-checking.png" width="240" alt="A list grouped by department; „cebula” has just been ticked and is struck through">
-  <img src="docs/screenshots/list-bought.png" width="240" alt="The bottom of the list: „Kupione (2)” expanded, with „Wyczyść kupione”">
+  <img src="docs/screenshots/lists.png" width="240" alt="Listy: one shared list, „Zakupy na sobote”, 6 of 13 bought, with „… ogląda” (the name hidden) under its name">
+  <img src="docs/screenshots/list-checking.png" width="240" alt="The list by department, with the share icon in the top bar and „… ogląda” (the name hidden) under the list's name">
+  <img src="docs/screenshots/list-bought.png" width="240" alt="The bottom of the list: „Kupione (6)” expanded, with „Wyczyść kupione”">
 </p>
 
 ## What makes it different
 
 - **Your lists are on your phone first.** The app works fully offline and without an account;
-  a list you never share never leaves the device.
+  until you sign in, no list leaves the device.
 - **Shared lists live in a Firebase project, not on a server of ours.** When you sign in, your
   lists and their photos go to a Firebase Realtime Database that only the list's members can
   read, enforced by the database's rules. The app asks Google for your name and email and

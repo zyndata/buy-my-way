@@ -54,6 +54,10 @@ interface ListDao {
     @Query("UPDATE lists SET ownerUid = :uid, updatedBy = COALESCE(updatedBy, :uid) WHERE id = :id")
     suspend fun adopt(id: String, uid: String)
 
+    /** Whether the list has a members node, as last read (STATE.md decision 64). */
+    @Query("UPDATE lists SET shared = :shared WHERE id = :id")
+    suspend fun setShared(id: String, shared: Boolean)
+
     @Upsert
     suspend fun upsert(list: ListEntity)
 
@@ -147,6 +151,13 @@ interface MemberDao {
         """,
     )
     fun observeForList(listId: String): Flow<List<MemberEntity>>
+
+    @Query("SELECT * FROM members WHERE listId = :listId")
+    suspend fun getForList(listId: String): List<MemberEntity>
+
+    /** Everyone this phone shares a list with, for names on the home screen. */
+    @Query("SELECT * FROM members")
+    fun observeAll(): Flow<List<MemberEntity>>
 
     @Upsert
     suspend fun upsert(member: MemberEntity)

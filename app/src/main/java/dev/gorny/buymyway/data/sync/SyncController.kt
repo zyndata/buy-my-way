@@ -5,6 +5,7 @@ import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import dev.gorny.buymyway.data.auth.AccountRepository
 import dev.gorny.buymyway.data.auth.AccountState
+import dev.gorny.buymyway.data.remote.RemoteDenied
 import dev.gorny.buymyway.data.remote.RemoteFailure
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -78,6 +79,11 @@ class SyncController(
         }
     }
 
+    /** A catch-up soon, whatever the last one was: a list was shared with this user just now. */
+    fun requestCatchUp() {
+        catchUps.trySend(Unit)
+    }
+
     /** Pull-to-refresh: send, then read every list. False when it could not reach RTDB. */
     suspend fun refresh(): Boolean {
         val uid = account.syncUid() ?: return false
@@ -107,7 +113,12 @@ class SyncController(
         _status.value = Status.SYNCING
         return try {
             if (profileSentFor != uid) {
-                account.profile()?.takeIf { it.uid == uid }?.let { engine.writeProfile(it.uid, it.name, it.email, it.photoUrl) }
+                try {
+                    account.profile()?.takeIf { it.uid == uid }?.let { engine.writeProfile(it.uid, it.name, it.email, it.photoUrl) }
+                } catch (_: RemoteDenied) {
+                    // Refused (an address the index cannot hold, say): the lists must still sync.
+                    Log.w(TAG, "profile refused")
+                }
                 profileSentFor = uid
             }
             engine.flush(uid)

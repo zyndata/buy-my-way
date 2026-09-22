@@ -1,23 +1,39 @@
 package dev.gorny.buymyway.data.sync
 
 import dev.gorny.buymyway.core.sync.RemoteWrites
+import dev.gorny.buymyway.data.remote.ChildEvent
+import dev.gorny.buymyway.data.remote.LiveSource
 import dev.gorny.buymyway.data.remote.RemoteDenied
 import dev.gorny.buymyway.data.remote.RemoteLists
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.map
 
 /**
- * An in-memory RTDB for the sync tests (PLAN.md Phase 4, task 7). It applies multi-path
- * updates atomically, stamps `changedAt` with its own clock, answers `changedAt` queries, and
- * refuses what `firebase/database.rules.json` refuses for a single user's lists: a stamp that
- * goes back, a changed group without a newer stamp, a write after a tombstone, anything under
- * a deleted list, another user's list. The real rules are tested against the Firebase emulator
- * in `firebase/test`; this mirror only has to be faithful enough for the merge to be tested.
+ * An in-memory RTDB for the sync tests (PLAN.md Phases 4 and 5). It applies multi-path
+ * updates atomically, stamps `changedAt` with its own clock, answers `changedAt` queries and
+ * listeners, and refuses what `firebase/database.rules.json` refuses: a stamp that goes back, a
+ * changed group without a newer stamp, a write after a tombstone, anything under a deleted
+ * list, a list the writer is neither the owner nor an editor of, members written by anyone
+ * but the owner (or by oneself with a valid invite), reads by non-members. The real rules are
+ * tested against the Firebase emulator in `firebase/test`; this mirror only has to be faithful
+ * enough for the merge and the sharing flows to be tested.
  */
 class FakeServer {
     private val root = mutableMapOf<String, Any?>()
     private var serverClock = 10_000_000L
+
+    /** Bumped after every accepted write: what the listeners watch. */
+    private val version = MutableStateFlow(0L)
+
+    /** The rules' `now` for an invite's expiry: the tests' wall clock. */
+    @Volatile
+    var wallClock = 0L
 
     var refusals = 0
         private set
@@ -28,7 +44,7 @@ class FakeServer {
     @Synchronized
     fun node(path: String): Any? = copy(get(root, split(path)))
 
-    inner class Client(private val uid: String) : RemoteLists {
+    inner class Client(private val uid: String) : RemoteLists, LiveSource {
         /** Offline: writes go nowhere and nothing answers. */
         var online = true
 
@@ -65,6 +81,40 @@ class FakeServer {
                     .mapValues { copy(it.value) }
             }
         }
+
+        // --- Listeners: re-read after every write, as the SDK reports changes ------------
+
+        override fun value(path: String): Flow<Any?> = version.map {
+            synchronized(this@FakeServer) {
+                checkReadable(uid, path)
+                copy(get(root, split(path)))
+            }
+        }.distinctUntilChanged()
+
+        override fun children(path: String, changedSince: Long?): Flow<ChildEvent> = flow {
+            var previous = emptyMap<String, Any?>()
+            version.collect {
+                val current = synchronized(this@FakeServer) {
+                    checkReadable(uid, path)
+                    map(get(root, split(path))).orEmpty()
+                        .filterValues { node -> changedSince == null || ((map(node)?.get(RemoteWrites.CHANGED_AT) as? Long) ?: -1) >= changedSince }
+                        .mapValues { copy(it.value) }
+                }
+                for ((key, node) in current) if (previous[key] != node) emit(ChildEvent(key, node))
+                for (key in previous.keys - current.keys) emit(ChildEvent(key, null))
+                previous = current
+            }
+        }
+
+        override fun present(path: String): Flow<Unit> = flow {
+            apply(uid, mapOf(path to RemoteWrites.SERVER_TIME))
+            emit(Unit)
+            try {
+                awaitCancellation()
+            } finally {
+                apply(uid, mapOf(path to null))
+            }
+        }
     }
 
     // --- Writing --------------------------------------------------------------------------
@@ -81,16 +131,22 @@ class FakeServer {
         }
         root.clear()
         root.putAll(proposed)
+        version.value++
         return true
     }
 
     private fun allowed(uid: String, written: Set<String>, proposed: Map<String, Any?>, now: Long): Boolean {
-        val listIds = written.mapNotNull { split(it).takeIf { p -> p.size >= 2 && p[0] == "lists" }?.get(1) }.toSet()
+        for (path in written) if (!writable(uid, split(path), proposed)) return false
+        val listIds = written.mapNotNull { split(it).takeIf { p -> p.size >= 3 && p[0] == "lists" && p[2] in CONTENT }?.get(1) }.toSet()
         for (listId in listIds) {
             val oldMeta = map(get(root, listOf("lists", listId, "meta")))
             val newMeta = map(get(proposed, listOf("lists", listId, "meta")))
             val owner = (oldMeta ?: newMeta)?.get("ownerUid")
-            if (owner != uid) return false
+            val editor = owner != uid && role(uid, listId) == "editor"
+            if (owner != uid && !editor) return false
+            // An editor neither deletes the list nor removes a node; the owner does.
+            if (editor && (newMeta == null || newMeta["deletedAt"] != oldMeta?.get("deletedAt"))) return false
+            if (editor && removesANode(listId, proposed)) return false
             if (!metaOk(oldMeta, newMeta)) return false
             val oldItems = map(get(root, listOf("lists", listId, "items"))).orEmpty()
             val newItems = map(get(proposed, listOf("lists", listId, "items"))).orEmpty()
@@ -129,7 +185,7 @@ class FakeServer {
         if (after == null) return true
         if (after[RemoteWrites.CHANGED_AT] != now) return false
         if (before == null) return true
-        val content = listOf("name", "quantity", "unit", "categoryId", "note", "photoAt", "sortKey", "updatedBy")
+        val content = listOf("name", "quantity", "unit", "categoryId", "note", "photoAt", "sortKey", "manualKey", "updatedBy")
         val tick = listOf("checked", "checkedBy")
         if (!groupOk(before, after, "updatedAt", content)) return false
         if (!groupOk(before, after, "checkedAt", tick)) return false
@@ -162,15 +218,75 @@ class FakeServer {
         return new >= old
     }
 
+    /** Who may write each path, apart from the content checks above (decision 64). */
+    private fun writable(uid: String, parts: List<String>, proposed: Map<String, Any?>): Boolean {
+        val listId = parts.getOrNull(1)
+        return when (parts.firstOrNull()) {
+            "lists" -> when (parts.getOrNull(2)) {
+                null -> proposed.let { get(it, parts) == null } && ownerOf(listId) == uid
+                in CONTENT -> true
+                "members" -> membersWritable(uid, listId!!, parts.getOrNull(3), proposed)
+                "presence" -> {
+                    val who = parts.getOrNull(3)
+                    (who == uid && (ownerOf(listId) == uid || role(uid, listId!!) != null)) ||
+                        (get(proposed, parts) == null && ownerOf(listId) == uid)
+                }
+                else -> false
+            }
+            "userLists" -> {
+                val who = parts.getOrNull(1)
+                val list = parts.getOrNull(2) ?: return false
+                val value = get(proposed, parts) as? String
+                val newOwner = map(get(proposed, listOf("lists", list, "meta")))?.get("ownerUid")
+                val mayWrite = who == uid || ownerOf(list) == uid || newOwner == uid
+                val valid = value == null ||
+                    (value == "owner" && newOwner == who) ||
+                    (value != "owner" && map(get(proposed, listOf("lists", list, "members", who.orEmpty())))?.get("role") == value)
+                mayWrite && valid
+            }
+            "invites" -> {
+                val token = parts.getOrNull(1) ?: return false
+                val list = (map(get(root, listOf("invites", token))) ?: map(get(proposed, listOf("invites", token))))?.get("listId") as? String
+                list != null && ownerOf(list) == uid
+            }
+            "users" -> listId == uid
+            "emailIndex" -> true
+            "photos" -> get(proposed, parts) == null && (ownerOf(listId) == uid || role(uid, listId!!) == "editor")
+            else -> false
+        }
+    }
+
+    private fun membersWritable(uid: String, listId: String, member: String?, proposed: Map<String, Any?>): Boolean {
+        if (ownerOf(listId) == uid) return true
+        if (member != uid) return false
+        val after = map(get(proposed, listOf("lists", listId, "members", uid)))
+        if (after == null) return true // leaving
+        if (get(root, listOf("lists", listId, "members", uid)) != null) return false // accepted once already
+        val token = after["invite"] as? String ?: return false
+        val invite = map(get(root, listOf("invites", token))) ?: return false
+        return invite["listId"] == listId && invite["role"] == after["role"] && ((invite["expiresAt"] as? Number)?.toLong() ?: 0) > wallClock
+    }
+
+    private fun removesANode(listId: String, proposed: Map<String, Any?>): Boolean = listOf("items", "categories").any { group ->
+        val before = map(get(root, listOf("lists", listId, group))).orEmpty().keys
+        val after = map(get(proposed, listOf("lists", listId, group))).orEmpty().keys
+        !after.containsAll(before)
+    }
+
+    private fun ownerOf(listId: String?): String? = listId?.let { map(get(root, listOf("lists", it, "meta")))?.get("ownerUid") as? String }
+
+    private fun role(uid: String, listId: String): String? = map(get(root, listOf("lists", listId, "members", uid)))?.get("role") as? String
+
     private fun checkReadable(uid: String, path: String) {
         val parts = split(path)
-        when {
-            parts.firstOrNull() == "lists" && parts.size >= 2 -> {
-                val owner = map(get(root, listOf("lists", parts[1], "meta")))?.get("ownerUid")
-                if (owner != uid) throw RemoteDenied("not readable")
-            }
-            parts.firstOrNull() in setOf("userLists", "users") && parts.getOrNull(1) != uid -> throw RemoteDenied("not readable")
+        val readable = when (parts.firstOrNull()) {
+            "lists" -> parts.size < 2 || ownerOf(parts[1]) == uid || role(uid, parts[1]) != null
+            "userLists" -> parts.getOrNull(1) == uid
+            "users" -> parts.getOrNull(1) == uid || parts.getOrNull(2) in setOf("name", "email", "photoUrl")
+            "invites" -> parts.size >= 2
+            else -> true
         }
+        if (!readable) throw RemoteDenied("not readable")
     }
 
     // --- The tree -------------------------------------------------------------------------
@@ -227,4 +343,9 @@ class FakeServer {
     private fun norm(value: Any?): Any? = if (value is Number) value.toDouble() else value
 
     private fun stampOf(value: Any?): Double? = (value as? Number)?.toDouble()
+
+    private companion object {
+        /** The parts of a list whose writes go through the content checks. */
+        val CONTENT = setOf("meta", "items", "categories")
+    }
 }

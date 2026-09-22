@@ -1,5 +1,6 @@
 package dev.gorny.buymyway.ui.list
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -10,11 +11,16 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.wrapContentSize
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -22,6 +28,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.Text
@@ -37,6 +44,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -57,6 +65,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.gorny.buymyway.R
 import dev.gorny.buymyway.core.model.Item
 import dev.gorny.buymyway.core.model.ListDetail
+import dev.gorny.buymyway.core.model.SortView
 import dev.gorny.buymyway.core.text.QuantityFormat
 import dev.gorny.buymyway.ui.common.DragHandle
 import dev.gorny.buymyway.ui.common.NameDialog
@@ -72,16 +81,20 @@ fun ListScreen(
     vm: ListViewModel,
     onBack: () -> Unit,
     onOpenCategoryOrder: () -> Unit,
+    onOpenShare: () -> Unit,
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
     val addBar by vm.addBar.collectAsStateWithLifecycle()
+    // Collected while the screen is shown: that is what keeps the listeners attached (decision 65).
+    val watching by vm.watching.collectAsStateWithLifecycle()
     val resources = LocalResources.current
     var menu by remember { mutableStateOf(false) }
+    var sorting by rememberSaveable { mutableStateOf(false) }
     var renaming by rememberSaveable { mutableStateOf(false) }
     var editing by rememberSaveable { mutableStateOf<String?>(null) }
     var boughtOpen by rememberSaveable { mutableStateOf(false) }
 
-    // Leaves the screen when the list is deleted, here or (from Phase 5) by someone else.
+    // Leaves the screen when the list is deleted, here or by someone else, or taken away.
     LaunchedEffect(state) {
         if (!state.loading && state.detail == null) onBack()
     }
@@ -94,7 +107,19 @@ fun ListScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Text(detail?.list?.name.orEmpty(), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Column {
+                        Text(detail?.list?.name.orEmpty(), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        if (watching.isNotEmpty()) {
+                            Text(
+                                watchingText(watching),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.testTag("watching"),
+                            )
+                        }
+                    }
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
@@ -102,22 +127,30 @@ fun ListScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = onOpenShare) {
+                        Icon(painterResource(R.drawable.ic_share), contentDescription = stringResource(R.string.action_share))
+                    }
                     Box {
                         IconButton(onClick = { menu = true }) {
                             Icon(painterResource(R.drawable.ic_more_vert), contentDescription = stringResource(R.string.action_more))
                         }
                         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                            MenuItem(R.string.action_category_order) { menu = false; onOpenCategoryOrder() }
-                            MenuItem(R.string.action_check_all) { menu = false; vm.setAllChecked(true) }
-                            MenuItem(R.string.action_uncheck_all) { menu = false; vm.setAllChecked(false) }
-                            MenuItem(R.string.action_rename) { menu = false; renaming = true }
+                            MenuItem(R.string.action_sort) { menu = false; sorting = true }
+                            if (state.canEdit) {
+                                MenuItem(R.string.action_category_order) { menu = false; onOpenCategoryOrder() }
+                                MenuItem(R.string.action_check_all) { menu = false; vm.setAllChecked(true) }
+                                MenuItem(R.string.action_uncheck_all) { menu = false; vm.setAllChecked(false) }
+                                MenuItem(R.string.action_rename) { menu = false; renaming = true }
+                            }
                         }
                     }
                 },
             )
         },
         bottomBar = {
-            if (detail != null) {
+            if (detail != null && !state.canEdit) {
+                ReadOnlyBar()
+            } else if (detail != null) {
                 AddBar(
                     state = addBar,
                     categories = detail.categories,
@@ -132,6 +165,7 @@ fun ListScreen(
         if (detail != null) {
             ListContent(
                 detail = detail,
+                state = state,
                 vm = vm,
                 boughtOpen = boughtOpen,
                 onToggleBought = { boughtOpen = !boughtOpen },
@@ -154,11 +188,23 @@ fun ListScreen(
         )
     }
 
+    if (sorting && detail != null) {
+        SortDialog(
+            current = detail.view,
+            onChoose = { view ->
+                sorting = false
+                vm.setView(view)
+            },
+            onDismiss = { sorting = false },
+        )
+    }
+
     val edited = editing?.let { id -> detail?.let { d -> (d.sections.flatMap { it.items } + d.bought).firstOrNull { it.id == id } } }
     if (edited != null && detail != null) {
         EditItemSheet(
             item = edited,
             categories = detail.categories,
+            nameOf = { uid -> uid?.let { ListViewModel.displayName(state.members[it]) }?.ifEmpty { null } },
             onSave = { content ->
                 editing = null
                 vm.update(edited.id, content)
@@ -181,9 +227,69 @@ private fun MenuItem(label: Int, onClick: () -> Unit) {
     DropdownMenuItem(text = { Text(stringResource(label)) }, onClick = onClick)
 }
 
+/** „Ania ogląda", „Ania i Tomek oglądają". */
+@Composable
+fun watchingText(names: List<String>): String {
+    val shown = names.map { it.ifEmpty { stringResource(R.string.someone) } }
+    return if (shown.size == 1) {
+        stringResource(R.string.watching_one, shown.single())
+    } else {
+        stringResource(R.string.watching_many, shown.dropLast(1).joinToString(", "), shown.last())
+    }
+}
+
+/** A viewer sees the list and cannot change it (PLAN.md *Sharing & permissions*). */
+@Composable
+private fun ReadOnlyBar() {
+    Text(
+        stringResource(R.string.read_only_hint),
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier
+            .fillMaxWidth()
+            .navigationBarsPadding()
+            .padding(16.dp)
+            .testTag("readOnly"),
+    )
+}
+
+/** „Sortowanie" (STATE.md decision 62): this user's view of this list. */
+@Composable
+private fun SortDialog(current: SortView, onChoose: (SortView) -> Unit, onDismiss: () -> Unit) {
+    val labels = mapOf(
+        SortView.DEPARTMENTS to R.string.sort_departments,
+        SortView.ALPHABETICAL to R.string.sort_alphabetical,
+        SortView.MANUAL to R.string.sort_manual,
+    )
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.action_sort)) },
+        text = {
+            Column {
+                SortView.entries.forEach { view ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 48.dp)
+                            .selectable(selected = view == current, role = Role.RadioButton, onClick = { onChoose(view) })
+                            .testTag("sort:${view.key}"),
+                    ) {
+                        RadioButton(selected = view == current, onClick = null)
+                        Text(stringResource(labels.getValue(view)), modifier = Modifier.padding(start = 12.dp))
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) } },
+    )
+}
+
 @Composable
 private fun ListContent(
     detail: ListDetail,
+    state: ListUiState,
     vm: ListViewModel,
     boughtOpen: Boolean,
     onToggleBought: () -> Unit,
@@ -218,10 +324,13 @@ private fun ListContent(
             }
         }
         for (section in detail.sections) {
-            item(key = "h:${section.category.id}") {
-                SectionHeader(section.category.name, Modifier.animateItem())
+            // The flat views have no headings (decision 62).
+            section.category?.let { category ->
+                item(key = "h:${category.id}") {
+                    SectionHeader(category.name, Modifier.animateItem())
+                }
             }
-            itemsWithMoves(section.items, reorder, vm, onEdit)
+            itemsWithMoves(section.items, state, reorder, vm, onEdit)
         }
         if (detail.bought.isNotEmpty()) {
             item(key = "bought") {
@@ -237,8 +346,8 @@ private fun ListContent(
                 items(detail.bought, key = { it.id }) { item ->
                     ItemRow(
                         item = item,
-                        onToggle = { vm.toggle(item) },
-                        onEdit = { onEdit(item) },
+                        onToggle = if (state.canEdit) ({ vm.toggle(item) }) else null,
+                        onEdit = if (state.canEdit) ({ onEdit(item) }) else null,
                         modifier = Modifier.animateItem(),
                     )
                 }
@@ -247,14 +356,21 @@ private fun ListContent(
     }
 }
 
-private fun LazyListScope.itemsWithMoves(items: List<Item>, reorder: ReorderState, vm: ListViewModel, onEdit: (Item) -> Unit) {
+private fun LazyListScope.itemsWithMoves(
+    items: List<Item>,
+    state: ListUiState,
+    reorder: ReorderState,
+    vm: ListViewModel,
+    onEdit: (Item) -> Unit,
+) {
     items.forEachIndexed { index, item ->
         item(key = item.id) {
-            val movable = !item.checked
+            val movable = !item.checked && state.canEdit
             ItemRow(
                 item = item,
-                onToggle = { vm.toggle(item) },
-                onEdit = { onEdit(item) },
+                initial = state.remoteTicks[item.id],
+                onToggle = if (state.canEdit) ({ vm.toggle(item) }) else null,
+                onEdit = if (state.canEdit) ({ onEdit(item) }) else null,
                 reorder = if (movable) reorder else null,
                 onMoveUp = if (movable && index > 0) ({ vm.moveBy(item.id, -1) }) else null,
                 onMoveDown = if (movable && index < items.lastIndex && !items[index + 1].checked) ({ vm.moveBy(item.id, 1) }) else null,
@@ -330,14 +446,16 @@ private fun BoughtHeader(count: Int, open: Boolean, onToggle: () -> Unit, onClea
 
 /**
  * One item. A tap ticks it (or, in „Kupione", brings it back); a long press edits it. A ticked
- * row is struck through, and TalkBack hears „kupione" (PLAN.md Phase 3, task 7).
+ * row is struck through, and TalkBack hears „kupione" (PLAN.md Phase 3, task 7). [initial] is
+ * shown on a tick someone else just made (Phase 5, task 5). A viewer gets neither action.
  */
 @Composable
 private fun ItemRow(
     item: Item,
-    onToggle: () -> Unit,
-    onEdit: () -> Unit,
+    onToggle: (() -> Unit)?,
+    onEdit: (() -> Unit)?,
     modifier: Modifier = Modifier,
+    initial: String? = null,
     reorder: ReorderState? = null,
     onMoveUp: (() -> Unit)? = null,
     onMoveDown: (() -> Unit)? = null,
@@ -358,13 +476,14 @@ private fun ItemRow(
                 .heightIn(min = 56.dp)
                 .testTag("item:${item.name}")
                 .combinedClickable(
+                    enabled = onToggle != null,
                     role = Role.Checkbox,
                     onClickLabel = stringResource(if (item.checked) R.string.action_uncheck else R.string.action_check),
-                    onLongClickLabel = stringResource(R.string.action_edit),
+                    onLongClickLabel = onEdit?.let { stringResource(R.string.action_edit) },
                     onLongClick = onEdit,
                     onClick = {
                         haptics.performHapticFeedback(if (item.checked) HapticFeedbackType.ToggleOff else HapticFeedbackType.ToggleOn)
-                        onToggle()
+                        onToggle?.invoke()
                     },
                 )
                 .semantics {
@@ -374,11 +493,26 @@ private fun ItemRow(
                 }
                 .padding(start = 16.dp, end = if (reorder == null) 16.dp else 0.dp),
         ) {
-            Icon(
-                painterResource(if (item.checked) R.drawable.ic_check_circle else R.drawable.ic_radio_button_unchecked),
-                contentDescription = null,
-                tint = if (item.checked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            if (initial != null) {
+                // Someone else's tick: their initial where the tick mark would be.
+                Text(
+                    initial,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onPrimary,
+                    modifier = Modifier
+                        .size(24.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary)
+                        .wrapContentSize(Alignment.Center)
+                        .testTag("tickedBy:${item.name}"),
+                )
+            } else {
+                Icon(
+                    painterResource(if (item.checked) R.drawable.ic_check_circle else R.drawable.ic_radio_button_unchecked),
+                    contentDescription = null,
+                    tint = if (item.checked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             Column(
                 modifier = Modifier
                     .weight(1f)

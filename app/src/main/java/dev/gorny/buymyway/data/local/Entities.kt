@@ -11,7 +11,7 @@ import dev.gorny.buymyway.core.model.Role
 import dev.gorny.buymyway.core.model.ShoppingList
 
 /*
- * Schema v1 (PLAN.md Phase 2, STATE.md decisions 39 and 42). The tables mirror the domain types
+ * Schema v1 (PLAN.md Phase 2, STATE.md decisions 39 and 42); v2 adds `items.manualKey` (decision 67). The tables mirror the domain types
  * of core/model one to one; the mappers below are the only place the two meet. No foreign keys:
  * a node may legitimately arrive before the node it belongs to, and deleting a list is a
  * tombstone, not a cascade.
@@ -42,6 +42,8 @@ data class ItemEntity(
     val note: String?,
     val photoAt: Long?,
     val sortKey: Double,
+    /** Schema v2 (STATE.md decision 67). */
+    val manualKey: Double?,
     val checked: Boolean,
     val checkedAt: Long?,
     val checkedBy: String?,
@@ -116,12 +118,12 @@ fun ListEntity.toDomain() = ShoppingList(id, name, ownerUid, shared, categoryOrd
 fun ShoppingList.toEntity() = ListEntity(id, name, ownerUid, shared, categoryOrder, createdAt, updatedAt, updatedBy, clearedAt, deletedAt)
 
 fun ItemEntity.toDomain() = Item(
-    id, listId, name, quantity, unit, categoryId, note, photoAt, sortKey,
+    id, listId, name, quantity, unit, categoryId, note, photoAt, sortKey, manualKey,
     checked, checkedAt, checkedBy, createdAt, createdBy, updatedAt, updatedBy, deletedAt,
 )
 
 fun Item.toEntity() = ItemEntity(
-    id, listId, name, quantity, unit, categoryId, note, photoAt, sortKey,
+    id, listId, name, quantity, unit, categoryId, note, photoAt, sortKey, manualKey,
     checked, checkedAt, checkedBy, createdAt, createdBy, updatedAt, updatedBy, deletedAt,
 )
 

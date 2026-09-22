@@ -216,9 +216,10 @@ data class Member(val uid: String, val role: Role, val since: Long,
 ### Firebase Realtime Database
 
 ```
-/users/{uid}                 { name, email, photoUrl, updatedAt }        write: self
-/users/{uid}/prefs           { categoryMemory, defaultOrder, updatedAt } read/write: self
-/emailIndex/{sha256(email)}  uid                                          write: self
+/users/{uid}                 { name, email, photoUrl, updatedAt }        write: self; name/email/photoUrl read: signed in (STATE.md decision 64)
+/users/{uid}/prefs           { categoryMemory, defaultOrder, listOrder, listSort/{listId} } read/write: self
+/users/{uid}/invites/{token} { listId, expiresAt }                         read/write: self (the owner's index of their invites)
+/emailIndex/{email, . as ,}  uid                                          write: self, key = auth.token.email (decision 63)
 /fcmTokens/{uid}/{token}     { at }                                       write: self; read: nobody (the script reads as owner)
 /userLists/{uid}/{listId}    role                                         write: the list's owner
 /lists/{listId}/meta         { name, ownerUid, categoryOrder, createdAt, updatedAt, updatedBy, clearedAt, deletedAt }
@@ -228,7 +229,7 @@ data class Member(val uid: String, val role: Role, val since: Long,
 /lists/{listId}/items/{itemId}  { …Item fields… }                         write: editor/owner, only if not older
 /lists/{listId}/presence/{uid} timestamp, removed by onDisconnect
 /photos/{listId}/{itemId}    { webp: base64, w, h, by, at }               read: members; write: editor/owner; ≤ 110 kB
-/invites/{token}             { listId, role, by, expiresAt }              token: 128-bit random
+/invites/{token}             { listId, role, by, expiresAt, listName, byName } token: 128-bit random; read: signed in
 ```
 
 - A member finds their lists through `/userLists/{uid}`, then reads `meta`, `categories` and

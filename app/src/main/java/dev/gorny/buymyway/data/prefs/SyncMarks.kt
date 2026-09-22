@@ -15,6 +15,7 @@ class SyncMarks(private val dataStore: DataStore<Preferences>) {
         DEFAULT_ORDER_SENT(longPreferencesKey("sync.defaultOrderSentAt")),
         LIST_ORDER_SENT(longPreferencesKey("sync.listOrderSentAt")),
         MEMORY_SENT(longPreferencesKey("sync.memorySentAt")),
+        LIST_SORT_SENT(longPreferencesKey("sync.listSortSentAt")),
 
         /** Server time: the largest `changedAt` of a category memory entry read. */
         MEMORY_SEEN(longPreferencesKey("sync.memorySeenUpTo")),

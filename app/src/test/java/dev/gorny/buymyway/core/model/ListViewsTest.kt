@@ -29,7 +29,7 @@ class ListViewsTest {
             Op.ItemPut(id(), "l", null, 3, "b", ItemContent("Mleko", categoryId = "nabial")),
             Op.ItemPut(id(), "l", null, 4, "c", ItemContent("Cebula", categoryId = "warzywa", sortKey = 1.0)),
         )
-        assertEquals(listOf("nabial", "warzywa"), d.sections.map { it.category.id })
+        assertEquals(listOf("nabial", "warzywa"), d.sections.map { it.category?.id })
         assertEquals(listOf("Cebula", "Ziemniaki"), d.sections[1].items.map { it.name })
         // The stored order names two; the other seven follow in the default order.
         assertEquals(listOf("nabial", "warzywa", "mieso", "pieczywo"), d.categories.take(4).map { it.id })
@@ -59,10 +59,10 @@ class ListViewsTest {
             Op.ListPut(id(), "l", null, 2, "Sobota", listOf("apteka", "nabial")),
             Op.ItemPut(id(), "l", null, 3, "a", ItemContent("Plastry", categoryId = "apteka")),
         )
-        assertEquals(listOf("apteka"), detail(*withCustom).sections.map { it.category.id })
+        assertEquals(listOf("apteka"), detail(*withCustom).sections.map { it.category?.id })
 
         val deleted = detail(*withCustom, Op.CategoryDelete(id(), "l", null, 4, "apteka", "nabial"))
-        assertEquals(listOf("nabial"), deleted.sections.map { it.category.id })
+        assertEquals(listOf("nabial"), deleted.sections.map { it.category?.id })
         assertEquals("nabial", deleted.categories.first().id)
     }
 

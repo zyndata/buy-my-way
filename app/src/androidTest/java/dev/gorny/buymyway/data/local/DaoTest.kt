@@ -39,7 +39,7 @@ class DaoTest {
         updatedAt: Long = 1,
         deletedAt: Long? = null,
     ) = ItemEntity(
-        id, listId, "Rzecz $id", null, null, "inne", null, null, 0.0,
+        id, listId, "Rzecz $id", null, null, "inne", null, null, 0.0, null,
         checked, checkedAt, null, 1, null, updatedAt, null, deletedAt,
     )
 

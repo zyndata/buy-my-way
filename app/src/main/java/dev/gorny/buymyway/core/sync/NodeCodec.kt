@@ -28,6 +28,7 @@ object NodeCodec {
         item.note?.let { put("note", it) }
         item.photoAt?.let { put("photoAt", it) }
         put("sortKey", item.sortKey)
+        item.manualKey?.let { put("manualKey", it) }
         put("checked", item.checked)
         item.checkedAt?.let { put("checkedAt", it) }
         item.checkedBy?.let { put("checkedBy", it) }
@@ -48,6 +49,7 @@ object NodeCodec {
         note = node.string("note"),
         photoAt = node.long("photoAt"),
         sortKey = node.double("sortKey") ?: 0.0,
+        manualKey = node.double("manualKey"),
         checked = node.boolean("checked") ?: false,
         checkedAt = node.long("checkedAt"),
         checkedBy = node.string("checkedBy"),

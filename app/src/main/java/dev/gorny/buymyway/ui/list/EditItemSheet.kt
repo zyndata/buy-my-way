@@ -42,17 +42,21 @@ import dev.gorny.buymyway.R
 import dev.gorny.buymyway.core.model.CategoryInfo
 import dev.gorny.buymyway.core.model.Item
 import dev.gorny.buymyway.core.model.ItemContent
+import dev.gorny.buymyway.core.text.DateText
 import dev.gorny.buymyway.core.text.QuantityFormat
 
 /**
  * The edit sheet (PLAN.md Phase 3, task 4): name, quantity and unit, category, note, delete.
- * The photo slot is there but disabled until Phase 6.
+ * The photo slot is there but disabled until Phase 6. Below them, read-only, when the item was
+ * last edited and, if bought, when it was ticked, with who did it where they are known
+ * (Phase 5, task 8). [nameOf] names a member by uid, or gives null.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EditItemSheet(
     item: Item,
     categories: List<CategoryInfo>,
+    nameOf: (String?) -> String?,
     onSave: (ItemContent) -> Unit,
     onDelete: () -> Unit,
     onDismiss: () -> Unit,
@@ -146,6 +150,7 @@ fun EditItemSheet(
                 Spacer(Modifier.width(8.dp))
                 Text(stringResource(R.string.photo_soon))
             }
+            ItemDates(item, nameOf)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 TextButton(onClick = onDelete) {
                     Icon(painterResource(R.drawable.ic_delete), contentDescription = null)
@@ -172,4 +177,25 @@ fun EditItemSheet(
             }
         }
     }
+}
+
+/** „Edytowano 22.09.2026, 08:56 · Ania" and, for a bought item, „Kupiono …". */
+@Composable
+private fun ItemDates(item: Item, nameOf: (String?) -> String?) {
+    Column(Modifier.testTag("itemDates")) {
+        DateLine(stringResource(R.string.item_edited, DateText.format(item.updatedAt)), nameOf(item.updatedBy))
+        val checkedAt = item.checkedAt
+        if (item.checked && checkedAt != null) {
+            DateLine(stringResource(R.string.item_bought, DateText.format(checkedAt)), nameOf(item.checkedBy))
+        }
+    }
+}
+
+@Composable
+private fun DateLine(text: String, by: String?) {
+    Text(
+        if (by != null) stringResource(R.string.item_date_by, text, by) else text,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
 }

@@ -5,6 +5,7 @@ import dev.gorny.buymyway.core.sync.RemoteWrites
 import dev.gorny.buymyway.core.text.TextLimits
 import dev.gorny.buymyway.data.local.AppDatabase
 import dev.gorny.buymyway.data.local.NameHistoryEntity
+import dev.gorny.buymyway.data.prefs.ListSortPreferences
 import dev.gorny.buymyway.data.prefs.StampedPreference
 import dev.gorny.buymyway.data.prefs.SyncMarks
 import dev.gorny.buymyway.data.prefs.SyncMarks.Mark
@@ -17,7 +18,8 @@ import kotlinx.coroutines.withTimeoutOrNull
 /**
  * `/users/{uid}/prefs` ↔ this phone (PLAN.md Phase 4, task 6; STATE.md decision 59): the
  * default category order and the home screen's list order, each last-writer-wins by its
- * `updatedAt`, and the category memory (`name_history`), last-writer-wins per name by `at`.
+ * `updatedAt`, the category memory (`name_history`), last-writer-wins per name by `at`, and
+ * from Phase 5 the sort view of each list (decision 67), last-writer-wins per list.
  * Called by [SyncEngine] under its lock.
  */
 class PrefsSync(
@@ -26,6 +28,7 @@ class PrefsSync(
     private val defaultOrder: StampedPreference,
     private val listOrder: StampedPreference,
     private val marks: SyncMarks,
+    private val listSort: ListSortPreferences? = null,
     private val timeoutMs: Long = SyncEngine.DEFAULT_TIMEOUT_MS,
 ) {
     private val stamped = listOf(
@@ -45,6 +48,7 @@ class PrefsSync(
             }
             marks.advance(mark, local.updatedAt)
         }
+        pushListSort(uid)
         while (true) {
             val rows = db.nameHistory().usedAfter(marks.get(Mark.MEMORY_SENT), MEMORY_BATCH)
             if (rows.isEmpty()) return
@@ -68,6 +72,12 @@ class PrefsSync(
 
     suspend fun pull(uid: String) {
         for ((node, pref, mark) in stamped) pullStamped("${RemoteWrites.prefs(uid)}/$node", pref, mark)
+        if (listSort != null) {
+            for ((listId, node) in io { remote.read(RemoteWrites.listSort(uid)) }.asNode()) {
+                val remoteValue = NodeCodec.stampedFromNode(node.asNode()) ?: continue
+                if (listSort.applyRemote(listId, remoteValue)) marks.advance(Mark.LIST_SORT_SENT, remoteValue.updatedAt)
+            }
+        }
 
         val since = marks.get(Mark.MEMORY_SEEN)
         val nodes = io { remote.readChangedSince(RemoteWrites.categoryMemory(uid), since) }
@@ -83,6 +93,27 @@ class PrefsSync(
             )
         }
         marks.advance(Mark.MEMORY_SEEN, seen)
+    }
+
+    private suspend fun pushListSort(uid: String) {
+        val prefs = listSort ?: return
+        val sent = marks.get(Mark.LIST_SORT_SENT)
+        val changed = prefs.all().filterValues { it.updatedAt > sent }
+        if (changed.isEmpty()) return
+        val paths = changed.entries.associate { (listId, value) -> "${RemoteWrites.listSort(uid)}/$listId" to NodeCodec.stampedToNode(value) }
+        try {
+            ack(paths)
+        } catch (_: RemoteDenied) {
+            // One was set later on another phone (the next pull brings it): send the rest alone.
+            for ((path, node) in paths) {
+                try {
+                    ack(mapOf(path to node))
+                } catch (_: RemoteDenied) {
+                    // RTDB's is newer.
+                }
+            }
+        }
+        marks.advance(Mark.LIST_SORT_SENT, changed.values.maxOf { it.updatedAt })
     }
 
     private suspend fun pullStamped(path: String, pref: StampedPreference, mark: Mark) {

@@ -7,6 +7,7 @@ import androidx.lifecycle.ProcessLifecycleOwner
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.FirebaseDatabase
 import dev.gorny.buymyway.core.categorize.Categorizer
+import dev.gorny.buymyway.core.model.SortView
 import dev.gorny.buymyway.data.ListRepository
 import dev.gorny.buymyway.data.auth.AccountRepository
 import dev.gorny.buymyway.data.auth.AccountState
@@ -15,15 +16,21 @@ import dev.gorny.buymyway.data.local.AppDatabase
 import dev.gorny.buymyway.data.prefs.AccountRecord
 import dev.gorny.buymyway.data.prefs.CategoryOrderPreferences
 import dev.gorny.buymyway.data.prefs.ListOrderPreferences
+import dev.gorny.buymyway.data.prefs.ListSortPreferences
 import dev.gorny.buymyway.data.prefs.SyncMarks
 import dev.gorny.buymyway.data.prefs.settingsDataStore
+import dev.gorny.buymyway.data.remote.FirebaseLiveSource
 import dev.gorny.buymyway.data.remote.FirebaseRemoteLists
 import dev.gorny.buymyway.data.remote.RemoteFailure
+import dev.gorny.buymyway.data.share.Sharing
 import dev.gorny.buymyway.data.sync.Connection
+import dev.gorny.buymyway.data.sync.LiveLists
+import dev.gorny.buymyway.data.sync.LostLists
 import dev.gorny.buymyway.data.sync.OutboxWorker
 import dev.gorny.buymyway.data.sync.PrefsSync
 import dev.gorny.buymyway.data.sync.SyncController
 import dev.gorny.buymyway.data.sync.SyncEngine
+import dev.gorny.buymyway.ui.list.ListLive
 import dev.gorny.buymyway.ui.lists.ListsSync
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -32,6 +39,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import java.security.SecureRandom
 
 class BuyMyWayApp : Application() {
     val container: AppContainer by lazy { AppContainer(this) }
@@ -51,6 +59,8 @@ class AppContainer(context: Context) {
     val categoryOrder: CategoryOrderPreferences by lazy { CategoryOrderPreferences(appContext.settingsDataStore) }
 
     val listOrder: ListOrderPreferences by lazy { ListOrderPreferences(appContext.settingsDataStore) }
+
+    val listSort: ListSortPreferences by lazy { ListSortPreferences(appContext.settingsDataStore) }
 
     /**
      * Work that must finish even when the screen that started it is gone: a delete committed
@@ -99,15 +109,56 @@ class AppContainer(context: Context) {
         Connection { online -> if (online) firebaseDatabase.goOnline() else firebaseDatabase.goOffline() }
     }
 
+    private val remote: FirebaseRemoteLists by lazy { FirebaseRemoteLists(firebaseDatabase) }
+
+    /** Shared lists taken away from this user, until the home screen has said so (Phase 5). */
+    private val lostLists = LostLists()
+
     private val sync: SyncEngine by lazy {
-        val remote = FirebaseRemoteLists(firebaseDatabase)
         SyncEngine(
             db = database,
             repo = lists,
             remote = remote,
-            prefs = PrefsSync(database, remote, categoryOrder.stored, listOrder.stored, SyncMarks(appContext.settingsDataStore)),
+            prefs = PrefsSync(
+                database,
+                remote,
+                categoryOrder.stored,
+                listOrder.stored,
+                SyncMarks(appContext.settingsDataStore),
+                listSort,
+            ),
             sessionValid = { account.checkSession() },
+            onListLost = lostLists::add,
         )
+    }
+
+    /** The listeners of the screens on show (Phase 5, decision 65). */
+    private val live: LiveLists by lazy {
+        LiveLists(lists, sync, FirebaseLiveSource(firebaseDatabase), connection) { account.syncUid() }
+    }
+
+    /** Invites, members and roles (Phase 5, decision 64). */
+    val sharing: Sharing by lazy {
+        val random = SecureRandom()
+        Sharing(
+            remote = remote,
+            engine = sync,
+            repo = lists,
+            connection = connection,
+            me = { account.syncUid()?.let { uid -> Sharing.Me(uid, account.profile()?.takeIf { it.uid == uid }?.name) } },
+            random = { bytes -> random.nextBytes(bytes) },
+        )
+    }
+
+    /** What the list screen needs besides the repository. */
+    val listLive: ListLive = object : ListLive {
+        override suspend fun myUid(): String? = account.actorUid()
+
+        override fun watch(listId: String) = live.watch(listId)
+
+        override fun sortView(listId: String) = listSort.view(listId)
+
+        override suspend fun setSortView(listId: String, view: SortView) = listSort.set(listId, view)
     }
 
     val syncController: SyncController by lazy {
@@ -121,11 +172,23 @@ class AppContainer(context: Context) {
         )
     }
 
-    /** What the home screen needs: who is signed in, and pull-to-refresh. */
+    /** What the home screen needs: who is signed in, pull-to-refresh, presence, leaving. */
     val listsSync: ListsSync = object : ListsSync {
         override val account: Flow<AccountState> get() = this@AppContainer.account.state
 
         override suspend fun refresh(): Boolean = syncController.refresh()
+
+        override fun presence(listIds: Set<String>) = live.presence(listIds)
+
+        override fun userLists() = live.userLists()
+
+        override fun requestCatchUp() = syncController.requestCatchUp()
+
+        override val lostLists: Flow<List<String>> get() = this@AppContainer.lostLists.pending
+
+        override fun lostShown(name: String) = this@AppContainer.lostLists.shown(name)
+
+        override suspend fun leave(listId: String) = sharing.leave(listId)
     }
 
     val pendingOps: Flow<Int> get() = lists.observePendingOps()

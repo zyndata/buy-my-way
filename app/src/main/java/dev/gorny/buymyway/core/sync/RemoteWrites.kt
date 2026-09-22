@@ -1,6 +1,8 @@
 package dev.gorny.buymyway.core.sync
 
 import dev.gorny.buymyway.core.model.Op
+import dev.gorny.buymyway.core.model.Role
+import java.util.Locale
 
 /**
  * What a change writes to RTDB, as the paths of one multi-path update from the root
@@ -38,6 +40,38 @@ object RemoteWrites {
 
     fun categoryMemory(uid: String) = "users/$uid/prefs/categoryMemory"
 
+    fun listSort(uid: String) = "users/$uid/prefs/listSort"
+
+    fun members(listId: String) = "lists/$listId/members"
+
+    fun member(listId: String, uid: String) = "lists/$listId/members/$uid"
+
+    fun presence(listId: String) = "lists/$listId/presence"
+
+    fun invite(token: String) = "invites/$token"
+
+    /** The owner's own index of the invites they made, so expired ones can be found (decision 64). */
+    fun userInvites(uid: String) = "users/$uid/invites"
+
+    fun photo(listId: String, itemId: String) = "photos/$listId/$itemId"
+
+    fun emailIndex(key: String) = "emailIndex/$key"
+
+    /** How a role is written in `members` and `/userLists`. */
+    fun roleValue(role: Role): String = role.name.lowercase(Locale.ROOT)
+
+    /**
+     * The `/emailIndex` key for [email] (decision 63): lower case, `.` written as `,`. Null for
+     * an address RTDB cannot use as a key; that person is invited by link.
+     */
+    fun emailKey(email: String): String? {
+        val normalised = email.trim().lowercase(Locale.ROOT)
+        if (!normalised.contains('@') || normalised.any { it in FORBIDDEN_IN_KEYS || it.isISOControl() || it.isWhitespace() }) return null
+        return normalised.replace('.', ',')
+    }
+
+    private const val FORBIDDEN_IN_KEYS = "$#[]/"
+
     /**
      * The update for [op]. [known] is what the device holds for the op's list, for the fields a
      * write must repeat as they are (`createdAt`, `ownerUid`); [uid] is the signed-in user.
@@ -57,6 +91,7 @@ object RemoteWrites {
                     "$base/note" to c.note,
                     "$base/photoAt" to c.photoAt,
                     "$base/sortKey" to c.sortKey,
+                    "$base/manualKey" to c.manualKey,
                     "$base/updatedAt" to op.at,
                     "$base/updatedBy" to actor,
                     "$base/createdAt" to (local?.createdAt ?: op.at),
@@ -79,16 +114,17 @@ object RemoteWrites {
             }
             is Op.ListPut -> {
                 val base = meta(op.listId)
+                // An editor renames a shared list too; only the owner has an "owner" entry.
+                val owner = known.list?.ownerUid ?: op.ownerUid ?: uid
                 val local = known.list?.takeIf { it.createdAt > 0 }
                 mapOf(
                     "$base/name" to op.name,
                     "$base/categoryOrder" to op.categoryOrder,
                     "$base/updatedAt" to op.at,
                     "$base/updatedBy" to actor,
-                    "$base/ownerUid" to (known.list?.ownerUid ?: op.ownerUid ?: uid),
+                    "$base/ownerUid" to owner,
                     "$base/createdAt" to (local?.createdAt ?: op.at),
-                    "${userLists(uid)}/${op.listId}" to OWNER,
-                )
+                ) + if (owner == uid) mapOf("${userLists(uid)}/${op.listId}" to OWNER) else emptyMap()
             }
             // Decision 36: the items and categories go with the list; the meta is the tombstone.
             is Op.ListDelete -> mapOf(
@@ -132,20 +168,88 @@ object RemoteWrites {
         }
     }
 
-    /** What is left of a deleted list after 30 days, removed by its owner (decision 56). */
-    fun removeList(listId: String, uid: String): Map<String, Any?> = mapOf(
-        list(listId) to null,
-        "${userLists(uid)}/$listId" to null,
+    /**
+     * What is left of a deleted list after 30 days, removed by its owner (decision 56), with
+     * the `/userLists` entry of everyone it was shared with.
+     */
+    fun removeList(listId: String, uid: String, memberUids: Collection<String> = emptyList()): Map<String, Any?> = buildMap {
+        put(list(listId), null)
+        for (member in (memberUids + uid).distinct().sorted()) put("${userLists(member)}/$listId", null)
+    }
+
+    /** Nodes gone for more than 30 days, and their photos, removed by the owner (decision 66). */
+    fun purge(listId: String, itemIds: Collection<String>, categoryIds: Collection<String>): Map<String, Any?> = buildMap {
+        for (itemId in itemIds.sorted()) {
+            put(item(listId, itemId), null)
+            put(photo(listId, itemId), null)
+        }
+        for (categoryId in categoryIds.sorted()) put(category(listId, categoryId), null)
+    }
+
+    /** `/users/{uid}` and `/emailIndex/{key}`, written at every sign-in (decisions 57 and 63). */
+    fun profile(uid: String, name: String?, email: String?, photoUrl: String?, at: Long): Map<String, Any?> = buildMap {
+        val base = user(uid)
+        put("$base/name", name)
+        put("$base/email", email)
+        put("$base/photoUrl", photoUrl)
+        put("$base/updatedAt", at)
+        email?.let(::emailKey)?.let { put(emailIndex(it), uid) }
+    }
+
+    // --- Sharing (decision 64): online acts, not ops -----------------------------------------
+
+    /** „Udostępnij": a private list gets its members node, with its owner in it. */
+    fun share(listId: String, ownerUid: String): Map<String, Any?> = mapOf(
+        member(listId, ownerUid) to mapOf("role" to OWNER, "since" to SERVER_TIME),
     )
 
-    /** `/users/{uid}` and `/emailIndex/{hash}`, written at every sign-in (decision 57). */
-    fun profile(uid: String, name: String?, email: String?, photoUrl: String?, emailHash: String?, at: Long): Map<String, Any?> =
-        buildMap {
-            val base = user(uid)
-            put("$base/name", name)
-            put("$base/email", email)
-            put("$base/photoUrl", photoUrl)
-            put("$base/updatedAt", at)
-            if (emailHash != null) put("emailIndex/$emailHash", uid)
+    /** An invite link's node, and the owner's index entry for it. */
+    fun invite(token: String, listId: String, role: Role, uid: String, byName: String?, listName: String, expiresAt: Long): Map<String, Any?> =
+        mapOf(
+            invite(token) to buildMap {
+                put("listId", listId)
+                put("role", roleValue(role))
+                put("by", uid)
+                put("expiresAt", expiresAt)
+                put("listName", listName)
+                byName?.let { put("byName", it) }
+            },
+            "${userInvites(uid)}/$token" to mapOf("listId" to listId, "expiresAt" to expiresAt),
+        )
+
+    fun removeInvites(uid: String, tokens: Collection<String>): Map<String, Any?> = buildMap {
+        for (token in tokens.sorted()) {
+            put(invite(token), null)
+            put("${userInvites(uid)}/$token", null)
         }
+    }
+
+    /** Accepting an invite: [uid] adds themselves under the invite's rules. */
+    fun accept(token: String, listId: String, role: Role, uid: String): Map<String, Any?> = mapOf(
+        member(listId, uid) to mapOf("role" to roleValue(role), "since" to SERVER_TIME, "invite" to token),
+        "${userLists(uid)}/$listId" to roleValue(role),
+    )
+
+    /** The owner adds someone found by e-mail ([isNew]), or changes a member's role. */
+    fun setMember(listId: String, uid: String, role: Role, isNew: Boolean): Map<String, Any?> = if (isNew) {
+        mapOf(
+            member(listId, uid) to mapOf("role" to roleValue(role), "since" to SERVER_TIME),
+            "${userLists(uid)}/$listId" to roleValue(role),
+        )
+    } else {
+        mapOf("${member(listId, uid)}/role" to roleValue(role), "${userLists(uid)}/$listId" to roleValue(role))
+    }
+
+    /** The owner removes a member, or a member leaves: the same three paths. */
+    fun removeMember(listId: String, uid: String): Map<String, Any?> = mapOf(
+        member(listId, uid) to null,
+        "${userLists(uid)}/$listId" to null,
+        "${presence(listId)}/$uid" to null,
+    )
+
+    /** „Uczyń prywatną": every member goes, and with them their `/userLists` entries. */
+    fun makePrivate(listId: String, ownerUid: String, memberUids: Collection<String>): Map<String, Any?> = buildMap {
+        put(members(listId), null)
+        for (member in memberUids.filter { it != ownerUid }.sorted()) put("${userLists(member)}/$listId", null)
+    }
 }

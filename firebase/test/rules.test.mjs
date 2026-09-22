@@ -2,7 +2,8 @@
 //
 // Run with `npm test` in this directory: `firebase emulators:exec` starts the database emulator
 // under a demo project id (no login, never the real project) and runs this file with node:test.
-// Phase 4 covers a single user's own lists; Phase 5 adds members, roles and invites.
+// Phase 4 covered a single user's own lists; Phase 5 adds members, roles, invites, presence
+// and the photo cleanup (STATE.md decisions 63–67).
 
 import { readFileSync } from 'node:fs';
 import { after, before, beforeEach, describe, test } from 'node:test';
@@ -42,6 +43,8 @@ beforeEach(async () => {
 });
 
 const db = (uid) => env.authenticatedContext(uid).database();
+const withEmail = (uid, email, verified = true) =>
+  env.authenticatedContext(uid, { email, email_verified: verified }).database();
 const anonymous = () => env.unauthenticatedContext().database();
 
 /** Seeds data as an admin, past the rules. */
@@ -100,7 +103,7 @@ const itemPath = (field) => `lists/${LIST}/items/${ITEM}${field ? `/${field}` : 
 
 /** What an `item.put` op writes: the content group, its stamp and changedAt. */
 function contentWrite(at, content = {}, by = ALICE) {
-  const c = { name: 'mleko', categoryId: 'nabial', sortKey: 1, quantity: null, unit: null, note: null, photoAt: null, ...content };
+  const c = { name: 'mleko', categoryId: 'nabial', sortKey: 1, manualKey: null, quantity: null, unit: null, note: null, photoAt: null, ...content };
   const paths = {};
   for (const [k, v] of Object.entries(c)) paths[itemPath(k)] = v;
   paths[itemPath('updatedAt')] = at;
@@ -137,14 +140,28 @@ describe('users and emailIndex', () => {
     await assertFails(db(ALICE).ref(`users/${ALICE}`).set({ name: 'Alice', admin: true }));
   });
 
-  test('an emailIndex entry names its writer, and cannot be taken over', async () => {
-    const hash = 'a'.repeat(64);
-    await assertSucceeds(db(ALICE).ref(`emailIndex/${hash}`).set(ALICE));
-    await assertFails(db(BOB).ref(`emailIndex/${hash}`).set(BOB));
-    await assertFails(db(BOB).ref(`emailIndex/${'b'.repeat(64)}`).set(ALICE));
-    await assertFails(db(ALICE).ref('emailIndex/not-a-hash').set(ALICE));
-    await assertFails(db(ALICE).ref(`emailIndex/${hash}`).get());
-    await assertSucceeds(db(ALICE).ref(`emailIndex/${hash}`).remove());
+  test("a member's name, e-mail and photo are readable by any signed-in user, the rest is not", async () => {
+    await seed(`users/${ALICE}`, { name: 'Alice', email: 'alice@example.com', updatedAt: T0, prefs: { defaultOrder: { value: 'x', updatedAt: T0 } } });
+    await assertSucceeds(db(BOB).ref(`users/${ALICE}/name`).get());
+    await assertSucceeds(db(BOB).ref(`users/${ALICE}/email`).get());
+    await assertFails(db(BOB).ref(`users/${ALICE}/prefs`).get());
+    await assertFails(db(BOB).ref('users').get());
+    await assertFails(anonymous().ref(`users/${ALICE}/name`).get());
+  });
+
+  test('an emailIndex entry is keyed by the writer’s own verified address (decision 63)', async () => {
+    const alice = withEmail(ALICE, 'Alice.Smith@example.com');
+    await assertSucceeds(alice.ref('emailIndex/alice,smith@example,com').set(ALICE));
+    // Not someone else's address, not someone else's uid, not an unverified address.
+    await assertFails(alice.ref('emailIndex/bob@example,com').set(ALICE));
+    await assertFails(alice.ref('emailIndex/alice,smith@example,com').set(BOB));
+    await assertFails(withEmail(BOB, 'alice.smith@example.com', false).ref('emailIndex/alice,smith@example,com').set(BOB));
+    await assertFails(withEmail(BOB, 'bob@example.com').ref('emailIndex/alice,smith@example,com').set(BOB));
+    // One key is readable by a signed-in user; the index is not listable.
+    await assertSucceeds(db(BOB).ref('emailIndex/alice,smith@example,com').get());
+    await assertFails(db(BOB).ref('emailIndex').get());
+    await assertFails(anonymous().ref('emailIndex/alice,smith@example,com').get());
+    await assertSucceeds(alice.ref('emailIndex/alice,smith@example,com').remove());
   });
 });
 
@@ -341,5 +358,320 @@ describe('meta and categories', () => {
 
   test('unknown children of a list are rejected', async () => {
     await assertFails(db(ALICE).ref(`lists/${LIST}/extra`).set(true));
+  });
+});
+
+// --- Phase 5: sharing ------------------------------------------------------------------------
+
+const CAROL = 'carol-uid';
+const DAVE = 'dave-uid';
+const TOKEN = 'AbCdEfGhIjKlMnOpQrStUv'; // 22 URL-safe characters: 128 bits
+const OTHER_TOKEN = 'ZyXwVuTsRqPoNmLkJiHgFe';
+const DAY = 24 * 60 * 60 * 1000;
+
+/** Alice's list shared with Bob as an editor and Carol as a viewer. */
+async function seedShared() {
+  await seedList();
+  await seed(`lists/${LIST}/members`, {
+    [ALICE]: { role: 'owner', since: T0 },
+    [BOB]: { role: 'editor', since: T0 },
+    [CAROL]: { role: 'viewer', since: T0 },
+  });
+  await seed(`userLists/${BOB}/${LIST}`, 'editor');
+  await seed(`userLists/${CAROL}/${LIST}`, 'viewer');
+}
+
+function invite(overrides = {}) {
+  return {
+    listId: LIST,
+    role: 'editor',
+    by: ALICE,
+    expiresAt: Date.now() + 7 * DAY,
+    listName: 'Zakupy',
+    byName: 'Alice',
+    ...overrides,
+  };
+}
+
+/** What accepting an invite writes: the member node with the token, and the userLists entry. */
+function accept(uid, role = 'editor', token = TOKEN) {
+  return {
+    [`lists/${LIST}/members/${uid}`]: { role, since: TIMESTAMP, invite: token },
+    [`userLists/${uid}/${LIST}`]: role,
+  };
+}
+
+describe('roles', () => {
+  beforeEach(seedShared);
+
+  test('a non-member reads nothing of a shared list', async () => {
+    const dave = db(DAVE);
+    await assertFails(dave.ref(`lists/${LIST}`).get());
+    await assertFails(dave.ref(`lists/${LIST}/items`).orderByChild('changedAt').startAt(0).get());
+    await assertFails(dave.ref(`lists/${LIST}/members`).get());
+    await assertFails(dave.ref(`photos/${LIST}`).get());
+  });
+
+  test('every member reads the whole list and its photos', async () => {
+    for (const uid of [ALICE, BOB, CAROL]) {
+      await assertSucceeds(db(uid).ref(`lists/${LIST}`).get());
+      await assertSucceeds(db(uid).ref(`lists/${LIST}/items`).orderByChild('changedAt').startAt(0).get());
+      await assertSucceeds(db(uid).ref(`photos/${LIST}`).get());
+    }
+  });
+
+  test('an editor adds, edits, ticks and deletes items', async () => {
+    const bob = db(BOB);
+    await assertSucceeds(bob.ref().update(contentWrite(T0 + 10, { name: 'kefir' }, BOB)));
+    await assertSucceeds(bob.ref().update(checkWrite(T0 + 20, true, BOB)));
+    const fresh = `lists/${LIST}/items/item-2`;
+    await assertSucceeds(bob.ref(fresh).set(item({ name: 'chleb', createdBy: BOB, updatedBy: BOB })));
+    await assertSucceeds(bob.ref().update({ [`${fresh}/deletedAt`]: T0 + 30, [`${fresh}/changedAt`]: TIMESTAMP }));
+  });
+
+  test('an editor adds a category, renames the list and clears "Kupione"', async () => {
+    const bob = db(BOB);
+    await assertSucceeds(
+      bob.ref(`lists/${LIST}/categories/own-1`).set({ name: 'Chemia', builtin: false, updatedAt: T0 + 10, updatedBy: BOB }),
+    );
+    await assertSucceeds(
+      bob.ref(`lists/${LIST}/meta`).update({ name: 'Biedronka', categoryOrder: ['nabial', 'own-1'], updatedAt: T0 + 10, updatedBy: BOB }),
+    );
+    await assertSucceeds(bob.ref(`lists/${LIST}/meta/clearedAt`).set(T0 + 20));
+  });
+
+  test('an editor neither deletes the list nor removes nodes', async () => {
+    const bob = db(BOB);
+    await assertFails(bob.ref(`lists/${LIST}/meta/deletedAt`).set(T0 + 10));
+    await assertFails(bob.ref(`lists/${LIST}/meta`).remove());
+    await assertFails(bob.ref(itemPath()).remove());
+    await assertFails(bob.ref(`lists/${LIST}/items`).remove());
+    await assertFails(bob.ref(`lists/${LIST}`).remove());
+  });
+
+  test('a viewer cannot touch anything, not even a tick', async () => {
+    const carol = db(CAROL);
+    await assertFails(carol.ref().update(checkWrite(T0 + 10, true, CAROL)));
+    await assertFails(carol.ref().update(contentWrite(T0 + 10, { name: 'kefir' }, CAROL)));
+    await assertFails(carol.ref(`lists/${LIST}/items/item-2`).set(item({ createdBy: CAROL, updatedBy: CAROL })));
+    await assertFails(carol.ref(`lists/${LIST}/meta/clearedAt`).set(T0 + 10));
+    await assertFails(
+      carol.ref(`lists/${LIST}/categories/own-1`).set({ name: 'X', builtin: false, updatedAt: T0 + 10, updatedBy: CAROL }),
+    );
+  });
+
+  test("an older op from an editor is refused like anyone's", async () => {
+    await assertSucceeds(db(ALICE).ref().update(contentWrite(T0 + 10, { name: 'mleko 2%' })));
+    await assertFails(db(BOB).ref().update(contentWrite(T0 + 5, { name: 'mleko 3,2%' }, BOB)));
+    await assertSucceeds(db(ALICE).ref().update(checkWrite(T0 + 20)));
+    await assertFails(db(BOB).ref().update(checkWrite(T0 + 15, false, BOB)));
+  });
+
+  test('an editor cannot write as someone else', async () => {
+    await assertFails(db(BOB).ref().update(contentWrite(T0 + 10, { name: 'kefir' }, ALICE)));
+    await assertFails(db(BOB).ref().update(checkWrite(T0 + 10, true, ALICE)));
+  });
+
+  test('the manual order is content: it needs a newer stamp', async () => {
+    await assertSucceeds(db(BOB).ref().update(contentWrite(T0 + 10, { manualKey: 3 }, BOB)));
+    await assertFails(db(BOB).ref(itemPath('manualKey')).set(4));
+    await assertFails(db(BOB).ref().update(contentWrite(T0 + 10, { manualKey: 4 }, BOB)));
+    await assertFails(db(BOB).ref().update(contentWrite(T0 + 20, { manualKey: 'first' }, BOB)));
+  });
+});
+
+describe('members', () => {
+  beforeEach(seedShared);
+
+  test('only the owner writes members', async () => {
+    await assertFails(db(BOB).ref(`lists/${LIST}/members/${CAROL}/role`).set('editor'));
+    await assertFails(db(BOB).ref(`lists/${LIST}/members/${DAVE}`).set({ role: 'editor', since: T0 }));
+    await assertFails(db(CAROL).ref(`lists/${LIST}/members/${CAROL}`).set({ role: 'editor', since: T0 }));
+    await assertFails(db(BOB).ref(`lists/${LIST}/members/${CAROL}`).remove());
+    await assertFails(db(BOB).ref(`lists/${LIST}/members`).remove());
+  });
+
+  test('the owner adds by e-mail, changes a role and removes, with the userLists entries', async () => {
+    const alice = db(ALICE);
+    await assertSucceeds(
+      alice.ref().update({
+        [`lists/${LIST}/members/${DAVE}`]: { role: 'viewer', since: TIMESTAMP },
+        [`userLists/${DAVE}/${LIST}`]: 'viewer',
+      }),
+    );
+    await assertSucceeds(
+      alice.ref().update({ [`lists/${LIST}/members/${CAROL}/role`]: 'editor', [`userLists/${CAROL}/${LIST}`]: 'editor' }),
+    );
+    await assertSucceeds(
+      alice.ref().update({
+        [`lists/${LIST}/members/${BOB}`]: null,
+        [`userLists/${BOB}/${LIST}`]: null,
+        [`lists/${LIST}/presence/${BOB}`]: null,
+      }),
+    );
+    // A removed member reads nothing any more.
+    await assertFails(db(BOB).ref(`lists/${LIST}`).get());
+  });
+
+  test('a userLists entry must match the role in the members node', async () => {
+    await assertFails(db(ALICE).ref(`userLists/${BOB}/${LIST}`).set('viewer'));
+    await assertFails(db(ALICE).ref(`userLists/${BOB}/${LIST}`).set('owner'));
+    await assertFails(db(BOB).ref(`userLists/${BOB}/${LIST}`).set('owner'));
+    await assertFails(db(CAROL).ref(`userLists/${CAROL}/${LIST}`).set('editor'));
+    await assertFails(db(BOB).ref(`userLists/${CAROL}/${LIST}`).remove());
+  });
+
+  test('the owner stays the owner, and nobody else can be one', async () => {
+    await assertFails(db(ALICE).ref(`lists/${LIST}/members/${ALICE}/role`).set('editor'));
+    await assertFails(db(ALICE).ref(`lists/${LIST}/members/${BOB}/role`).set('owner'));
+    await assertFails(db(ALICE).ref(`lists/${LIST}/members/${BOB}/role`).set('admin'));
+  });
+
+  test('a member leaves on their own', async () => {
+    await assertSucceeds(
+      db(CAROL).ref().update({ [`lists/${LIST}/members/${CAROL}`]: null, [`userLists/${CAROL}/${LIST}`]: null }),
+    );
+    await assertFails(db(CAROL).ref(`lists/${LIST}`).get());
+  });
+
+  test('"Uczyń prywatną" removes every member at once', async () => {
+    await assertSucceeds(
+      db(ALICE).ref().update({
+        [`lists/${LIST}/members`]: null,
+        [`userLists/${BOB}/${LIST}`]: null,
+        [`userLists/${CAROL}/${LIST}`]: null,
+      }),
+    );
+    await assertFails(db(BOB).ref(`lists/${LIST}`).get());
+    await assertSucceeds(db(ALICE).ref(`lists/${LIST}`).get());
+  });
+
+  test('"Udostępnij" makes a private list shared with the owner as its first member', async () => {
+    await seed(`lists/${LIST}/members`, null);
+    await assertSucceeds(db(ALICE).ref(`lists/${LIST}/members/${ALICE}`).set({ role: 'owner', since: TIMESTAMP }));
+  });
+});
+
+describe('invites', () => {
+  beforeEach(seedList);
+
+  test('the owner creates an invite; nobody else can', async () => {
+    await assertSucceeds(db(ALICE).ref(`invites/${TOKEN}`).set(invite()));
+    await assertFails(db(BOB).ref(`invites/${OTHER_TOKEN}`).set(invite({ by: BOB })));
+    await assertFails(db(BOB).ref(`invites/${OTHER_TOKEN}`).set(invite()));
+    await assertFails(db(BOB).ref(`invites/${TOKEN}`).remove());
+  });
+
+  test('an invite has a proper token, role and lifetime', async () => {
+    await assertFails(db(ALICE).ref('invites/short').set(invite()));
+    await assertFails(db(ALICE).ref(`invites/${TOKEN}`).set(invite({ role: 'owner' })));
+    await assertFails(db(ALICE).ref(`invites/${TOKEN}`).set(invite({ expiresAt: Date.now() + 30 * DAY })));
+    await assertFails(db(ALICE).ref(`invites/${TOKEN}`).set({ ...invite(), admin: true }));
+  });
+
+  test('a signed-in user reads one invite by its token, never the index', async () => {
+    await seed(`invites/${TOKEN}`, invite());
+    await assertSucceeds(db(BOB).ref(`invites/${TOKEN}`).get());
+    await assertFails(db(BOB).ref('invites').get());
+    await assertFails(anonymous().ref(`invites/${TOKEN}`).get());
+  });
+
+  test('accepting is allowed once, and then the whole list is readable', async () => {
+    await seed(`invites/${TOKEN}`, invite());
+    await assertFails(db(BOB).ref(`lists/${LIST}`).get());
+    await assertSucceeds(db(BOB).ref().update(accept(BOB)));
+    await assertSucceeds(db(BOB).ref(`lists/${LIST}`).get());
+    await assertSucceeds(db(BOB).ref(`photos/${LIST}`).get());
+    // The same person cannot accept again (to change their role, say).
+    await assertFails(db(BOB).ref().update(accept(BOB)));
+    // Someone else may use the same link, once.
+    await assertSucceeds(db(CAROL).ref().update(accept(CAROL)));
+  });
+
+  test('an expired invite is refused', async () => {
+    await seed(`invites/${TOKEN}`, invite({ expiresAt: Date.now() - 1000 }));
+    await assertFails(db(BOB).ref().update(accept(BOB)));
+  });
+
+  test('an invite gives only its own role, for its own list', async () => {
+    await seed(`invites/${TOKEN}`, invite({ role: 'viewer' }));
+    await assertFails(db(BOB).ref().update(accept(BOB, 'editor')));
+    await assertFails(db(BOB).ref().update(accept(BOB, 'owner')));
+    await seed('lists/list-2', { meta: meta() });
+    await assertFails(
+      db(BOB).ref().update({ [`lists/list-2/members/${BOB}`]: { role: 'viewer', since: TIMESTAMP, invite: TOKEN } }),
+    );
+    await assertSucceeds(db(BOB).ref().update(accept(BOB, 'viewer')));
+  });
+
+  test("no invite, a made-up token, or someone else's member node: refused", async () => {
+    await assertFails(db(BOB).ref(`lists/${LIST}/members/${BOB}`).set({ role: 'editor', since: T0 }));
+    await assertFails(db(BOB).ref().update(accept(BOB, 'editor', OTHER_TOKEN)));
+    await seed(`invites/${TOKEN}`, invite());
+    await assertFails(db(BOB).ref(`lists/${LIST}/members/${CAROL}`).set({ role: 'editor', since: TIMESTAMP, invite: TOKEN }));
+  });
+
+  test('the owner removes an expired invite, and keeps an index of their own', async () => {
+    await seed(`invites/${TOKEN}`, invite({ expiresAt: Date.now() - 1000 }));
+    await assertSucceeds(db(ALICE).ref(`users/${ALICE}/invites/${TOKEN}`).set({ listId: LIST, expiresAt: T0 }));
+    await assertFails(db(BOB).ref(`users/${ALICE}/invites`).get());
+    await assertSucceeds(
+      db(ALICE).ref().update({ [`invites/${TOKEN}`]: null, [`users/${ALICE}/invites/${TOKEN}`]: null }),
+    );
+  });
+});
+
+describe('presence', () => {
+  beforeEach(seedShared);
+
+  test('a member marks themselves present with the server time, and goes away', async () => {
+    await assertSucceeds(db(CAROL).ref(`lists/${LIST}/presence/${CAROL}`).set(TIMESTAMP));
+    await assertSucceeds(db(BOB).ref(`lists/${LIST}/presence`).get());
+    await assertFails(db(CAROL).ref(`lists/${LIST}/presence/${CAROL}`).set(T0));
+    await assertSucceeds(db(CAROL).ref(`lists/${LIST}/presence/${CAROL}`).remove());
+  });
+
+  test("nobody is present in someone else's name or in a list they are not in", async () => {
+    await assertFails(db(BOB).ref(`lists/${LIST}/presence/${CAROL}`).set(TIMESTAMP));
+    await assertFails(db(DAVE).ref(`lists/${LIST}/presence/${DAVE}`).set(TIMESTAMP));
+  });
+});
+
+describe('cleanup', () => {
+  beforeEach(seedShared);
+
+  test('the owner removes old tombstones and their photos; an editor removes only a photo', async () => {
+    await assertSucceeds(
+      db(ALICE).ref().update({
+        [itemPath()]: null,
+        [`photos/${LIST}/${ITEM}`]: null,
+        [`lists/${LIST}/categories/nabial`]: null,
+      }),
+    );
+    await assertSucceeds(db(BOB).ref(`photos/${LIST}/${ITEM}`).remove());
+    await assertFails(db(CAROL).ref(`photos/${LIST}/${ITEM}`).remove());
+    await assertFails(db(BOB).ref(`photos/${LIST}/${ITEM}`).set({ webp: 'x' }));
+  });
+
+  test("a deleted list is removed whole, with every member's userLists entry", async () => {
+    await seed(`lists/${LIST}/meta/deletedAt`, T0 + 10);
+    await assertSucceeds(
+      db(ALICE).ref().update({
+        [`lists/${LIST}`]: null,
+        [`userLists/${ALICE}/${LIST}`]: null,
+        [`userLists/${BOB}/${LIST}`]: null,
+        [`userLists/${CAROL}/${LIST}`]: null,
+      }),
+    );
+  });
+});
+
+describe('the sort view preference (decision 67)', () => {
+  test('is per list, last-writer-wins, and one of three', async () => {
+    const path = `users/${ALICE}/prefs/listSort/${LIST}`;
+    await assertSucceeds(db(ALICE).ref(path).set({ value: 'manual', updatedAt: T0 + 10 }));
+    await assertFails(db(ALICE).ref(path).set({ value: 'alphabetical', updatedAt: T0 + 5 }));
+    await assertFails(db(ALICE).ref(path).set({ value: 'random', updatedAt: T0 + 20 }));
+    await assertFails(db(BOB).ref(path).set({ value: 'alphabetical', updatedAt: T0 + 20 }));
   });
 });

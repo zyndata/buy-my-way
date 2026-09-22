@@ -9,6 +9,8 @@ import dev.gorny.buymyway.core.model.ListSummary
 import dev.gorny.buymyway.core.model.ListViews
 import dev.gorny.buymyway.core.model.Member
 import dev.gorny.buymyway.core.model.Op
+import dev.gorny.buymyway.core.model.Role
+import dev.gorny.buymyway.core.model.SortView
 import dev.gorny.buymyway.core.model.ShoppingList
 import dev.gorny.buymyway.core.sync.ListState
 import dev.gorny.buymyway.core.sync.Merge
@@ -58,6 +60,9 @@ class ListRepository(
         data class Revived(override val itemId: String) : AddResult
     }
 
+    /** A change to a list shared with this user as a viewer (PLAN.md *Sharing & permissions*). */
+    class ReadOnlyList(listId: String) : IllegalStateException("list $listId is read-only here")
+
     private var lastAt = 0L
 
     /** Strictly increasing on this device, so two edits in one millisecond keep their order. */
@@ -78,16 +83,29 @@ class ListRepository(
      * Lista. Null when the list does not exist or was deleted. [lingering] are items just
      * ticked that the screen still shows in place (see [ListViews.detail]).
      */
-    fun observeList(listId: String, lingering: Flow<Set<String>> = flowOf(emptySet())): Flow<ListDetail?> = combine(
+    fun observeList(
+        listId: String,
+        lingering: Flow<Set<String>> = flowOf(emptySet()),
+        view: Flow<SortView> = flowOf(SortView.DEPARTMENTS),
+    ): Flow<ListDetail?> = combine(
         db.lists().observe(listId),
         db.categories().observeForList(listId),
         db.items().observeForList(listId),
         lingering,
-    ) { list, categories, items, inPlace ->
+        view,
+    ) { list, categories, items, inPlace, sortView ->
         list?.toDomain()
             ?.takeIf { it.deletedAt == null && it.updatedAt > 0 }
-            ?.let { ListViews.detail(it, categories.map { c -> c.toDomain() }, items.map { i -> i.toDomain() }, inPlace) }
+            ?.let { ListViews.detail(it, categories.map { c -> c.toDomain() }, items.map { i -> i.toDomain() }, inPlace, sortView) }
     }.distinctUntilChanged()
+
+    /** Every known, undeleted item of a list, ticked or not: what the screen diffs for remote ticks. */
+    fun observeItems(listId: String): Flow<List<Item>> =
+        db.items().observeForList(listId).map { rows -> rows.map { it.toDomain() } }.distinctUntilChanged()
+
+    /** Everyone the lists on this phone are shared with. */
+    fun observeAllMembers(): Flow<List<Member>> =
+        db.members().observeAll().map { rows -> rows.map { it.toDomain() } }.distinctUntilChanged()
 
     /** The edit sheet. */
     fun observeItem(itemId: String): Flow<Item?> = db.items().observe(itemId)
@@ -103,6 +121,13 @@ class ListRepository(
         db.nameHistory().observeMatching(TextKey.fold(typed), limit)
             .map { rows -> rows.map { NameSuggestion(it.name, it.categoryId) } }
             .distinctUntilChanged()
+
+    /** Whether the list is in RTDB (uploaded, or read from there). */
+    fun observeSynced(listId: String): Flow<Boolean> =
+        db.listSync().observe(listId).map { it?.synced == true }.distinctUntilChanged()
+
+    /** The server time of the newest remote change applied to this list. */
+    suspend fun seenUpTo(listId: String): Long = db.listSync().get(listId)?.seenUpTo ?: 0
 
     /** Ops not yet written to RTDB. */
     fun observePendingOps(): Flow<Int> = db.outbox().observeCount()
@@ -157,6 +182,8 @@ class ListRepository(
         unit: String? = null,
         categoryId: String? = null,
         note: String? = null,
+        /** Added in the „Ręcznie" view: it goes to the end of that order (decision 67). */
+        placeLast: Boolean = false,
     ): AddResult = db.withTransaction {
         val itemName = cleanName(name, TextLimits.ITEM_NAME)
         val list = liveList(listId)
@@ -179,6 +206,7 @@ class ListRepository(
             categoryId = category,
             note = cleanOptional(note, TextLimits.NOTE),
             sortKey = ListViews.nextSortKey(list, items, category),
+            manualKey = if (placeLast) ListViews.nextManualKey(items.filter { Merge.isVisible(it, list) }) else null,
         )
         commit(listOf(Op.ItemPut(newId(), listId, actor(), at, itemId, content)))
         remember(itemName, category, at)
@@ -204,6 +232,34 @@ class ListRepository(
         val item = liveItem(itemId)
         if (item.sortKey == sortKey) return@withTransaction
         commit(listOf(Op.ItemPut(newId(), item.listId, actor(), nextAt(), itemId, item.content.copy(sortKey = sortKey))))
+    }
+
+    /** A drag in the „Ręcznie" view: only the moved item's `manualKey` changes. */
+    suspend fun moveItemManually(itemId: String, manualKey: Double) = db.withTransaction {
+        val item = liveItem(itemId)
+        if (item.manualKey == manualKey) return@withTransaction
+        commit(listOf(Op.ItemPut(newId(), item.listId, actor(), nextAt(), itemId, item.content.copy(manualKey = manualKey))))
+    }
+
+    /** Places every item still to buy that has no „Ręcznie" position, after the placed ones. */
+    suspend fun placeAllManually(listId: String) = db.withTransaction {
+        if (!canEdit(listId)) return@withTransaction
+        val state = loadState(listId)
+        val list = state.list ?: return@withTransaction
+        val shown = ListViews.detail(list, state.categories.values, state.items.values, view = SortView.MANUAL)
+            .sections.flatMap { it.items }
+        placeManually(listId, ListViews.placements(shown))
+    }
+
+    /** Places items that have no „Ręcznie" position yet (decision 67), one `item.put` each. */
+    suspend fun placeManually(listId: String, keys: Map<String, Double>) = db.withTransaction {
+        if (keys.isEmpty()) return@withTransaction
+        val at = nextAt()
+        val ops = keys.keys.sorted().mapNotNull { itemId ->
+            val item = db.items().get(itemId)?.toDomain()?.takeIf { it.listId == listId && it.manualKey == null } ?: return@mapNotNull null
+            Op.ItemPut(newId(), listId, actor(), at, itemId, item.content.copy(manualKey = keys.getValue(itemId)))
+        }
+        commit(ops)
     }
 
     suspend fun setChecked(itemId: String, checked: Boolean) = db.withTransaction {
@@ -280,19 +336,23 @@ class ListRepository(
         val sync = db.listSync().get(listId)
         if (sync != null && sync.sweptAt > 0 && now - sync.sweptAt < Merge.DAY_MS) return@withTransaction false
 
-        val expired = Merge.expiredItems(loadState(listId), now)
+        // Expiry is a change like any other, so a viewer leaves it to the others.
+        val expired = if (canEdit(listId)) Merge.expiredItems(loadState(listId), now) else emptyList()
         if (expired.isNotEmpty()) {
             val at = nextAt()
             commit(expired.map { Op.ItemDelete(newId(), listId, actor(), at, it) })
         }
 
+        // Decision 66: the owner's phone removes old nodes from RTDB first, during a catch-up,
+        // and forgets them only then; purging here would leave them in RTDB for ever.
+        val uid = actor()
+        val ownedAndSynced = uid != null && db.lists().get(listId)?.ownerUid == uid && sync?.synced == true
         val purge = Merge.purgeable(loadState(listId), now)
-        if (purge.wholeList) {
+        if (purge.wholeList && !ownedAndSynced) {
             forget(listId)
             return@withTransaction true
         }
-        if (purge.itemIds.isNotEmpty()) db.items().deleteByIds(purge.itemIds)
-        if (purge.categoryIds.isNotEmpty()) db.categories().deleteByIds(listId, purge.categoryIds)
+        if (!ownedAndSynced) purgeLocal(listId, purge.itemIds, purge.categoryIds)
         val current = db.listSync().get(listId) ?: newSync(listId)
         db.listSync().upsert(current.copy(sweptAt = now))
         true
@@ -331,6 +391,49 @@ class ListRepository(
         }
         ids
     }
+
+    /**
+     * The members node as last read (decision 64): Room's copy is replaced, and the list is
+     * shared exactly when it has one. Names already known are kept when a read has none.
+     */
+    suspend fun applyMembers(listId: String, members: List<Member>) = db.withTransaction {
+        val known = db.members().getForList(listId).associateBy { it.uid }
+        db.members().deleteForList(listId)
+        for (member in members) {
+            val old = known[member.uid]
+            db.members().upsert(
+                member.copy(
+                    name = member.name ?: old?.name,
+                    email = member.email ?: old?.email,
+                    photoUrl = member.photoUrl ?: old?.photoUrl,
+                ).toEntity(),
+            )
+        }
+        db.lists().setShared(listId, members.isNotEmpty())
+    }
+
+    /** Members whose name this phone has not read yet. */
+    suspend fun membersWithoutProfile(listId: String): List<String> =
+        db.members().getForList(listId).filter { it.name == null && it.email == null }.map { it.uid }
+
+    /** Nodes RTDB no longer has (removed after 30 days, decision 66), gone from the phone too. */
+    suspend fun purgeLocal(listId: String, itemIds: List<String>, categoryIds: List<String>) = db.withTransaction {
+        if (itemIds.isNotEmpty()) db.items().deleteByIds(itemIds)
+        if (categoryIds.isNotEmpty()) db.categories().deleteByIds(listId, categoryIds)
+    }
+
+    /**
+     * What the signed-in user may do with a list: a list without an owner (signed out) or
+     * owned here is theirs; on a shared list, the members node says.
+     */
+    suspend fun roleOf(listId: String): Role? {
+        val list = db.lists().get(listId) ?: return null
+        val uid = actor()
+        if (list.ownerUid == null || list.ownerUid == uid) return Role.OWNER
+        return db.members().getForList(listId).firstOrNull { it.uid == uid }?.toDomain()?.role
+    }
+
+    suspend fun canEdit(listId: String): Boolean = roleOf(listId).let { it == Role.OWNER || it == Role.EDITOR }
 
     /** The list is in RTDB now; [dirty] says whether the outbox still holds ops for it. */
     suspend fun markSynced(listId: String, dirty: Boolean) = db.withTransaction {
@@ -371,6 +474,10 @@ class ListRepository(
     private suspend fun commit(ops: List<Op>) {
         if (ops.isEmpty()) return
         db.withTransaction {
+            for (listId in ops.map { it.listId }.distinct()) {
+                // A list made just now has no row yet; anything else must be editable here.
+                if (db.lists().get(listId) != null && !canEdit(listId)) throw ReadOnlyList(listId)
+            }
             for (op in ops) {
                 mergeIntoRoom(Merge.nodesOf(op))
                 db.outbox().insert(OutboxOpEntity(opId = op.id, listId = op.listId, payload = Op.encode(op), createdAt = op.at))

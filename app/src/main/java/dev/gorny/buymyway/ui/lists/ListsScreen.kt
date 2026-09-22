@@ -36,6 +36,7 @@ import androidx.compose.material3.pulltorefresh.pullToRefresh
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -57,6 +58,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.gorny.buymyway.R
 import dev.gorny.buymyway.core.model.ListSummary
+import dev.gorny.buymyway.core.model.Role
+import dev.gorny.buymyway.data.share.Sharing
 import dev.gorny.buymyway.data.auth.AccountState
 import dev.gorny.buymyway.ui.common.DragHandle
 import dev.gorny.buymyway.ui.common.NameDialog
@@ -64,6 +67,9 @@ import dev.gorny.buymyway.ui.common.ReorderState
 import dev.gorny.buymyway.ui.common.moveActions
 import dev.gorny.buymyway.ui.common.rememberReorderState
 import dev.gorny.buymyway.ui.common.reorderableItem
+import dev.gorny.buymyway.ui.list.watchingText
+import dev.gorny.buymyway.ui.share.LeaveDialog
+import dev.gorny.buymyway.ui.share.ShareViewModel
 import kotlinx.coroutines.launch
 
 /** Listy, the home screen (PLAN.md *Screens*). */
@@ -73,14 +79,24 @@ fun ListsScreen(
     vm: ListsViewModel,
     onOpenList: (String) -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenShare: (String) -> Unit,
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
+    val lost by vm.lostLists.collectAsStateWithLifecycle(emptyList())
     val account by vm.account.collectAsStateWithLifecycle()
     val refreshing by vm.refreshing.collectAsStateWithLifecycle()
     val resources = LocalResources.current
     val messages = rememberCoroutineScope()
     var creating by rememberSaveable { mutableStateOf(false) }
     var renaming by rememberSaveable { mutableStateOf<String?>(null) }
+    var leaving by rememberSaveable { mutableStateOf<String?>(null) }
+
+    // A shared list taken away from this user leaves with a sentence (PLAN.md Phase 5, task 7).
+    LaunchedEffect(lost) {
+        val name = lost.firstOrNull() ?: return@LaunchedEffect
+        vm.held.snackbar.showSnackbar(resources.getString(R.string.list_lost, name))
+        vm.lostShown(name)
+    }
 
     Scaffold(
         topBar = {
@@ -130,7 +146,11 @@ fun ListsScreen(
                     else -> ListCards(
                         vm = vm,
                         lists = lists,
+                        roles = state.roles,
+                        watching = state.watching,
                         onOpenList = onOpenList,
+                        onShare = onOpenShare,
+                        onLeave = { leaving = it },
                         onRename = { renaming = it },
                         onDelete = { summary ->
                             vm.delete(
@@ -158,6 +178,20 @@ fun ListsScreen(
             onDismiss = { creating = false },
         )
     }
+    val left = leaving?.let { id -> state.lists?.firstOrNull { it.list.id == id } }
+    if (left != null) {
+        LeaveDialog(
+            listName = left.list.name,
+            onConfirm = {
+                leaving = null
+                vm.leave(left.list.id) { failure ->
+                    val message = (failure as? Sharing.SharingFailure)?.let(ShareViewModel::messageFor) ?: R.string.share_failed
+                    messages.launch { vm.held.snackbar.showSnackbar(resources.getString(message)) }
+                }
+            },
+            onDismiss = { leaving = null },
+        )
+    }
     val renamed = renaming?.let { id -> state.lists?.firstOrNull { it.list.id == id } }
     if (renamed != null) {
         NameDialog(
@@ -178,7 +212,11 @@ fun ListsScreen(
 private fun ListCards(
     vm: ListsViewModel,
     lists: List<ListSummary>,
+    roles: Map<String, Role>,
+    watching: Map<String, List<String>>,
     onOpenList: (String) -> Unit,
+    onShare: (String) -> Unit,
+    onLeave: (String) -> Unit,
     onRename: (String) -> Unit,
     onDelete: (ListSummary) -> Unit,
 ) {
@@ -200,12 +238,17 @@ private fun ListCards(
         items(lists, key = { it.list.id }) { summary ->
             val id = summary.list.id
             val index = lists.indexOf(summary)
+            val role = roles[id] ?: Role.OWNER
             ListCard(
                 summary = summary,
+                watching = watching[id].orEmpty(),
                 reorder = reorder,
                 onOpen = { onOpenList(id) },
-                onRename = { onRename(id) },
-                onDelete = { onDelete(summary) },
+                onShare = { onShare(id) },
+                onRename = if (role != Role.VIEWER) ({ onRename(id) }) else null,
+                // Only the owner deletes a list; anyone else leaves it (decision 64).
+                onDelete = if (role == Role.OWNER) ({ onDelete(summary) }) else null,
+                onLeave = if (role != Role.OWNER) ({ onLeave(id) }) else null,
                 onMoveUp = if (index > 0) ({ vm.moveBy(id, -1) }) else null,
                 onMoveDown = if (index < lists.lastIndex) ({ vm.moveBy(id, 1) }) else null,
                 modifier = Modifier.reorderableItem(this, reorder, id),
@@ -255,10 +298,13 @@ private fun EmptyLists(modifier: Modifier) {
 @Composable
 private fun ListCard(
     summary: ListSummary,
+    watching: List<String>,
     reorder: ReorderState,
     onOpen: () -> Unit,
-    onRename: () -> Unit,
-    onDelete: () -> Unit,
+    onShare: () -> Unit,
+    onRename: (() -> Unit)?,
+    onDelete: (() -> Unit)?,
+    onLeave: (() -> Unit)?,
     onMoveUp: (() -> Unit)?,
     onMoveDown: (() -> Unit)?,
     modifier: Modifier = Modifier,
@@ -281,18 +327,25 @@ private fun ListCard(
                     .padding(start = 16.dp, top = 12.dp, bottom = 12.dp, end = 8.dp),
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (!summary.list.shared) {
-                        Icon(
-                            painterResource(R.drawable.ic_lock),
-                            contentDescription = stringResource(R.string.list_private),
-                            modifier = Modifier.size(16.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Spacer(Modifier.width(6.dp))
-                    }
+                    Icon(
+                        painterResource(if (summary.list.shared) R.drawable.ic_group else R.drawable.ic_lock),
+                        contentDescription = stringResource(if (summary.list.shared) R.string.list_shared else R.string.list_private),
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.width(6.dp))
                     Text(
                         summary.list.name,
                         style = MaterialTheme.typography.titleMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                if (watching.isNotEmpty()) {
+                    Text(
+                        watchingText(watching),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -319,19 +372,39 @@ private fun ListCard(
                 }
                 DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                     DropdownMenuItem(
-                        text = { Text(stringResource(R.string.action_rename)) },
+                        text = { Text(stringResource(R.string.action_share)) },
                         onClick = {
                             menu = false
-                            onRename()
+                            onShare()
                         },
                     )
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.action_delete)) },
-                        onClick = {
-                            menu = false
-                            onDelete()
-                        },
-                    )
+                    onRename?.let { rename ->
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.action_rename)) },
+                            onClick = {
+                                menu = false
+                                rename()
+                            },
+                        )
+                    }
+                    onDelete?.let { delete ->
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.action_delete)) },
+                            onClick = {
+                                menu = false
+                                delete()
+                            },
+                        )
+                    }
+                    onLeave?.let { leave ->
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.action_leave_list)) },
+                            onClick = {
+                                menu = false
+                                leave()
+                            },
+                        )
+                    }
                 }
             }
             DragHandle(reorder, summary.list.id)

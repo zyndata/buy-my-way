@@ -115,4 +115,65 @@
         <item quantity="other">%d zmiany nie zostało jeszcze wysłanych i przepadnie.</item>
     </plurals>
     <string name="refresh_failed">Nie udało się pobrać zmian. Sprawdź połączenie.</string>
+
+    <!-- Udostępnianie i na żywo (Phase 5) -->
+    <string name="title_invite">Zaproszenie</string>
+    <string name="action_share">Udostępnij</string>
+    <string name="action_sort">Sortowanie</string>
+    <string name="sort_departments">Według działów</string>
+    <string name="sort_alphabetical">Alfabetycznie</string>
+    <string name="sort_manual">Ręcznie</string>
+    <string name="read_only_hint">Możesz tylko przeglądać tę listę.</string>
+    <string name="someone">Ktoś</string>
+    <string name="watching_one">%1$s ogląda</string>
+    <string name="watching_many">%1$s i %2$s oglądają</string>
+    <string name="item_edited">Edytowano %1$s</string>
+    <string name="item_bought">Kupiono %1$s</string>
+    <string name="item_date_by">%1$s · %2$s</string>
+    <string name="list_shared">Lista udostępniona</string>
+    <string name="list_lost">Lista „%1$s” nie jest już Ci udostępniona.</string>
+    <string name="action_leave_list">Opuść listę</string>
+    <string name="leave_title">Opuścić listę „%1$s”?</string>
+    <string name="leave_body">Lista zniknie z tego telefonu. Wrócisz do niej tylko z nowym zaproszeniem.</string>
+
+    <string name="share_people">Osoby</string>
+    <string name="share_invite">Zaproś</string>
+    <string name="share_private_hint">Ta lista jest prywatna. Zaproś kogoś, a zobaczy ją i jej zmiany na bieżąco.</string>
+    <string name="share_member_hint">Tą listą zarządza jej właściciel.</string>
+    <string name="role_owner">właściciel</string>
+    <string name="role_editor">Może edytować</string>
+    <string name="role_viewer">Tylko przegląda</string>
+    <string name="member_me">%1$s (Ty)</string>
+    <string name="member_actions">Uprawnienia: %1$s</string>
+    <string name="action_invite_link">Zaproś linkiem</string>
+    <string name="share_link_hint">Link działa 7 dni. Każdy, kto go otworzy i się zaloguje, dołączy do listy.</string>
+    <string name="share_link_text">Dołącz do mojej listy zakupów „%1$s” w Buy My Way: %2$s</string>
+    <string name="share_link_chooser">Wyślij zaproszenie</string>
+    <string name="field_email">Adres e-mail</string>
+    <string name="action_invite_email">Zaproś e-mailem</string>
+    <string name="share_email_hint">Osoba, która już korzysta z Buy My Way, zobaczy listę od razu. Aplikacja nie wysyła żadnych e-maili.</string>
+    <string name="share_email_added">Dodano %1$s.</string>
+    <string name="share_email_already">%1$s ma już tę listę.</string>
+    <string name="share_email_invalid">To nie wygląda na adres e-mail.</string>
+    <string name="share_email_not_found_title">Nie znaleziono</string>
+    <string name="share_email_not_found">%1$s jeszcze nie korzysta z Buy My Way. Wyślij tej osobie zaproszenie linkiem.</string>
+    <string name="action_send_link">Wyślij link</string>
+    <string name="action_remove_member">Usuń z listy</string>
+    <string name="action_make_private">Uczyń prywatną</string>
+    <string name="make_private_title">Uczynić listę prywatną?</string>
+    <string name="make_private_body">Wszyscy poza Tobą stracą do niej dostęp, a lista zniknie z ich telefonów.</string>
+    <string name="share_sign_in_needed">Aby udostępniać listy, zaloguj się przez Google.</string>
+    <string name="share_offline">Brak połączenia. Udostępnianie wymaga internetu.</string>
+    <string name="share_refused">Nie masz uprawnień, aby to zrobić.</string>
+    <string name="share_failed">Coś poszło nie tak. Spróbuj ponownie.</string>
+
+    <string name="invite_sign_in">Aby dołączyć do listy, zaloguj się przez Google.</string>
+    <string name="invite_body">%1$s zaprasza Cię do listy „%2$s”.</string>
+    <string name="invite_as_editor">Będziesz móc dodawać i odhaczać rzeczy.</string>
+    <string name="invite_as_viewer">Będziesz móc przeglądać listę.</string>
+    <string name="action_join">Dołącz</string>
+    <string name="action_not_now">Nie teraz</string>
+    <string name="action_retry">Spróbuj ponownie</string>
+    <string name="invite_expired">To zaproszenie wygasło. Poproś o nowe.</string>
+    <string name="invite_not_found">Nie ma takiego zaproszenia. Poproś o nowy link.</string>
 </resources>

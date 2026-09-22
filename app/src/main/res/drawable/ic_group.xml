@@ -1,0 +1,13 @@
+<!-- Drawn for this app (two people), not taken from an icon set. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+  <path
+      android:fillColor="#FF000000"
+      android:pathData="M16.5,5a3,3 0,1 1,0 6a3,3 0,1 1,0 -6zM16.8,13c2.9,0.3 5.2,2.8 5.2,5.8V20h-4.2c0,-2.7 -0.4,-5 -1,-7z" />
+  <path
+      android:fillColor="#FF000000"
+      android:pathData="M8.5,4a3.5,3.5 0,1 1,0 7a3.5,3.5 0,1 1,0 -7zM1.5,20c0,-3.9 3.1,-7 7,-7s7,3.1 7,7z" />
+</vector>

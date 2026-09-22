@@ -12,7 +12,7 @@ GitHub tag vX.Y.Z
 
 Firebase project      Realtime Database (Spark plan), Auth (Google), Cloud Messaging
 Google Apps Script    the push sender, deployed from push/ under the owner's account
-buymyway.gorny.dev    a static page for invite App Links + assetlinks.json (Phase 5)
+eatmyway.gorny.dev    /bmw/i/<token> invite page + assetlinks.json, in the Eat My Way repo (Phase 5)
 ```
 
 > Phases 0, 5, 9, 10 and 11 fill in the exact steps. Until then this file records what each
@@ -61,6 +61,29 @@ never stored in the repository): `npx firebase deploy --only database --project 
 Rules and app go out together: an app that writes a field the live rules do not know is
 refused (unknown fields are rejected), so publish the rules **before** installing a build
 that needs them.
+
+**Phase 5's rules and the Phase 4 build do not mix.** The Phase 5 rules key `/emailIndex` by
+the address itself (STATE.md decision 63), so a Phase 4 build's profile write (a sha256 key)
+is refused, and that build then fails every sync. So: publish the rules, then install the
+Phase 5 build on every phone straight away. The sha256 entries under `/emailIndex` that Phase 4
+wrote are no longer used, and can be deleted in the console (the 64-character hex keys).
+
+## Invite links (Phase 5)
+
+A list is shared by `https://eatmyway.gorny.dev/bmw/i/<token>` (STATE.md decisions 35 and 63).
+The host is Eat My Way's, and so are the files, in the **Eat My Way repository** (its decision
+458): `public/bmw/invite.html` + `invite.js`, the `Caddyfile` rewrite of `/bmw/i/*` to that
+page, and `public/.well-known/assetlinks.json`. They go live with an Eat My Way release
+(`/release` there). Until then, and on a phone where Android has not verified the App Link,
+a link opens the browser; its page's button opens `buymyway://i/<token>`, which the app also
+handles.
+
+`assetlinks.json` lists the SHA-256 of every key that signs a build that should open the links
+directly: today the Windows machine's debug key. Add the Linux machine's debug key when it is
+registered (STATE.md open question 2), and the release key in Phase 10. Read a fingerprint with
+`keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android`.
+Check the verification on a phone with
+`adb shell pm get-app-links dev.gorny.buymyway` (it should say `verified` for the host).
 
 ## The push sender (Phase 9)
 

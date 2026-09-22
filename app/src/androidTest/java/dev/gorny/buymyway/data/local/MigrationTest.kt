@@ -7,6 +7,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -56,6 +57,8 @@ class MigrationTest {
             assertEquals(listOf("nabial", "warzywa"), summary.list.categoryOrder)
             assertEquals(1, summary.total)
             assertEquals("Mleko", db.items().get("i1")?.name)
+            // v2 (decision 67): an item from before has no „Ręcznie" position yet.
+            assertNull(db.items().get("i1")?.manualKey)
             assertEquals("nabial", db.nameHistory().get("mleko")?.categoryId)
         } finally {
             db.close()

@@ -128,6 +128,32 @@ CI reads the same four values from GitHub Secrets (the keystore as base64).
   `connectedDebugAndroidTest` on API 35 `google_apis` x86_64 (STATE.md decision 38). A phone
   connected over `adb` works as well: Gradle runs the suite on every device `adb` sees.
 
+## Two phones, two accounts (Phase 5)
+
+Sharing and live changes are tested on the emulator against a fake server that mirrors the
+rules (`SharingTest`), because the emulator has no Google account. What only two real phones
+can show is measured by hand:
+
+- **Check latency.** `app/src/androidTest/.../probe/TwoPhoneProbe.kt` runs inside the installed,
+  signed-in debug app and is skipped everywhere else (CI included). Both phones share a list
+  named „Pomiar". Install on each with `ANDROID_SERIAL=<serial> ./gradlew installDebug
+  installDebugAndroidTest`: an install, not `connectedDebugAndroidTest`, which would uninstall
+  the app and sign it out. Then start phone B, and then phone A:
+
+  ```
+  adb -s <B> shell am instrument -w -e probe b -e class dev.gorny.buymyway.probe.TwoPhoneProbe dev.gorny.buymyway.test/androidx.test.runner.AndroidJUnitRunner
+  adb -s <A> shell am instrument -w -e probe a -e class dev.gorny.buymyway.probe.TwoPhoneProbe dev.gorny.buymyway.test/androidx.test.runner.AndroidJUnitRunner
+  adb -s <A> logcat -d -s BuyMyWayProbe
+  ```
+
+  A ticks „ping N", B ticks „pong N" the moment it sees it, and A times the round trip on
+  its own clock, 20 times (the echo of STATE.md decision 16). The `RESULT` line gives the
+  median and p95.
+- **Invite link, airplane mode, the animation**: by hand, and recorded in STATE.md.
+
+`ANDROID_SERIAL` picks one device when several are connected. Without it, Gradle's
+connected tasks use every device `adb` sees.
+
 ## Reference material
 
 `D:\Work\eat-my-way\android\` (outside this repository) holds decompiled third-party apps kept

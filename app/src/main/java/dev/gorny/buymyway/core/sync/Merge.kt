@@ -201,7 +201,7 @@ object Merge {
     fun blankItem(id: String, listId: String) = Item(
         id = id, listId = listId,
         name = "", quantity = null, unit = null, categoryId = BuiltinCategories.FALLBACK,
-        note = null, photoAt = null, sortKey = 0.0,
+        note = null, photoAt = null, sortKey = 0.0, manualKey = null,
         checked = false, checkedAt = null, checkedBy = null,
         createdAt = 0, createdBy = null, updatedAt = 0, updatedBy = null, deletedAt = null,
     )

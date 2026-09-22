@@ -36,6 +36,7 @@ data class ItemContent(
     val note: String? = null,
     val photoAt: Long? = null, // set when /photos/{listId}/{id} exists; null = none
     val sortKey: Double = 0.0, // manual order within a category
+    val manualKey: Double? = null, // order in the „Ręcznie" view; null = not placed yet (decision 67)
 )
 
 data class Item(
@@ -48,6 +49,7 @@ data class Item(
     val note: String?,
     val photoAt: Long?,
     val sortKey: Double,
+    val manualKey: Double?,
     val checked: Boolean,
     val checkedAt: Long?,
     val checkedBy: String?,
@@ -58,7 +60,7 @@ data class Item(
     val deletedAt: Long?, // tombstone, final, kept 30 days
 ) {
     val content: ItemContent
-        get() = ItemContent(name, quantity, unit, categoryId, note, photoAt, sortKey)
+        get() = ItemContent(name, quantity, unit, categoryId, note, photoAt, sortKey, manualKey)
 
     fun withContent(c: ItemContent): Item = copy(
         name = c.name,
@@ -68,6 +70,7 @@ data class Item(
         note = c.note,
         photoAt = c.photoAt,
         sortKey = c.sortKey,
+        manualKey = c.manualKey,
     )
 }
 

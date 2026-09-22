@@ -1,6 +1,9 @@
 package dev.gorny.buymyway.ui
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
@@ -22,6 +25,11 @@ import dev.gorny.buymyway.ui.lists.ListsScreen
 import dev.gorny.buymyway.ui.lists.ListsViewModel
 import dev.gorny.buymyway.ui.settings.SettingsScreen
 import dev.gorny.buymyway.ui.settings.SettingsViewModel
+import dev.gorny.buymyway.ui.share.InviteScreen
+import dev.gorny.buymyway.ui.share.InviteViewModel
+import dev.gorny.buymyway.ui.share.ShareScreen
+import dev.gorny.buymyway.ui.share.ShareViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
 
 /** The app's routes, as PLAN.md's "Screens & navigation" names them. */
@@ -33,23 +41,34 @@ object Routes {
     const val IMPORT = "import"
     const val SETTINGS = "settings"
     const val DEFAULT_ORDER = "settings/categories"
+    const val INVITE = "invite/{token}"
 
     fun list(listId: String) = "list/$listId"
     fun listCategories(listId: String) = "list/$listId/categories"
+    fun share(listId: String) = "list/$listId/share"
+    fun invite(token: String) = "invite/$token"
 }
 
 private val listIdArgument = listOf(navArgument("listId") { type = NavType.StringType })
 
+/** [invites] carries the token of an invite link the app was opened with, until it is shown. */
 @Composable
-fun BuyMyWayNavHost() {
+fun BuyMyWayNavHost(invites: MutableStateFlow<String?> = MutableStateFlow(null)) {
     val container = (LocalContext.current.applicationContext as BuyMyWayApp).container
     val nav = rememberNavController()
+    val invite by invites.collectAsStateWithLifecycle()
+    LaunchedEffect(invite) {
+        val token = invite ?: return@LaunchedEffect
+        invites.value = null
+        nav.navigate(Routes.invite(token))
+    }
     NavHost(navController = nav, startDestination = Routes.LISTS) {
         composable(Routes.LISTS) {
             ListsScreen(
                 vm = viewModel { ListsViewModel(container.lists, container.listOrder, container.appScope, container.listsSync) },
                 onOpenList = { nav.navigate(Routes.list(it)) },
                 onOpenSettings = { nav.navigate(Routes.SETTINGS) },
+                onOpenShare = { nav.navigate(Routes.share(it)) },
             )
         }
         composable(Routes.LIST, arguments = listIdArgument) { entry ->
@@ -58,6 +77,7 @@ fun BuyMyWayNavHost() {
                 vm = viewModel { listViewModel(container, listId) },
                 onBack = { nav.popBackStack(Routes.LIST, inclusive = true) },
                 onOpenCategoryOrder = { nav.navigate(Routes.listCategories(listId)) },
+                onOpenShare = { nav.navigate(Routes.share(listId)) },
             )
         }
         composable(Routes.LIST_CATEGORIES, arguments = listIdArgument) { entry ->
@@ -89,10 +109,27 @@ fun BuyMyWayNavHost() {
                 onBack = { nav.popBackStack(Routes.DEFAULT_ORDER, inclusive = true) },
             )
         }
-        // Filled by Phase 5 (Udostępnianie) and Phase 8 (Import); nothing links here yet.
-        composable(Routes.SHARE, arguments = listIdArgument) {
-            PlaceholderScreen(title = R.string.title_share, onBack = nav::popBackStack)
+        composable(Routes.SHARE, arguments = listIdArgument) { entry ->
+            val listId = entry.arguments?.getString("listId").orEmpty()
+            ShareScreen(
+                vm = viewModel { ShareViewModel(container.lists, listId, container.sharing, container.account.state) },
+                onBack = { nav.popBackStack(Routes.SHARE, inclusive = true) },
+                onLeft = { nav.popBackStack(Routes.LISTS, inclusive = false) },
+                onOpenSettings = { nav.navigate(Routes.SETTINGS) },
+            )
         }
+        composable(Routes.INVITE, arguments = listOf(navArgument("token") { type = NavType.StringType })) { entry ->
+            val token = entry.arguments?.getString("token").orEmpty()
+            InviteScreen(
+                vm = viewModel { InviteViewModel(token, container.sharing, container.account.state) },
+                onBack = { nav.popBackStack(Routes.INVITE, inclusive = true) },
+                onOpenList = { listId ->
+                    nav.navigate(Routes.list(listId)) { popUpTo(Routes.INVITE) { inclusive = true } }
+                },
+                onOpenSettings = { nav.navigate(Routes.SETTINGS) },
+            )
+        }
+        // Filled by Phase 8 (Import); nothing links here yet.
         composable(Routes.IMPORT) {
             PlaceholderScreen(title = R.string.title_import, onBack = nav::popBackStack)
         }
@@ -104,6 +141,7 @@ private fun listViewModel(container: AppContainer, listId: String) = ListViewMod
     listId = listId,
     dictionary = container::suggestNames,
     commitScope = container.appScope,
+    live = container.listLive,
 )
 
 private fun listCategoryOrder(container: AppContainer, listId: String): CategoryOrderViewModel {

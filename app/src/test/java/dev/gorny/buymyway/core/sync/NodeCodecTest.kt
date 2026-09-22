@@ -13,7 +13,7 @@ class NodeCodecTest {
 
     private val full = Item(
         id = "item-1", listId = "list-1", name = "Ziemniaki", quantity = 2.5, unit = "kg",
-        categoryId = "warzywa", note = "młode", photoAt = 1_700_000_000_500, sortKey = 3.5,
+        categoryId = "warzywa", note = "młode", photoAt = 1_700_000_000_500, sortKey = 3.5, manualKey = 7.25,
         checked = true, checkedAt = 1_700_000_000_300, checkedBy = "uid-b",
         createdAt = 1_700_000_000_000, createdBy = "uid-a",
         updatedAt = 1_700_000_000_200, updatedBy = "uid-a", deletedAt = 1_700_000_000_900,

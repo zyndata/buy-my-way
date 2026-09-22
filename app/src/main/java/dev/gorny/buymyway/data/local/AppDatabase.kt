@@ -7,6 +7,7 @@ import androidx.room.RoomDatabase
 import androidx.room.TypeConverter
 import androidx.room.TypeConverters
 import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
@@ -38,15 +39,21 @@ abstract class AppDatabase : RoomDatabase() {
         const val NAME = "buymyway.db"
 
         /** The current schema version; the exported schemas in app/schemas are named after it. */
-        const val VERSION = 1
+        const val VERSION = 2
 
         /**
-         * Every migration, oldest first. Schema v1 has none; each new version adds its step
-         * here and a case to the migration test, which walks all of them from v1 on the
-         * committed schema files. No destructive fallback: a missing migration is a crash in
-         * testing, never lost lists.
+         * Every migration, oldest first. Each new version adds its step here and a case to the
+         * migration test, which walks all of them from v1 on the committed schema files. No
+         * destructive fallback: a missing migration is a crash in testing, never lost lists.
          */
-        val MIGRATIONS: Array<Migration> = emptyArray()
+        val MIGRATIONS: Array<Migration> = arrayOf(
+            // v2: the „Ręcznie" order (STATE.md decision 67). Null = not placed yet.
+            object : Migration(1, 2) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL("ALTER TABLE items ADD COLUMN manualKey REAL")
+                }
+            },
+        )
 
         fun open(context: Context): AppDatabase =
             Room.databaseBuilder(context.applicationContext, AppDatabase::class.java, NAME)

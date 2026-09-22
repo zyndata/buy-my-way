@@ -12,7 +12,7 @@ Any deviation from [PLAN.md](PLAN.md) must be recorded here before proceeding.
 | 2     | Local data layer & the merge           | done    | 2026-09-21 |
 | 3     | Lists & items on screen                | done    | 2026-09-21 |
 | 4     | Google sign-in & cloud persistence     | done    | 2026-09-22 |
-| 5     | Sharing & real-time                    | pending |           |
+| 5     | Sharing & real-time                    | done    | 2026-09-22 |
 | 6     | Photos                                 | pending |           |
 | 7     | Voice input                            | pending |           |
 | 8     | Import from Eat My Way                 | pending |           |
@@ -25,8 +25,9 @@ decision).
 
 The repository holds the plan, the workflow files, the repository hygiene (2026-09-18), the
 push sender's skeleton (`push/`, deployed), from Phase 1 the Android app's scaffold, from
-Phase 2 its local data layer, from Phase 3 its screens for private lists and, from Phase 4,
-Google sign-in with the lists kept in Firebase Realtime Database.
+Phase 2 its local data layer, from Phase 3 its screens for private lists, from Phase 4
+Google sign-in with the lists kept in Firebase Realtime Database and, from Phase 5, sharing
+with other people and live changes.
 
 **Phase 0 done (2026-09-21).** Under `drive.file`, a shared file is invisible to the other
 member's copy of the app. So shared lists and photos move to Firebase Realtime Database and
@@ -124,6 +125,54 @@ flake: after the emulator's system server died and the emulator was rebooted, th
 strike-through test missed its 1 s window once, and it passed on the rerun. Also found: when
 the emulator cannot install anything, `connectedDebugAndroidTest` reports success with **zero
 tests**, so a local run is only evidence together with its test count. Phase 5 is next.
+
+**Phase 5 done (2026-09-22).** Lists can be shared. „Udostępnij" (on the list and on its card)
+opens Udostępnianie. There the owner invites by link
+(`https://eatmyway.gorny.dev/bmw/i/<token>`, 7 days, or `buymyway://i/<token>`) or by e-mail
+(anyone who has signed in; nobody is e-mailed), gives „Może edytować" or „Tylko przegląda",
+removes people, and can make the list private again. A member can leave. A list taken away
+leaves the phone with a sentence. While a list is open, its meta, members, categories and
+changed items are live listeners, and presence says „Ania ogląda" on the list and on its card.
+Someone else's tick shows their initial, holds 1.5 s, then slides into „Kupione". A viewer
+gets no add bar and no taps. The edit sheet shows „Edytowano …" and „Kupiono … · Ania".
+„Sortowanie" offers „Według działów", „Alfabetycznie" and „Ręcznie". The last two are flat,
+and the manual order is the list's (`manualKey`, Room schema v2), while the view is each
+user's. The owner's phone removes 30-day-old tombstones and expired invites from RTDB. The
+rules cover members, roles, invites, presence and the photo cleanup. Eat My Way serves the
+invite page and `assetlinks.json` (its decision 458), and its privacy page follows.
+Decisions 63–69. **What wakes the device:** nothing new. Every listener is attached only while
+its screen is shown (decision 65). The only background work is still Phase 4's `OutboxWorker`.
+Verified: 63 rules tests on the Firebase emulator (30 new). Loosening the editor check made 2
+fail, and they caught a real hole (decision 68). 80 JVM tests (16 new: the sort views, the
+Polish collation, placing, invite links, dates, write shapes). 39 instrumented tests on the API
+35 emulator (12 new). `SharingTest` runs three accounts on a fake server that mirrors the
+rules: an invited editor sees the whole list the moment they accept, with no act on the
+owner's phone; an expired or made-up invite is refused; an e-mail viewer is refused a tick,
+both on the phone and on the server; a removed member loses the list with a sentence, and one
+who leaves loses it without one; ten simulated minutes of edits with one phone offline
+converge with no duplicates and every tick kept; a tick arrives through a live listener, and
+a watcher who is removed loses the list; the manual order reaches the other member while
+their view stays theirs; the owner purges 30-day tombstones from RTDB. Four Compose flows:
+someone else's tick with its initial, then „Kupione"; the three sort views; the dates;
+read-only for a viewer. Making the live listener drop ticks failed the live test. The migration
+test walks v1 → v2. **By hand on two physical phones, two Google accounts** (S10e = A, S23
+Ultra = B, both on Wi-Fi, since the S10e has no SIM), against the real project once the rules
+were published: the invite link opened the app on B (the host's App Link is not yet verified,
+so the link was allowed for the app with `pm set-app-links-user-selection`); B joined and saw
+the whole list; adding, ticking and reordering crossed both ways; „… ogląda" and the initial
+on someone else's tick were seen on both. **Check latency (`TwoPhoneProbe`, 20 echoes): round
+trip median 1028 ms, p95 1068 ms, max 1134 ms, so one way ≈ 514 ms median and ≈ 534 ms p95,
+under 1 s.** About 300 ms of each leg is the send debounce (decision 58); the network part
+matches Phase 0. **Airplane mode on B, edits on both:** after reconnecting, both phones' Room
+held the same rows field for field (49 visible items, 43 ticked), both outboxes were empty,
+there were no sync duplicates (every repeated name was typed separately on one phone), and no
+tick was lost. **Not verified:** mobile data (neither phone was on it); the full ten minutes
+offline (the offline edits spanned about two minutes; the ten-minute case ran only on the fake
+server); photos seen by a new member (Phase 6 adds photos; the rules test covers the read);
+the App Link verified by Android (it needs the Eat My Way release, owner); the Linux machine
+(open question 2). One mistake on the way: the first rules published were the Phase 4 file.
+It was the one on GitHub, since the Phase 5 rules were not pushed yet. Sharing was refused
+until the right file was published.
 
 ## Decisions
 
@@ -685,6 +734,106 @@ Newest last. Every deviation from PLAN.md lands here **before** it is acted on.
       means Room schema v2 and its migration. The existing `sortKey` stays the order within
       a department.
 
+### 2026-09-22 — Phase 5 (sharing & real-time)
+
+63. **The owner's answers at the start of Phase 5 (2026-09-22).**
+    - **The invite link's host is prepared in the Eat My Way repository, and the owner releases
+      it.** Phase 5 adds to `eat-my-way` (its `dev` branch) a static page for `/bmw/i/*`, a
+      Caddy rewrite that serves it for every token, and `/.well-known/assetlinks.json`. That
+      file names `dev.gorny.buymyway` with the debug SHA-256 of each machine for now. The
+      release key does not exist until Phase 10, which adds its SHA-256. The page's button
+      opens `buymyway://i/<token>`, so the link works even before Android has verified the
+      App Link. Nothing sends e-mail: the owner's server cannot, and nothing needs it.
+    - **`/emailIndex` is keyed by the e-mail address itself (answers open question 10).** The
+      key is the lower-case address with `.` written as `,` (RTDB keys cannot hold a dot), and
+      the rules accept a write only when the key is the writer's own verified Google address
+      (`auth.token.email`). Nobody can claim someone else's address. An address containing
+      `$ # [ ] /` gets no entry, so that person can be invited by link only. The sha256 entries
+      written in Phase 4 are left unused and can be deleted in the console. The index can be
+      read one key at a time by any signed-in user, never listed.
+    - **„Usuń moje dane" is built in Phase 9 (answers open question 8)**, together with
+      `/fcmTokens`, so one action removes everything.
+    - **The two-phone checks are done by hand at the end of the phase** (S10e and S23 Ultra,
+      two accounts): check latency, airplane mode, the invite link.
+64. **How sharing is modelled.**
+    - **Membership changes are not ops.** Inviting, accepting, changing a role, removing a
+      member, „Uczyń prywatną" and leaving a list are made online, as one acknowledged
+      multi-path update each, and the screen says so when there is no connection. Membership
+      is owned by the server (the owner writes it), so an outbox and a merge would only add
+      ways for it to go wrong. Sharing needs a network anyway. Room's `members` table and
+      `lists.shared` are a copy of what was last read.
+    - **Roles in the rules.** Reading a list: its owner (`meta/ownerUid`) or anyone under
+      `members`. Items and categories: the owner or an editor. The meta's name, category order
+      and `clearedAt`: the owner or an editor (PLAN.md *Storage layout*). `ownerUid`,
+      `createdAt` and `deletedAt`: the owner only. Members and invites: the owner only, except
+      that a signed-in user may add *themselves* with a valid invite (unexpired, for this list,
+      with the invite's role, and with the token written in the member node as `invite`), and
+      may remove themselves.
+    - **„Opuść listę" (an addition).** On a list shared with them, a member's card menu shows
+      „Opuść listę" instead of „Usuń", which only the owner may do. It removes their member
+      entry and their `/userLists` entry, and the list leaves the phone.
+    - **`/userLists/{uid}/{listId}` holds the role.** It is written by the list's owner for
+      anyone (an e-mail invite, a role change, a removal) or by the user for themselves, and
+      the value must equal the role in the members node written with it (or `owner` for the
+      owner).
+    - **The invite carries `listName` and `byName` too**, beyond PLAN.md's `{listId, role, by,
+      expiresAt}`, so the person accepting sees whose list it is before they are a member and
+      can read it. The token is 128 random bits in URL-safe base64 (22 characters). An invite is
+      valid for 7 days and can be accepted by several people, each once. The owner's device
+      removes expired invites.
+    - **A member's name, e-mail and photo are readable by any signed-in user who knows their
+      uid** (`/users/{uid}/name|email|photoUrl`; `prefs` stays private). The rules cannot
+      express "shares a list with me", and a uid is only ever seen by people who share a list
+      with that user. That is what shows „Ania ogląda" and „Kupiono … · Ania".
+    - **`/photos` gets only a rule for removing a photo in Phase 5** (owner and editors), so
+      that the tombstone cleanup can remove photos with their items. Phase 6 writes the rest.
+65. **What is attached while the app is open (refines the *Battery policy* line on
+    listeners).** On the list screen: `meta` and `members` as values, `categories` as
+    children, `items` as children of the query `changedAt ≥ seenUpTo`, and `presence`. On the
+    home screen, besides `/userLists/{uid}`, only the `presence` node of each *shared* list,
+    for „Ania ogląda". All of it only while the screen is shown and the connection is held
+    (foreground plus the 30 s grace, decision 58). Presence is written as the server time when
+    a list screen opens, removed when it closes, and removed by `onDisconnect` otherwise.
+    Nothing new runs in the background, so nothing new wakes the device.
+66. **RTDB tombstones are removed by the owner's device during a catch-up.** For each list it
+    owns, it removes the item and category nodes that `Merge.purgeable` names (gone for more
+    than 30 days) and their `/photos` nodes in one update, and then forgets them in Room. So
+    for a list that is in RTDB and owned here, the daily local sweep leaves the purge to
+    sync. Otherwise the node would stay in RTDB for ever. Other members' phones purge only
+    their own Room. Expired invites are removed in the same pass.
+67. **The manual order: `manualKey` may be empty.** An item without one is "not placed yet".
+    „Ręcznie" shows the placed items by key, then the unplaced ones in department order. Items
+    are placed (a batch of `item.put`s, appended in department order) when „Ręcznie" is
+    chosen and before a drag in that view, never just because a screen is looking. So two
+    phones never write for nothing. An item added in „Ręcznie" gets the next key. One added
+    in another view has none and is placed at the end the next time. A viewer never places
+    anything. `manualKey` is part of the content group: last-writer-wins with it, in the rules'
+    equality checks, and in Room schema v2 (a nullable column, so the migration only adds
+    it). The chosen view is per user and per list: DataStore, then
+    `/users/{uid}/prefs/listSort/{listId}` (`{value, updatedAt}`).
+68. **Found while writing the Phase 5 rules tests: an author could stay the previous one.**
+    `updatedBy`, `checkedBy` (and the meta's and a category's `updatedBy`) accepted "the writer,
+    or unchanged". So an editor could move `updatedAt` forward and leave `updatedBy` naming
+    someone else, and put their edit under another person's name. The hole was already in
+    Phase 4, but with one user per list it did not matter. Now an author may stay unchanged only
+    while its stamp does too; any newer stamp must carry `auth.uid`. The test „an editor
+    cannot write as someone else" failed before the fix and passes after it.
+69. **Three smaller things Phase 5 needed.**
+    - **The owner's invite index is `/users/{uid}/invites/{token}` (`{listId, expiresAt}`).**
+      `/invites` cannot be listed, by design (a token is the secret), so without an index the
+      owner's phone could not find its expired invites to remove them (decision 36). It lives
+      under the owner's own node, which only they read.
+    - **A refused profile write no longer stops sync.** `/users/{uid}` and the e-mail index
+      are written at the first sync after sign-in. If the rules ever refuse that (an address the
+      index cannot hold, say), sync logs it and goes on, instead of failing every time.
+    - **The two-phone check latency is measured by a probe, not by eye.**
+      `androidTest/.../probe/TwoPhoneProbe.kt` runs inside the installed, signed-in app on
+      both phones: A ticks „ping N", B answers with „pong N", A times the round trip (the echo
+      of decision 16). It is skipped without its argument, so CI never runs it. How to run it
+      is in docs/DEVELOPMENT.md.
+
+## Open questions
+
 1. ~~Where do shared lists live, now that `drive.file` cannot cross users?~~ Answered by
    decisions 19–21: in RTDB, and Drive leaves the app.
 2. **Firebase project created 2026-09-21.** Public ids so far:
@@ -731,7 +880,7 @@ Newest last. Every deviation from PLAN.md lands here **before** it is acted on.
    check stays useful after any console change:
    `curl -sL -d '{"idToken":"x"}' <script url>` must answer
    `{"ok":false,"error":"unauthenticated"}`, not an authorisation error page.
-8. **"Usuń moje dane" in the app?** The privacy page can only offer deletion by email until
+8. **"Usuń moje dane" in the app?** Phase 9 (decision 63). The privacy page can only offer deletion by email until
    the app has it. A Settings action that deletes the user's lists where they are the owner,
    leaves the others, and removes `/users/{uid}`, `/emailIndex`, `/fcmTokens`,
    `/userLists` and their photos is small once Phase 5 exists. It is proposed for Phase 5
@@ -741,7 +890,8 @@ Newest last. Every deviation from PLAN.md lands here **before** it is acted on.
    That would stop a stranger's Google account from using the quota even through our own
    APK, but every new user would need a manual step. ~~Phase 4 decides.~~ No allow-list
    (decision 60).
-10. **Can `/emailIndex` be squatted?** The rules cannot hash, so they cannot check that a key
+10. ~~**Can `/emailIndex` be squatted?**~~ Answered by decision 63: it is keyed by the e-mail
+    itself, checked against `auth.token.email`. The original question: the rules cannot hash, so they cannot check that a key
     is the sha256 of the writer's own email (decision 57). Phase 5, which reads the index for
     e-mail invites, decides whether that matters. One option: key by the email itself (dots
     encoded) and compare with `auth.token.email`.
