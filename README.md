@@ -12,8 +12,8 @@ The interface is in **Polish**. The code, comments and documentation are in Engl
 
 > **Status: early development. It works as a shopping list you can share: invite someone
 > by link or e-mail, and each of you sees the other's changes on the open list in about half
-> a second. Photos, dictation, the Eat My Way import and notifications for a closed app come
-> next.** [PLAN.md](PLAN.md) holds the specification and the phases (Phase 11, Google
+> a second, photos included. Dictation, the Eat My Way import and notifications for a closed
+> app come next.** [PLAN.md](PLAN.md) holds the specification and the phases (Phase 11, Google
 > Play, was dropped); [STATE.md](STATE.md) records what has been decided and what is still
 > open.
 > Phase 0, a spike on Drive sharing and the Google project, is done. Its verdict: another
@@ -39,7 +39,12 @@ The interface is in **Polish**. The code, comments and documentation are in Engl
 > open list is live: someone else's tick shows their initial and slides into „Kupione", and
 > „Ania ogląda" says who is looking. The edit sheet says when an item was edited and bought,
 > and „Sortowanie" shows a list by department, A–Z, or in your own order. Measured on two
-> phones: a tick reached the other in ≈ 0.5 s (p95). Phase 6, photos, is next.
+> phones: a tick reached the other in ≈ 0.5 s (p95).
+> Phase 6 is done: an item can carry a photo — taken with the camera or picked from the
+> gallery, without giving the app the camera, storage or photo permission. It is shrunk to at
+> most 800 px and 80 kB, turned the right way up and stripped of everything the camera wrote
+> into it, location above all, before it leaves the phone. It shows in the row and opens full
+> screen. Phase 7, dictation, is next.
 
 ## Screenshots
 

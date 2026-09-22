@@ -13,7 +13,7 @@ Any deviation from [PLAN.md](PLAN.md) must be recorded here before proceeding.
 | 3     | Lists & items on screen                | done    | 2026-09-21 |
 | 4     | Google sign-in & cloud persistence     | done    | 2026-09-22 |
 | 5     | Sharing & real-time                    | done    | 2026-09-22 |
-| 6     | Photos                                 | in-progress |           |
+| 6     | Photos                                 | done    | 2026-09-22 |
 | 7     | Voice input                            | pending |           |
 | 8     | Import from Eat My Way                 | pending |           |
 | 9     | Background, notifications & battery    | pending |           |
@@ -26,8 +26,8 @@ decision).
 The repository holds the plan, the workflow files, the repository hygiene (2026-09-18), the
 push sender's skeleton (`push/`, deployed), from Phase 1 the Android app's scaffold, from
 Phase 2 its local data layer, from Phase 3 its screens for private lists, from Phase 4
-Google sign-in with the lists kept in Firebase Realtime Database and, from Phase 5, sharing
-with other people and live changes.
+Google sign-in with the lists kept in Firebase Realtime Database, from Phase 5 sharing
+with other people and live changes, and from Phase 6 photos on items.
 
 **Phase 0 done (2026-09-21).** Under `drive.file`, a shared file is invisible to the other
 member's copy of the app. So shared lists and photos move to Firebase Realtime Database and
@@ -176,6 +176,54 @@ link opened `MainActivity` directly, with no browser. Only the debug key is list
 (decision 63). One mistake on the way: the first rules published were the Phase 4 file.
 It was the one on GitHub, since the Phase 5 rules were not pushed yet. Sharing was refused
 until the right file was published.
+
+**Phase 6 done (2026-09-22).** Items can carry a photo. „Zrób zdjęcie" (the camera,
+through a `FileProvider`) and „Wybierz z galerii" (the Photo Picker) in the edit sheet, with no
+camera, storage or media permission declared. The image is scaled to at most 800 px, turned by
+its EXIF orientation and encoded as WebP at the best quality that fits in 80 kB; the encoding
+leaves no EXIF, so no location travels. The photo shows in its row as a thumbnail and opens full
+screen with pinch-zoom, for a viewer too. It waits in `filesDir/photo-outbox` and is sent by
+`PhotoWorker` to `/photos/{listId}/{itemId}`; the item's `photoAt` follows only once that write
+is acknowledged. „Usuń zdjęcie" clears `photoAt` at once and removes the node after, unless
+someone put a newer photo there. Photos are cached in `cacheDir/photos`, capped at 50 MB,
+least-recently-used first, and a cached photo is never fetched again. Deleting a list removes
+its photos at once; an item's photo goes with its tombstone after 30 days. The rules cover all
+of it. Decisions 70–73. **What wakes the device:** `PhotoWorker`, one-shot and unique, with
+`NetworkType.CONNECTED`, only after a photo was set or removed and not yet sent. Nothing
+periodic; nothing else new.
+Verified: 81 rules tests on the Firebase emulator (18 new: who writes a photo, the caps, the
+five fields, the writer's own name, a newer `at`, a live item, a deleted list, removing one
+photo or all). Loosening the `by` check made the „signed by its writer" test fail. 94 JVM tests
+(14 new: the sizing search, the quality ladder, the EXIF swap, the cache's eviction, the photo
+node and the write shapes). 59 instrumented tests on the API 35 emulator (20 new). They cover
+the pipeline on real Android (a 12-megapixel JPEG with EXIF and GPS → 800 × 600, under 80 kB,
+no EXIF chunk left; a sideways photo comes out upright; pure noise shrinks until it fits; the
+app declares no camera, storage or media permission — read from the merged manifest at
+runtime), the two caches (the cap holds over fifty photos, a cached photo is never fetched
+twice, two rows asking at once fetch once, a waiting photo survives a restart and a half-written
+one is forgotten) and six two-phone flows over the fake server (a photo reaches the other phone
+and `photoAt` follows only the acknowledged write; a replacement wins and a removal never takes
+a newer photo; a photo removed while it was being sent does not come back; a viewer sees photos
+and cannot change them; a photo waits for its list's upload; deleting a list takes its photos,
+as does a 30-day tombstone). Removing the guard that checks the outbox after an upload made the
+„removed while it was being sent" test fail.
+**By hand on the emulator:** the camera (a real camera app), the Photo Picker (2560 × 1600 PNG
+→ 800 × 500, 4 kB), the thumbnail and the full-screen viewer.
+**By hand on two physical phones, two accounts** (S10e = A, S23 Ultra = B) against the real
+project: A photographed an item with the Samsung camera (a 1.9 MB JPEG → 450 × 800, 1.3 kB
+WebP); it showed on B's row **3.8 s** after the camera's „OK" (the camera's own return and two
+UI dumps included) and opened full screen there, upright. „Usuń zdjęcie" on A removed it from
+both phones and from `/photos` with no refusal. B's cache held both photos (13 kB and 59 kB).
+**Not verified:** the 50 MB cap on a phone (it was measured with a small cap on the emulator);
+HEIF from a Samsung gallery (the picker gave a JPEG); a photo taken while offline and sent
+later on a phone (the fake server covers it).
+**Found on the way:** the first photo was refused (`permission denied at photos/…`) because the
+project still ran the Phase 5 rules, and the app dropped it without a word. The rules were
+published, and the phase adds one log line when a photo is refused, and a paragraph in
+docs/DEPLOYMENT.md: publish Phase 6's rules **before** installing this build, because it also
+refuses to delete a list. Seen once on the emulator and not reproduced: the edit sheet closed
+itself when the camera returned. The test photo left on „mleko" in „Zakupy na sobote" is the
+owner's to remove.
 
 ## Decisions
 

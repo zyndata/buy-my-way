@@ -1,5 +1,6 @@
 package dev.gorny.buymyway.data.photo
 
+import android.util.Log
 import androidx.compose.ui.graphics.ImageBitmap
 import dev.gorny.buymyway.core.sync.NodeCodec
 import dev.gorny.buymyway.core.sync.RemoteWrites
@@ -122,7 +123,11 @@ class Photos(
                 if (next.remove) sendRemoval(next) else sendPhoto(uid, next)
             } catch (e: RemoteDenied) {
                 if (!sessionValid()) throw SyncEngine.SessionLost().apply { initCause(e) }
-                outbox.complete(next) // refused: someone put a newer photo, or the item is gone
+                // Refused: someone put a newer photo, the item is gone, or the rules live in the
+                // project are older than this build (docs/DEPLOYMENT.md). The photo is dropped,
+                // so say so: without this line it would leave the row with no word anywhere.
+                Log.w(TAG, "a photo was refused and dropped")
+                outbox.complete(next)
             }
         }
     }
@@ -177,6 +182,8 @@ class Photos(
     private class Answer<T>(val value: T)
 
     companion object {
+        private const val TAG = "BuyMyWayPhotos"
+
         /** The photo node of an item, read by a row that shows it; null if there is none. */
         fun decode(node: Any?): NodeCodec.Photo? = node?.asNode()?.let(NodeCodec::photoFromNode)
     }
