@@ -23,6 +23,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -536,22 +537,32 @@ class ListViewModel(
      */
     private fun watchRemoteTicks() {
         viewModelScope.launch {
-            val me = live?.myUid()
-            var before: Map<String, Item>? = null
-            repo.observeItems(listId).collect { items ->
-                val previous = before
-                before = items.associateBy { it.id }
-                if (previous == null) return@collect
-                for (item in items) {
-                    val old = previous[item.id]
-                    val newlyTicked = item.checked && (old == null || !old.checked)
-                    if (!newlyTicked || item.checkedBy == null || item.checkedBy == me) continue
-                    val initial = initialOf(item.checkedBy)
-                    remoteLingering.update { it + (item.id to initial) }
-                    launch {
-                        delay(REMOTE_LINGER_MS)
-                        remoteLingering.update { it - item.id }
-                    }
+            try {
+                watchTicks(live?.myUid())
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // A database that cannot be read any more must not take the app down with it;
+                // someone else's tick simply stops being animated until the screen is reopened.
+            }
+        }
+    }
+
+    private suspend fun watchTicks(me: String?) = coroutineScope {
+        var before: Map<String, Item>? = null
+        repo.observeItems(listId).collect { items ->
+            val previous = before
+            before = items.associateBy { it.id }
+            if (previous == null) return@collect
+            for (item in items) {
+                val old = previous[item.id]
+                val newlyTicked = item.checked && (old == null || !old.checked)
+                if (!newlyTicked || item.checkedBy == null || item.checkedBy == me) continue
+                val initial = initialOf(item.checkedBy)
+                remoteLingering.update { it + (item.id to initial) }
+                launch {
+                    delay(REMOTE_LINGER_MS)
+                    remoteLingering.update { it - item.id }
                 }
             }
         }

@@ -22,6 +22,8 @@ import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelStore
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -95,9 +97,17 @@ class ScreenFlowsTest {
 
     @After
     fun close() {
+        // A view model built by hand is never cleared, so its flows would go on querying a
+        // database this test is about to close, and the crash would land on the next test.
+        store.clear()
         scope.cancel()
         db.close()
     }
+
+    private val store = ViewModelStore()
+
+    /** Keeps [vm] until [close], which clears it as a screen leaving the stack would. */
+    private fun <T : ViewModel> kept(vm: T): T = vm.also { store.put(it.hashCode().toString(), it) }
 
     private fun text(id: Int, vararg args: Any) = context.getString(id, *args)
 
@@ -122,7 +132,7 @@ class ScreenFlowsTest {
     }
 
     private fun showList(listId: String, live: ListLive? = null): ListViewModel {
-        val vm = ListViewModel(repo, listId, { _, _ -> emptyList() }, scope, live)
+        val vm = kept(ListViewModel(repo, listId, { _, _ -> emptyList() }, scope, live))
         compose.setContent { BuyMyWayTheme { ListScreen(vm, onBack = {}, onOpenCategoryOrder = {}, onOpenShare = {}) } }
         // The screen (and its add bar) appears once Room has answered.
         waitFor { exists(hasTestTag("addField")) }
@@ -163,10 +173,12 @@ class ScreenFlowsTest {
     @Test
     fun aCategoryDraggedInTheEditorKeepsItsNewPlace() {
         val listId = runBlocking { repo.createList("Sobota") }
-        val vm = CategoryOrderViewModel(
-            categories = repo.observeList(listId).map { it?.categories.orEmpty() },
-            save = { repo.setCategoryOrder(listId, it) },
-            edits = null,
+        val vm = kept(
+            CategoryOrderViewModel(
+                categories = repo.observeList(listId).map { it?.categories.orEmpty() },
+                save = { repo.setCategoryOrder(listId, it) },
+                edits = null,
+            ),
         )
         compose.setContent { BuyMyWayTheme { CategoryOrderScreen(vm, R.string.title_category_order, onBack = {}) } }
         waitFor { exists(hasTestTag("drag:warzywa")) }
@@ -206,7 +218,7 @@ class ScreenFlowsTest {
         val prefs = ListOrderPreferences(
             PreferenceDataStoreFactory.create { File(context.cacheDir, "test-${UUID.randomUUID()}.preferences_pb") },
         )
-        val vm = ListsViewModel(repo, prefs, scope)
+        val vm = kept(ListsViewModel(repo, prefs, scope))
         compose.setContent { BuyMyWayTheme { ListsScreen(vm, onOpenList = {}, onOpenSettings = {}, onOpenShare = {}) } }
         waitFor { exists(hasText("Niedziela")) }
 
@@ -325,7 +337,7 @@ class ScreenFlowsTest {
             // The list belongs to Ania; this phone's user is signed out, so only a viewer's copy.
             db.lists().upsert(db.lists().get(listId)!!.copy(ownerUid = ANIA))
         }
-        val vm = ListViewModel(repo, listId, { _, _ -> emptyList() }, scope)
+        val vm = kept(ListViewModel(repo, listId, { _, _ -> emptyList() }, scope))
         compose.setContent { BuyMyWayTheme { ListScreen(vm, onBack = {}, onOpenCategoryOrder = {}, onOpenShare = {}) } }
         waitFor { exists(hasTestTag("readOnly")) }
         assertEquals(false, exists(hasTestTag("addField")))
@@ -357,7 +369,7 @@ class ScreenFlowsTest {
             repo.addItem(listId, "mleko").itemId.also { repo.setPhotoAt(it, 1_000) }
         }
         val photos = FakePhotos()
-        val vm = ListViewModel(repo, listId, { _, _ -> emptyList() }, scope, photos = photos)
+        val vm = kept(ListViewModel(repo, listId, { _, _ -> emptyList() }, scope, photos = photos))
         compose.setContent { BuyMyWayTheme { ListScreen(vm, onBack = {}, onOpenCategoryOrder = {}, onOpenShare = {}) } }
         waitFor { exists(hasTestTag("photo:mleko")) }
         assertEquals("only the item with a photo has one", false, exists(hasTestTag("photo:chleb")))
@@ -389,7 +401,7 @@ class ScreenFlowsTest {
             repo.addItem(listId, "mleko").itemId.also { repo.setPhotoAt(it, 1_000) }
             db.lists().upsert(db.lists().get(listId)!!.copy(ownerUid = ANIA))
         }
-        val vm = ListViewModel(repo, listId, { _, _ -> emptyList() }, scope, photos = FakePhotos())
+        val vm = kept(ListViewModel(repo, listId, { _, _ -> emptyList() }, scope, photos = FakePhotos()))
         compose.setContent { BuyMyWayTheme { ListScreen(vm, onBack = {}, onOpenCategoryOrder = {}, onOpenShare = {}) } }
         waitFor { exists(hasTestTag("readOnly")) && exists(hasTestTag("photo:mleko")) }
         compose.onNodeWithTag("photo:mleko").performClick()

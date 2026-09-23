@@ -11,6 +11,8 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextReplacement
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelStore
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -74,9 +76,15 @@ class DictationFlowsTest {
 
     @After
     fun close() {
+        // Cleared as a screen leaving the stack would, so no flow outlives the database.
+        store.clear()
         scope.cancel()
         db.close()
     }
+
+    private val store = ViewModelStore()
+
+    private fun <T : ViewModel> kept(vm: T): T = vm.also { store.put(it.hashCode().toString(), it) }
 
     private fun text(id: Int, vararg args: Any) = context.getString(id, *args)
 
@@ -105,7 +113,7 @@ class DictationFlowsTest {
     private val voice = SilentVoice()
 
     private fun showList(listId: String): ListViewModel {
-        val vm = ListViewModel(repo, listId, { _, _ -> emptyList() }, scope)
+        val vm = kept(ListViewModel(repo, listId, { _, _ -> emptyList() }, scope))
         compose.setContent { BuyMyWayTheme { ListScreen(vm, onBack = {}, onOpenCategoryOrder = {}, onOpenShare = {}, voice = voice) } }
         waitFor { exists(hasTestTag("addField")) }
         return vm
