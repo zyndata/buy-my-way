@@ -140,6 +140,7 @@ private fun listViewModel(container: AppContainer, listId: String) = ListViewMod
     repo = container.lists,
     listId = listId,
     dictionary = container::suggestNames,
+    knownNames = container::knownNames,
     commitScope = container.appScope,
     live = container.listLive,
     photos = container.photos,

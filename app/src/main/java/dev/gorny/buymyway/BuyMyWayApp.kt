@@ -7,6 +7,7 @@ import androidx.lifecycle.ProcessLifecycleOwner
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.FirebaseDatabase
 import dev.gorny.buymyway.core.categorize.Categorizer
+import dev.gorny.buymyway.core.voice.Dictation
 import dev.gorny.buymyway.core.model.SortView
 import dev.gorny.buymyway.core.sync.RemoteWrites
 import dev.gorny.buymyway.data.ListRepository
@@ -89,6 +90,12 @@ class AppContainer(context: Context) {
 
     /** Dictionary names for the add bar's autocomplete. */
     suspend fun suggestNames(typed: String, limit: Int): List<String> = categorizer().suggest(typed, limit)
+
+    /** Where one dictated thing ends and the next begins, when nothing was said between them. */
+    suspend fun knownNames(): Dictation.KnownNames {
+        val categorizer = categorizer()
+        return Dictation.KnownNames { words, from -> categorizer.knownNameLength(words, from) }
+    }
 
     // --- Account and sync (Phase 4) --------------------------------------------------------
 

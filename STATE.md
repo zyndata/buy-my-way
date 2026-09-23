@@ -264,9 +264,13 @@ the test hands it one that opens no microphone; the test also grants `RECORD_AUD
 `UiAutomation`, because an install for a test run grants nothing and the sheet refuses to
 listen without it. Reproduced here by putting the tablet emulator at a phone's size
 (`adb shell wm size 1080x2280`, `wm density 440`), where the suite is green again.
-**Not verified:** actual Polish speech recognised into items (the emulator has no audio in, and
-the phones are the owner's) — this is the acceptance criterion „works offline when the Polish
-pack is installed", and it stays for the owner to check on the S10e; the network retry after a
+**On the owner's S10e (2026-09-23), with real speech:** „dwa kilo ziemniaków, mleko, masło i
+chleb" was recognised **without any commas**, and the first build made two items out of it
+instead of four. The dictionary now decides where one thing ends (decision 78), and the sheet's
+buttons no longer collide on a phone (decision 79). Both are covered by new tests, and the build
+went back on the phone to be said again.
+**Not verified:** dictation with the phone offline — the acceptance criterion „works offline
+when the Polish pack is installed" — which stays for the owner to check on the S10e; the network retry after a
 language error; a phone with no recognizer at all (the rule is tested, the device is not); the
 Linux machine (open question 2). **To do:** `docs/screenshots/list-checking.png` shows the add
 bar without the mic, so it is one phase out of date; decision 47 leaves screenshots to the
@@ -1045,6 +1049,31 @@ Newest last. Every deviation from PLAN.md lands here **before** it is acted on.
     and the mic button would hide itself everywhere. **No background work, no service, no
     network of ours:** the speech goes to the system recognizer and the app keeps no audio
     (`onBufferReceived` is ignored, nothing is written to disk).
+
+78. **The dictionary says where one dictated thing ends (found on the owner's S10e,
+    2026-09-23).** Google's Polish recognizer writes **no commas at all**: „dwa kilo
+    ziemniaków, mleko, masło i chleb" arrives as „dwa kilo ziemniaków mleko masło i chleb", so
+    the phase as first written made two items („2 kg ziemniaków mleko masło" and „chleb"), not
+    four. Splitting on „i" alone is not enough, and speech gives nothing else to split on. So
+    `Categorizer.knownNameLength` answers „how many words from here name one thing I know", and
+    `Dictation` cuts wherever a known name follows a name already read, or a quantity followed
+    by one („mleko dwa chleby"). The 662-name dictionary (decision 40) was already there; 241 of
+    its entries have several words, which is what keeps „mleko kokosowe", „papier toaletowy" and
+    „sok pomarańczowy" whole, because the longest entry wins.
+    - **The match is stricter than for categorising**: a spoken word may carry at most two
+      letters beyond the entry („ziemniaków" ↔ „ziemniaki"), where categorising allows three.
+      Three would let a derived adjective start an item („pomarańczowy" ↔ „pomarańcze"), and in
+      Polish an adjective belongs to the noun before it.
+    - **A word it does not know never starts an item**, so „chleb wiejski" and „mleko od Zosi"
+      stay whole. The cost is the other way round: two things it does not know, said with
+      nothing between them, stay one line — and that is what the review sheet is for.
+    - Nothing is asked of the network, and the dictionary is the one already read from assets.
+      The user's own names (`name_history`) are **not** consulted yet; that would help for
+      names outside the dictionary and is a small addition later.
+79. **The sheet's mic button takes its own row.** On the S10e the three buttons did not fit
+    across the screen and „Dodaj wszystkie" was squeezed into a circle with its label broken
+    into „Doda j wszy stkie". „Dyktuj dalej" / „Zatrzymaj" is now full width above, with
+    „Anuluj" and „Dodaj wszystkie" on the row below.
 
 ## Open questions
 

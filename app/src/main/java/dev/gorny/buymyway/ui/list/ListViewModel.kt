@@ -117,6 +117,8 @@ class ListViewModel(
     private val commitScope: CoroutineScope,
     private val live: ListLive? = null,
     private val photos: ItemPhotos? = null,
+    /** The dictionary that says where one dictated item ends (Phase 7, STATE.md decision 78). */
+    private val knownNames: suspend () -> Dictation.KnownNames = { Dictation.KnownNames.NONE },
 ) : ViewModel() {
 
     val held = HeldDeletes(commitScope) { repo.deleteItem(it) }
@@ -290,7 +292,8 @@ class ListViewModel(
     /** One finished utterance becomes chips, each with the category it would be filed under. */
     private fun heard(utterance: String) {
         viewModelScope.launch {
-            val parsed = Dictation.parse(utterance)
+            val known = runCatching { knownNames() }.getOrDefault(Dictation.KnownNames.NONE)
+            val parsed = Dictation.parse(utterance, known)
             val heard = parsed.map { item ->
                 DictatedItem(
                     key = dictatedKeys++,

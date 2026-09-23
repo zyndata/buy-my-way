@@ -45,11 +45,77 @@ object Dictation {
     private val commas = Regex("""(?<!\d),|,(?!\d)|[;\n]""")
 
     /**
-     * Everything [utterance] names, in the order it was said. An empty utterance, or one that
-     * names nothing („dwa kilo" alone), gives an empty list.
+     * How many words, from the given one on, name one thing — the dictionary's answer
+     * ([dev.gorny.buymyway.core.categorize.Categorizer.knownNameLength]). Without it dictation
+     * cuts only where a word says so, which is all a phone gives when it writes no commas.
      */
-    fun parse(utterance: String): List<ParsedItem> =
-        segments(utterance).mapNotNull { segment -> ItemParser.parse(clean(segment)) }
+    fun interface KnownNames {
+        fun lengthAt(foldedWords: List<String>, from: Int): Int
+
+        companion object {
+            /** Knows nothing: „mleko masło" stays one item. */
+            val NONE = KnownNames { _, _ -> 0 }
+        }
+    }
+
+    /**
+     * Everything [utterance] names, in the order it was said. An empty utterance, or one that
+     * names nothing („dwa kilo" alone), gives an empty list. [known] tells the parser where one
+     * item ends and the next begins when nothing was said between them.
+     */
+    fun parse(utterance: String, known: KnownNames = KnownNames.NONE): List<ParsedItem> =
+        segments(utterance)
+            .map { clean(it) }
+            .flatMap { segment -> cut(segment, known) }
+            .mapNotNull(ItemParser::parse)
+
+    /**
+     * One cleaned segment as the things it names. A phone's recognizer writes „dwa kilo
+     * ziemniaków mleko masło" with nothing between the three, so the dictionary is asked where
+     * a name starts: a known name after a name already read begins a new item, and so does a
+     * quantity that is followed by one („mleko dwa chleby"). Words it does not know stay where
+     * they are, which keeps „ser żółty" and „papier toaletowy" whole.
+     */
+    private fun cut(segment: String, known: KnownNames): List<String> {
+        val words = segment.split(WHITESPACE).filter { it.isNotEmpty() }
+        if (words.size < 2) return listOf(segment)
+        val folded = words.map { TextKey.fold(it) }
+
+        val parts = mutableListOf<String>()
+        var current = mutableListOf<String>()
+        var named = false
+        var index = 0
+        while (index < words.size) {
+            val length = known.lengthAt(folded, index)
+            when {
+                length > 0 -> {
+                    if (named) {
+                        parts += current.joinToString(" ")
+                        current = mutableListOf()
+                    }
+                    repeat(length) { current += words[index++] }
+                    named = true
+                }
+                // „mleko dwa chleby": the quantity belongs to what comes after it, not before.
+                named && ItemParser.isQuantityToken(words[index]) && startsName(words, folded, index, known) -> {
+                    parts += current.joinToString(" ")
+                    current = mutableListOf(words[index])
+                    named = false
+                    index++
+                }
+                else -> current += words[index++]
+            }
+        }
+        if (current.isNotEmpty()) parts += current.joinToString(" ")
+        return parts
+    }
+
+    /** Whether the quantity at [index] is followed by a name, rather than ending the item. */
+    private fun startsName(words: List<String>, folded: List<String>, index: Int, known: KnownNames): Boolean {
+        var next = index
+        while (next < words.size && ItemParser.isQuantityToken(words[next])) next++
+        return next < words.size && known.lengthAt(folded, next) > 0
+    }
 
     /** The utterance cut into one part per item, still as they were said. */
     fun segments(utterance: String): List<String> =

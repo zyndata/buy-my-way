@@ -1,8 +1,11 @@
 package dev.gorny.buymyway.core.voice
 
+import dev.gorny.buymyway.core.categorize.Categorizer
 import dev.gorny.buymyway.core.parse.ParsedItem
+import dev.gorny.buymyway.core.text.TextKey
 import org.junit.Assert.assertEquals
 import org.junit.Test
+import java.io.File
 
 /**
  * The dictation parser (PLAN.md Phase 7, task 2: „60+ unit test cases from real utterances").
@@ -18,6 +21,29 @@ class DictationTest {
         assertEquals("„$utterance”", expected.toList(), Dictation.parse(utterance))
     }
 
+    /** Unit tests run with the module directory as the working directory. */
+    private val categorizer = Categorizer.fromJson(File("src/main/assets/products-pl.json").readText())
+
+    private val known = Dictation.KnownNames { words, from -> categorizer.knownNameLength(words, from) }
+
+    /** As a phone hands it over: no commas, and the dictionary to tell the things apart. */
+    private fun checkSpoken(utterance: String, vararg expected: ParsedItem) {
+        assertEquals("„$utterance”", expected.toList(), Dictation.parse(utterance, known))
+    }
+
+    @Test
+    fun theDictionaryKnowsWhereANameEnds() {
+        fun lengthOf(text: String) = categorizer.knownNameLength(TextKey.words(text), 0)
+
+        assertEquals(1, lengthOf("mleko"))
+        assertEquals(1, lengthOf("ziemniaków"))
+        assertEquals(2, lengthOf("mleko kokosowe"))
+        assertEquals(2, lengthOf("papier toaletowy"))
+        assertEquals("a word it does not know", 0, lengthOf("wiejski"))
+        assertEquals("a derived adjective is not the fruit", 0, lengthOf("pomarańczowy"))
+        assertEquals("a quantity is not a name", 0, lengthOf("dwa"))
+    }
+
     // --- The acceptance criterion ---------------------------------------------------------
 
     @Test
@@ -31,14 +57,65 @@ class DictationTest {
         )
     }
 
+    /**
+     * What a phone actually hands over: Google's Polish recognizer writes no commas at all
+     * (seen on an S10e, 2026-09-23). The dictionary says where one thing ends and the next
+     * begins, so the same sentence still becomes four items.
+     */
     @Test
     fun theSameSentenceWithoutAnyComma() {
+        checkSpoken(
+            "dwa kilo ziemniaków mleko masło i chleb",
+            item("ziemniaków", 2.0, "kg"),
+            item("mleko"),
+            item("masło"),
+            item("chleb"),
+        )
+    }
+
+    @Test
+    fun withoutTheDictionaryTheWordsStayTogether() {
+        // The parser alone cuts only where a word says so; the sheet is there to be corrected.
         check(
             "dwa kilo ziemniaków mleko masło i chleb",
-            // With nothing between them the middle words are one name, which the sheet is for.
             item("ziemniaków mleko masło", 2.0, "kg"),
             item("chleb"),
         )
+    }
+
+    @Test
+    fun spokenSentencesWithNoPunctuationAtAll() {
+        checkSpoken("mleko masło chleb", item("mleko"), item("masło"), item("chleb"))
+        checkSpoken("kup mleko chleb", item("mleko"), item("chleb"))
+        checkSpoken("pół kilo cebuli dwa ogórki", item("cebuli", 0.5, "kg"), item("ogórki", 2.0))
+        checkSpoken("mleko dwa chleby", item("mleko"), item("chleby", 2.0))
+        checkSpoken("jajka mleko masło ser chleb", item("jajka"), item("mleko"), item("masło"), item("ser"), item("chleb"))
+        checkSpoken("dwa litry mleka sześć jajek", item("mleka", 2.0, "l"), item("jajek", 6.0))
+    }
+
+    /** A name of several words is one thing, not two: the longest dictionary entry wins. */
+    @Test
+    fun namesOfSeveralWordsAreNotCutInHalf() {
+        checkSpoken("mleko kokosowe", item("mleko kokosowe"))
+        checkSpoken("papier toaletowy", item("papier toaletowy"))
+        checkSpoken("sok pomarańczowy", item("sok pomarańczowy"))
+        checkSpoken("ser żółty chleb", item("ser żółty"), item("chleb"))
+        checkSpoken("mleko kokosowe chleb", item("mleko kokosowe"), item("chleb"))
+        checkSpoken("papier toaletowy mleko", item("papier toaletowy"), item("mleko"))
+    }
+
+    /** A word the dictionary does not know stays with the name before it. */
+    @Test
+    fun anUnknownWordDoesNotStartAnItem() {
+        checkSpoken("chleb wiejski", item("chleb wiejski"))
+        checkSpoken("mleko od Zosi chleb", item("mleko od Zosi"), item("chleb"))
+    }
+
+    /** A quantity at the end belongs to the name before it, not to what follows. */
+    @Test
+    fun aQuantityThatEndsTheSentenceStaysWithItsName() {
+        checkSpoken("mleko dwa litry", item("mleko dwa litry"))
+        checkSpoken("ziemniaki 2 kg", item("ziemniaki", 2.0, "kg"))
     }
 
     // --- Separators -----------------------------------------------------------------------

@@ -123,19 +123,26 @@ fun DictationSheet(
                     )
                 }
             }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                FilledTonalButton(
-                    onClick = { if (state.busy) voice.stop() else listen() },
-                    modifier = Modifier.testTag("dictateMore"),
-                ) {
-                    Icon(
-                        painterResource(if (state.busy) R.drawable.ic_stop else R.drawable.ic_mic),
-                        contentDescription = null,
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(stringResource(if (state.busy) R.string.action_stop_dictating else R.string.action_dictate_more))
-                }
-                Spacer(Modifier.weight(1f))
+            // Three buttons do not fit across a phone, so the mic takes its own row: on a small
+            // screen the last of a Row is squeezed to a circle with its label broken up.
+            FilledTonalButton(
+                onClick = { if (state.busy) voice.stop() else listen() },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("dictateMore"),
+            ) {
+                Icon(
+                    painterResource(if (state.busy) R.drawable.ic_stop else R.drawable.ic_mic),
+                    contentDescription = null,
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(if (state.busy) R.string.action_stop_dictating else R.string.action_dictate_more))
+            }
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.End,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
                 TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
                 Spacer(Modifier.width(8.dp))
                 Button(

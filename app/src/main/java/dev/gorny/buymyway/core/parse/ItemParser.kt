@@ -80,6 +80,17 @@ object ItemParser {
         return ParsedItem(name, quantity, unit)
     }
 
+    /**
+     * Whether [token] is a number, a number word or a unit — something that says *how much*
+     * rather than *what*. Dictation uses it to see where an item without a comma begins.
+     */
+    fun isQuantityToken(token: String): Boolean {
+        val bare = token.trim()
+        if (number.matches(bare) || times.matches(bare) || numberWithUnit.matches(bare)) return true
+        val folded = TextKey.fold(bare.removeSuffix("."))
+        return folded.isNotEmpty() && (folded in units || folded in numberWords)
+    }
+
     /** The text split into the parts [parseAll] reads, untrimmed. */
     fun segments(text: String): List<String> = text.split(separator)
 
