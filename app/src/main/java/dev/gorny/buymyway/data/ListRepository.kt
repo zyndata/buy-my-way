@@ -1,6 +1,8 @@
 package dev.gorny.buymyway.data
 
 import androidx.room.withTransaction
+import dev.gorny.buymyway.core.imports.ImportPlan
+import dev.gorny.buymyway.core.imports.ImportedItem
 import dev.gorny.buymyway.core.model.BuiltinCategories
 import dev.gorny.buymyway.core.model.Item
 import dev.gorny.buymyway.core.model.ItemContent
@@ -32,6 +34,11 @@ import java.util.UUID
 
 /** A name the add bar can offer, with the category it was last filed under. */
 data class NameSuggestion(val name: String, val categoryId: String)
+
+/** What one import did, so the screen can say it in a sentence. */
+data class ImportSummary(val added: Int, val summed: Int, val revived: Int) {
+    val total: Int get() = added + summed
+}
 
 /**
  * The one way the app changes its lists (PLAN.md Phase 2, task 3).
@@ -102,6 +109,21 @@ class ListRepository(
     /** Every known, undeleted item of a list, ticked or not: what the screen diffs for remote ticks. */
     fun observeItems(listId: String): Flow<List<Item>> =
         db.items().observeForList(listId).map { rows -> rows.map { it.toDomain() } }.distinctUntilChanged()
+
+    /**
+     * The lists an import may be poured into: the ones this user owns, and the shared ones
+     * where they edit (PLAN.md Phase 8, task 3). A viewer's lists are not offered at all,
+     * rather than refused after the fact.
+     */
+    fun observeEditableLists(): Flow<List<ListSummary>> =
+        combine(observeLists(), observeAllMembers()) { lists, members ->
+            val me = actor()
+            lists.filter { summary ->
+                val list = summary.list
+                list.ownerUid == null || list.ownerUid == me ||
+                    members.any { it.listId == list.id && it.uid == me && it.role == Role.EDITOR }
+            }
+        }.distinctUntilChanged()
 
     /** Everyone the lists on this phone are shared with. */
     fun observeAllMembers(): Flow<List<Member>> =
@@ -211,6 +233,80 @@ class ListRepository(
         commit(listOf(Op.ItemPut(newId(), listId, actor(), at, itemId, content)))
         remember(itemName, category, at)
         AddResult.Added(itemId)
+    }
+
+    /**
+     * A whole shared text into one list, as one batch of ops (PLAN.md Phase 8, task 3). What it
+     * does is decided by [ImportPlan] first: a line that names something the list already holds,
+     * in the same unit, grows that item's quantity instead of adding a second row, and one
+     * sitting in „Kupione" comes back (decision 36). A heading the list has no category for
+     * becomes one; a line that had no heading is categorised as a typed one would be.
+     */
+    suspend fun importItems(listId: String, items: List<ImportedItem>): ImportSummary = db.withTransaction {
+        val list = liveList(listId)
+        val existing = db.items().getAllForList(listId).map { it.toDomain() }
+        val plan = ImportPlan.of(items, list, existing)
+        if (plan.isEmpty) return@withTransaction ImportSummary(0, 0, 0)
+
+        val at = nextAt()
+        val uid = actor()
+        val ops = mutableListOf<Op>()
+
+        // Headings this list has no category for. They are created once, and the list's walk
+        // order gains them all in a single put, so the batch stays one write per node.
+        val byName = db.categories().getAllForList(listId).map { it.toDomain() }
+            .filter { Merge.isVisible(it) }
+            .associateBy { TextKey.fold(it.name) }
+        val made = mutableMapOf<String, String>()
+        fun categoryFor(name: String): String {
+            val key = TextKey.fold(name)
+            byName[key]?.let { return it.id }
+            return made.getOrPut(key) {
+                val id = newId()
+                ops += Op.CategoryPut(newId(), listId, uid, at, id, cleanName(name, TextLimits.CATEGORY_NAME), builtin = false)
+                id
+            }
+        }
+
+        val sortKeys = mutableMapOf<String, Double>()
+        val added = plan.added.map { line ->
+            val name = cleanName(line.name, TextLimits.ITEM_NAME)
+            val category = when {
+                line.categoryId != null && BuiltinCategories.isBuiltin(line.categoryId) -> line.categoryId
+                line.categoryName != null -> categoryFor(line.categoryName)
+                else -> proposeCategory(listId, name)
+            }
+            val sortKey = sortKeys.getOrPut(category) { ListViews.nextSortKey(list, existing, category) }
+            sortKeys[category] = sortKey + 1.0
+            ops += Op.ItemPut(
+                newId(), listId, uid, at, newId(),
+                ItemContent(
+                    name = name,
+                    quantity = line.quantity,
+                    unit = cleanOptional(line.unit, TextLimits.UNIT),
+                    categoryId = category,
+                    sortKey = sortKey,
+                ),
+            )
+            name to category
+        }
+        if (made.isNotEmpty()) {
+            ops += Op.ListPut(newId(), listId, uid, at, list.name, list.categoryOrder + made.values)
+        }
+
+        for (grown in plan.summed) {
+            val item = existing.first { it.id == grown.itemId }
+            ops += Op.ItemPut(newId(), listId, uid, at, item.id, item.content.copy(quantity = grown.quantity))
+            if (grown.revive) ops += Op.ItemCheck(newId(), listId, uid, at, item.id, checked = false)
+        }
+
+        commit(ops)
+        added.forEach { (name, category) -> remember(name, category, at) }
+        ImportSummary(
+            added = plan.added.size,
+            summed = plan.summed.size,
+            revived = plan.summed.count { it.revive },
+        )
     }
 
     /**

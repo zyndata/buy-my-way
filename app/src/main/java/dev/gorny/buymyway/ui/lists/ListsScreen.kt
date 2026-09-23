@@ -1,5 +1,6 @@
 package dev.gorny.buymyway.ui.lists
 
+import android.content.ClipboardManager
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -45,6 +46,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
@@ -80,6 +82,8 @@ fun ListsScreen(
     onOpenList: (String) -> Unit,
     onOpenSettings: () -> Unit,
     onOpenShare: (String) -> Unit,
+    /** „Wklej ze schowka" (PLAN.md Phase 8, task 2); absent where the screen is tested alone. */
+    onPasteImport: (String) -> Unit = {},
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
     val lost by vm.lostLists.collectAsStateWithLifecycle(emptyList())
@@ -106,6 +110,9 @@ fun ListsScreen(
                     IconButton(onClick = onOpenSettings) {
                         Icon(painterResource(R.drawable.ic_settings), contentDescription = stringResource(R.string.title_settings))
                     }
+                    ListsMenu(onPaste = onPasteImport, onNothingToPaste = {
+                        messages.launch { vm.held.snackbar.showSnackbar(resources.getString(R.string.import_clipboard_empty)) }
+                    })
                 },
             )
         },
@@ -409,5 +416,34 @@ private fun ListCard(
             }
             DragHandle(reorder, summary.list.id)
         }
+    }
+}
+
+/**
+ * „Wklej ze schowka" (PLAN.md Phase 8, task 2). The clipboard is read only on that tap, which
+ * is why it lives behind the overflow rather than being looked at when the screen opens.
+ */
+@Composable
+private fun ListsMenu(onPaste: (String) -> Unit, onNothingToPaste: () -> Unit) {
+    var open by rememberSaveable { mutableStateOf(false) }
+    val context = LocalContext.current
+    IconButton(onClick = { open = true }, modifier = Modifier.testTag("listsMenu")) {
+        Icon(painterResource(R.drawable.ic_more_vert), contentDescription = stringResource(R.string.action_more))
+    }
+    DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+        DropdownMenuItem(
+            text = { Text(stringResource(R.string.action_paste_import)) },
+            onClick = {
+                open = false
+                val clip = context.getSystemService(ClipboardManager::class.java)
+                    ?.primaryClip
+                    ?.takeIf { it.itemCount > 0 }
+                    ?.getItemAt(0)
+                    ?.coerceToText(context)
+                    ?.toString()
+                if (clip.isNullOrBlank()) onNothingToPaste() else onPaste(clip)
+            },
+            modifier = Modifier.testTag("pasteImport"),
+        )
     }
 }

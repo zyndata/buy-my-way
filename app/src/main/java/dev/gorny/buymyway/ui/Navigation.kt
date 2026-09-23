@@ -19,6 +19,8 @@ import dev.gorny.buymyway.core.model.CategoryInfo
 import dev.gorny.buymyway.ui.categories.CategoryEdits
 import dev.gorny.buymyway.ui.categories.CategoryOrderScreen
 import dev.gorny.buymyway.ui.categories.CategoryOrderViewModel
+import dev.gorny.buymyway.ui.imports.ImportScreen
+import dev.gorny.buymyway.ui.imports.ImportViewModel
 import dev.gorny.buymyway.ui.list.ListScreen
 import dev.gorny.buymyway.ui.list.ListViewModel
 import dev.gorny.buymyway.ui.lists.ListsScreen
@@ -30,6 +32,7 @@ import dev.gorny.buymyway.ui.share.InviteViewModel
 import dev.gorny.buymyway.ui.share.ShareScreen
 import dev.gorny.buymyway.ui.share.ShareViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.getAndUpdate
 import kotlinx.coroutines.flow.map
 
 /** The app's routes, as PLAN.md's "Screens & navigation" names them. */
@@ -51,16 +54,28 @@ object Routes {
 
 private val listIdArgument = listOf(navArgument("listId") { type = NavType.StringType })
 
-/** [invites] carries the token of an invite link the app was opened with, until it is shown. */
+/**
+ * [invites] carries the token of an invite link the app was opened with, until it is shown, and
+ * [imports] the text shared into the app, until the import screen has taken it.
+ */
 @Composable
-fun BuyMyWayNavHost(invites: MutableStateFlow<String?> = MutableStateFlow(null)) {
+fun BuyMyWayNavHost(
+    invites: MutableStateFlow<String?> = MutableStateFlow(null),
+    imports: MutableStateFlow<String?> = MutableStateFlow(null),
+) {
     val container = (LocalContext.current.applicationContext as BuyMyWayApp).container
     val nav = rememberNavController()
     val invite by invites.collectAsStateWithLifecycle()
+    val shared by imports.collectAsStateWithLifecycle()
     LaunchedEffect(invite) {
         val token = invite ?: return@LaunchedEffect
         invites.value = null
         nav.navigate(Routes.invite(token))
+    }
+    // The text itself stays in the flow: the import screen's view model takes it when it is
+    // built, which is the one place that may not miss it.
+    LaunchedEffect(shared) {
+        if (shared != null) nav.navigate(Routes.IMPORT)
     }
     NavHost(navController = nav, startDestination = Routes.LISTS) {
         composable(Routes.LISTS) {
@@ -69,6 +84,7 @@ fun BuyMyWayNavHost(invites: MutableStateFlow<String?> = MutableStateFlow(null))
                 onOpenList = { nav.navigate(Routes.list(it)) },
                 onOpenSettings = { nav.navigate(Routes.SETTINGS) },
                 onOpenShare = { nav.navigate(Routes.share(it)) },
+                onPasteImport = { imports.value = it },
             )
         }
         composable(Routes.LIST, arguments = listIdArgument) { entry ->
@@ -129,9 +145,16 @@ fun BuyMyWayNavHost(invites: MutableStateFlow<String?> = MutableStateFlow(null))
                 onOpenSettings = { nav.navigate(Routes.SETTINGS) },
             )
         }
-        // Filled by Phase 8 (Import); nothing links here yet.
         composable(Routes.IMPORT) {
-            PlaceholderScreen(title = R.string.title_import, onBack = nav::popBackStack)
+            ImportScreen(
+                // Taking the text here empties the flow, so leaving and coming back cannot
+                // import it a second time, and the navigate above does not fire again.
+                vm = viewModel { ImportViewModel(imports.getAndUpdate { null }.orEmpty(), container.lists) },
+                onBack = { nav.popBackStack(Routes.IMPORT, inclusive = true) },
+                onImported = { listId, _ ->
+                    nav.navigate(Routes.list(listId)) { popUpTo(Routes.IMPORT) { inclusive = true } }
+                },
+            )
         }
     }
 }

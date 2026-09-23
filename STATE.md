@@ -15,7 +15,7 @@ Any deviation from [PLAN.md](PLAN.md) must be recorded here before proceeding.
 | 5     | Sharing & real-time                    | done    | 2026-09-22 |
 | 6     | Photos                                 | done    | 2026-09-22 |
 | 7     | Voice input                            | done    | 2026-09-23 |
-| 8     | Import from Eat My Way                 | pending |           |
+| 8     | Import from Eat My Way                 | done    | 2026-09-23 |
 | 8b    | „Moje produkty"                        | pending |           |
 | 9     | Background, notifications & battery    | pending |           |
 | 10    | Release engineering & 1.0              | pending |           |
@@ -28,7 +28,8 @@ The repository holds the plan, the workflow files, the repository hygiene (2026-
 push sender's skeleton (`push/`, deployed), from Phase 1 the Android app's scaffold, from
 Phase 2 its local data layer, from Phase 3 its screens for private lists, from Phase 4
 Google sign-in with the lists kept in Firebase Realtime Database, from Phase 5 sharing
-with other people and live changes, from Phase 6 photos on items, and from Phase 7 dictation.
+with other people and live changes, from Phase 6 photos on items, from Phase 7 dictation, and
+from Phase 8 the import of a shopping list shared out of Eat My Way.
 
 **Phase 0 done (2026-09-21).** Under `drive.file`, a shared file is invisible to the other
 member's copy of the app. So shared lists and photos move to Firebase Realtime Database and
@@ -283,6 +284,58 @@ phone with no recognizer at all (the rule is tested, the device is not); the Lin
 (open question 2). **To do:** `docs/screenshots/list-checking.png` shows the add
 bar without the mic, so it is one phase out of date; decision 47 leaves screenshots to the
 owner on a real phone.
+
+**Phase 8 done (2026-09-23), all three acceptance criteria met.** A shopping list shared out of
+Eat My Way becomes a list here. Buy My Way is a share target for `text/plain`, and Listy's
+overflow offers „Wklej ze schowka"; either opens Import, which shows what the text turned out to
+hold, grouped under the departments it was printed under, with „×" on any line that should not
+come. „Dokąd dodać" picks a list that exists or makes a new one named after the title's date
+range („tydzień 15.09 – 21.09"), and one tap writes the lot as a single batch of ops. A line
+that names something the list already holds, in the same unit, grows that item's quantity
+instead of adding a second row, and one sitting in „Kupione" comes back (decision 36). A heading
+the list has no category for becomes one; a line that had no heading is categorised as a typed
+one would be. Any other text — anything at all — becomes one item per non-empty line. Decisions
+82–87. **What wakes the device:** nothing new. No worker, no service, no listener; the clipboard
+is read only on that one tap, and the import writes through the same outbox as typing.
+No new dependency.
+Verified: 172 JVM tests (50 new: 32 for the format in `EatMyWayImportTest`, over a week's list
+in `src/test/resources/eatmyway-export.txt`, and 18 for the merge rules in `ImportPlanTest`).
+103 instrumented tests on the API 35 emulator (29 new): 20 in `ImportRepositoryTest` (the batch
+reaching Room at one `at`, the departments, the order within one, a new category and its place
+in the walk order, a heading the list already has, the name remembered for the add bar, an
+import that touches nothing it did not name) and 9 Compose flows in `ImportFlowsTest` (the
+preview grouped under its headings; **nothing reaching any list before the button**; one tap
+making the list and filling it; the new list's name changed first; a line removed in the
+preview never arriving; an existing list chosen instead; the same text twice summing; plain text
+as one line per name; a text that names nothing offering no button). 72 rules tests still pass —
+Phase 8 changes no rules, because an import writes ordinary items and categories through the
+ops the rules already cover. Lint clean.
+**The three acceptance criteria:** a week's list lands in the right category with its quantity
+in one tap after the preview (`aWeeksListLandsInItsDepartmentsWithItsQuantities`,
+`oneTapMakesTheListAndFillsIt`); the same text twice sums and adds no duplicate
+(`theSameTextTwiceSumsQuantitiesAndAddsNoDuplicate`, and the same on screen); any text becomes a
+line-per-item list and never a crash (`plainTextIsOneItemPerLine`, and `junkIsReadAsNamesAndNeverThrows`
+over ten shapes — an empty bullet, dashes alone, control characters, 5000 letters, emoji, HTML,
+JSON).
+The emulator here is a tablet, so it was put at a phone's size for the run (`wm size 1080x2280`,
+`wm density 440`), which is what Phase 7 learned to do (decision 79). The suite reports 104
+entries: 103 tests and `TwoPhoneProbe`, which skips itself without its argument (decision 69)
+and which AGP writes into the XML as a failure while the task still passes — the same entry CI
+has been green with since Phase 5.
+**Found on the way (a lesson about this machine, not about the code):** the first two full runs
+were red, and neither was the phase's doing. The first failed a Phase 7 dictation test on a
+5 s Compose timeout while `testDebugUnitTest` was running beside it — the instrumented suite
+must have the machine to itself. The second aborted inside the new `oneTapMakesTheListAndFillsIt`
+after ~90 tests, on an emulator that had been up since 21 September and by then was drawing
+frames in 6 s (`app_time_stats: avg=6147ms`); no assertion failed and no process crashed, the
+runner simply never got a verdict. Both passed when run alone. The suite was then run once more
+on a cold-booted emulator with nothing else on the machine: **104 entries, one probe skip, zero
+failures**. The import test's wait was raised from 10 s to 30 s anyway — the import is a few
+database writes, so the wait is only about how loaded the machine is, and waiting longer costs
+nothing when the work is already done.
+**Not verified:** sharing from the real Eat My Way app on a phone — the fixture is a
+reconstruction, not a capture (decision 84), so the owner's first real share is the last check;
+the Linux machine (open question 2).
 
 ## Decisions
 
@@ -1105,6 +1158,57 @@ Newest last. Every deviation from PLAN.md lands here **before** it is acted on.
     on the user's own private ones. Nothing is learned automatically — the user taps
     „Zapamiętaj" — because automatic learning is how a dictionary fills with typos.
 
+### 2026-09-23 — Phase 8 (import from Eat My Way)
+
+82. **The parser's package is `core/imports`, not PLAN.md's `core/import`.** `import` is a
+    Kotlin keyword, so a package of that name has to be written in backticks at every use site
+    and is awkward for anything reading the class from Java. One letter is cheaper. The file is
+    `EatMyWayImport.kt` and the class `EatMyWayImport`, exactly as the plan names them.
+83. **Phase 8 adds no dependency.** The parser is Kotlin's own regexes over the format's
+    vocabulary; the share target is a manifest intent filter (`ACTION_SEND`, `text/plain`, and
+    nothing else — no file, no image, no stream); the clipboard is the framework's
+    `ClipboardManager`, read through `getSystemService` only when „Wklej ze schowka" is tapped.
+    Compose's `LocalClipboard` is not used: the paste is a one-off read, not state a screen
+    watches, and the framework class does not move between Compose versions.
+84. **The „real export" test fixture is a faithful reconstruction, not a capture.** PLAN.md task
+    1 asks for „30+ tests including a real export". No text shared out of the real app exists in
+    or beside this repository, so `app/src/test/resources/eatmyway-export.txt` is built from the
+    closest real things: the **real ingredient names and real departments** of the owner's 27
+    Eat My Way recipes (the same 65 names decision 41 already took from a backup that stays out
+    of the repository), printed in the **exact shape** `formatShoppingList` writes — title,
+    blank line, department headings in shop-walk order, `• <name> — <amount>` with the
+    „(n g)" suffix where Eat My Way would add one. What it cannot prove is that the real app
+    still writes that shape; the owner's first real share is what closes that, and a captured
+    text can replace the file with no code change.
+85. **An import merges on the name and the unit, and measure forms count as one unit.** PLAN.md
+    says „sum same name+unit". The name is compared folded (`TextKey`), so „Ziemniaki" meets
+    „ziemniaki". The unit is compared through `EatMyWayImport.unitKey`, which folds Eat My Way's
+    household measures to the one word they mean, so „1 ząbek" and „2 ząbki" are three cloves
+    and not two rows — its `MEASURE_NAMES` table is the reference, and only the words are the
+    same, no code is shared. „2 szt." never meets „200 g". A line with no unit meets only
+    another with no unit. **The stored unit stays as the text wrote it**, so a row still reads
+    „2 ząbki" rather than a dictionary form; when two forms merge, the one already on the item
+    is kept, so „1 ząbek" plus „2 ząbki" reads „3 ząbek". That is bad Polish in a case that
+    needs two different printings of one measure in one list, and it is one tap to correct.
+    Two more rules the plan does not spell out: „no quantity" is not zero, so an uncounted line
+    leaves a counted item alone rather than emptying it; and a number outside what an item may
+    hold („99999 g") is still an amount, taken off the name and dropped, rather than left to
+    read „Ryż — 99999 g".
+86. **What the preview offers, and what it deliberately does not.** It shows every line grouped
+    under its heading with its amount, „×" removes one, „Dokąd dodać" picks the target and a new
+    list's name can be typed over. It does **not** edit names, quantities or departments: the
+    list screen and the edit sheet already do that, on real items, and a second editor here
+    would be a second place for the same rules to drift. Only lists this user may add to are
+    offered (`observeEditableLists`), so a viewer's list is never proposed and then refused.
+    Nothing is written before the button: the text is parsed in the view model and the first
+    write of any kind is the one batch of ops.
+87. **The shared text is held in a flow, and taken exactly once.** `MainActivity` puts what
+    `ACTION_SEND` carried into an `imports` flow, as it already does for an invite link
+    (decision 57's pattern), and the navigation graph opens Import when it is not null. The
+    import screen's view model takes the text with `getAndUpdate { null }` when it is built —
+    the one place that cannot miss it — so leaving the screen and coming back cannot import the
+    same text twice, and the navigate does not fire again.
+
 ## Open questions
 
 1. ~~Where do shared lists live, now that `drive.file` cannot cross users?~~ Answered by
@@ -1168,8 +1272,34 @@ Newest last. Every deviation from PLAN.md lands here **before** it is acted on.
     is the sha256 of the writer's own email (decision 57). Phase 5, which reads the index for
     e-mail invites, decides whether that matters. One option: key by the email itself (dots
     encoded) and compare with `auth.token.email`.
-11. **The README's list screenshot is a phase behind.** `docs/screenshots/list-checking.png`
-    shows the add bar without the mic that Phase 7 put there. Decision 47 leaves screenshots
-    to the owner on a real phone (`adb exec-out screencap`), so it is theirs to re-take; the
-    other two (`lists.png`, `list-bought.png`) are unchanged by Phase 7. A screenshot of
-    „Dyktowanie" would be worth adding at the same time.
+11. **Two of the README's screenshots are a phase behind.** `docs/screenshots/list-checking.png`
+    shows the add bar without the mic that Phase 7 put there, and after Phase 8 `lists.png`
+    shows Listy's top bar without the „⋮" that „Wklej ze schowka" lives in. Decision 47 leaves
+    screenshots to the owner on a real phone (`adb exec-out screencap`), so they are theirs to
+    re-take; `list-bought.png` is unchanged. Screenshots of „Dyktowanie" and of the import
+    preview would be worth adding at the same time.
+12. **A structured export from Eat My Way — an open question for *that* project, not this one**
+    (PLAN.md Phase 8, task 4; raised 2026-09-23). Phase 8 reads the plain text Eat My Way
+    already shares, and **no change to Eat My Way is required or requested**. What the text
+    cannot carry, and what a structured export would have to add if that project ever wants it:
+    - **The department as an id, not as a label.** The text prints „Nabiał i jaja"; the parser
+      matches that string back to `nabial`. Both apps already agree on the nine ids
+      (decision 9), so an export carrying `department: "nabial"` would survive a label being
+      reworded on either side. Today a reworded heading silently becomes a *custom category*
+      of the imported list — no data is lost, but the item stops meeting its department.
+    - **The amount as a number, a unit and a measure, not as printed text.** „2 ząbki (10 g)"
+      is parsed back into 2 + „ząbki", and the grams are thrown away. `{amount: 2, unit: "szt",
+      measureName: "ząbek", grams: 10}` would need no Polish plural table on this side
+      (decision 85) and would let a summed row print the right form.
+    - **A stable ingredient id.** Merging is by folded name today (decision 85), so „Ser żółty
+      gouda" and „Ser gouda" are two things. An `ingredientId` would merge them, and would let
+      a later import update a row rather than guess.
+    - **The list's identity and its range**, so importing the same week twice could be told
+      from importing two different weeks. Today they are the same text and therefore sum
+      (which is the wanted behaviour for the first, and arguably not for the second).
+    - **How it would travel:** the same share sheet, as `application/json` beside the
+      `text/plain` (a share can offer both, and an app that parses neither still gets the text),
+      or an App Link into `buymyway://`. Either way the plain text stays, because it is what a
+      person can read in a messenger.
+    Nothing here is planned. It is written down so that the next person to touch Eat My Way's
+    `formatShoppingList` knows what this side would gain.

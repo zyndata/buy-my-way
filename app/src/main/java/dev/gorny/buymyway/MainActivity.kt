@@ -14,6 +14,9 @@ class MainActivity : ComponentActivity() {
     /** An invite link the app was opened with (PLAN.md *Sharing & permissions*), until shown. */
     private val invites = MutableStateFlow<String?>(null)
 
+    /** Text shared into the app (PLAN.md Phase 8, task 2), until the import screen reads it. */
+    private val imports = MutableStateFlow<String?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
@@ -21,7 +24,7 @@ class MainActivity : ComponentActivity() {
         if (savedInstanceState == null) handle(intent)
         setContent {
             BuyMyWayTheme {
-                BuyMyWayNavHost(invites)
+                BuyMyWayNavHost(invites, imports)
             }
         }
     }
@@ -32,7 +35,13 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handle(intent: Intent?) {
-        if (intent?.action != Intent.ACTION_VIEW) return
-        intent.dataString?.let(InviteLinks::tokenOf)?.let { invites.value = it }
+        when (intent?.action) {
+            Intent.ACTION_VIEW -> intent.dataString?.let(InviteLinks::tokenOf)?.let { invites.value = it }
+            // Whatever the share sheet sent: the parser makes a list of any text (Phase 8).
+            Intent.ACTION_SEND -> intent.getCharSequenceExtra(Intent.EXTRA_TEXT)
+                ?.toString()
+                ?.takeIf { it.isNotBlank() }
+                ?.let { imports.value = it }
+        }
     }
 }

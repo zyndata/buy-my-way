@@ -51,6 +51,13 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="buymyway" android:host="i" />
             </intent-filter>
+            <!-- A shopping list shared out of Eat My Way, or any other text (PLAN.md Phase 8,
+                 task 2). Text is all this app accepts: no file, no image, no stream. -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
         </activity>
 
         <!-- The camera app writes the photo it takes through this (PLAN.md Phase 6, task 1).

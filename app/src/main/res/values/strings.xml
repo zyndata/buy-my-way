@@ -214,4 +214,31 @@
     <string name="voice_error_busy">Rozpoznawanie mowy jest teraz zajęte. Spróbuj za chwilę.</string>
     <string name="voice_error_language">Ten telefon nie rozpoznaje polskiej mowy. Doinstaluj język polski w ustawieniach telefonu.</string>
     <string name="voice_error_other">Nie udało się rozpoznać mowy. Spróbuj ponownie.</string>
+
+    <!-- Import from Eat My Way (PLAN.md Phase 8) -->
+    <string name="action_paste_import">Wklej ze schowka</string>
+    <string name="import_clipboard_empty">Schowek jest pusty.</string>
+    <string name="import_source_eatmyway">Lista z Eat My Way</string>
+    <string name="import_source_text">Wklejony tekst</string>
+    <string name="import_nothing">Nie znalazłem nic do dodania.</string>
+    <string name="import_no_category">Bez działu</string>
+    <string name="import_target">Dokąd dodać</string>
+    <string name="import_new_list">Nowa lista</string>
+    <string name="import_list_name">Nazwa nowej listy</string>
+    <string name="import_check">Sprawdź, zanim dodasz. „×” usuwa pozycję.</string>
+    <string name="action_remove_imported">Usuń „%1$s” z importu</string>
+    <string name="import_failed">Nie udało się dodać. Spróbuj ponownie.</string>
+    <string name="import_read_only">Tej listy nie możesz zmieniać.</string>
+    <plurals name="import_count">
+        <item quantity="one">%d pozycja</item>
+        <item quantity="few">%d pozycje</item>
+        <item quantity="many">%d pozycji</item>
+        <item quantity="other">%d pozycji</item>
+    </plurals>
+    <plurals name="action_import">
+        <item quantity="one">Dodaj %d pozycję</item>
+        <item quantity="few">Dodaj %d pozycje</item>
+        <item quantity="many">Dodaj %d pozycji</item>
+        <item quantity="other">Dodaj %d pozycji</item>
+    </plurals>
 </resources>

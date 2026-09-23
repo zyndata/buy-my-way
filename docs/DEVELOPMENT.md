@@ -178,6 +178,30 @@ needs a microphone. What needs a real one:
 - **A phone with no recognizer** has no mic button at all. `adb shell pm query-services -a
   android.speech.RecognitionService` says whether a device has one.
 
+## Import from Eat My Way (Phase 8)
+
+`EatMyWayImportTest` (JVM) reads a week's list from `app/src/test/resources/eatmyway-export.txt`,
+`ImportPlanTest` covers the merge rules, and `ImportFlowsTest` drives the preview screen. None of
+them needs the other app. What needs it:
+
+- **A real share.** Open Eat My Way, „Lista zakupów — tydzień", share, pick Buy My Way. The
+  preview should show every line under its department. The fixture is a faithful reconstruction
+  of the format, not a captured share (STATE.md decision 84), so this is the check that the real
+  app still writes what the parser reads. If it ever stops matching, drop the captured text into
+  that file — no code change is needed to test against it.
+- **Without the other app installed**, a share can be simulated:
+
+  ```sh
+  adb shell am start -a android.intent.action.SEND -t text/plain \
+    --es android.intent.extra.TEXT $'Lista zakupów — środa\n\nPieczywo\n• Chleb — 1 szt.' \
+    -n dev.gorny.buymyway/.MainActivity
+  ```
+
+  „Wklej ze schowka" in Listy's „⋮" reads the clipboard instead, which needs no share at all.
+- **Anything else shared into the app** — a note, a recipe, a wall of text — must become one item
+  per line and never a crash. `junkIsReadAsNamesAndNeverThrows` covers the shapes; the share
+  sheet is the place to try a real one.
+
 ## Reference material
 
 `D:\Work\eat-my-way\android\` (outside this repository) holds decompiled third-party apps kept
