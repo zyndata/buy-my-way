@@ -62,6 +62,11 @@ object RemoteWrites {
 
     fun emailIndex(key: String) = "emailIndex/$key"
 
+    /** This phone's FCM registration, written by its own user and read by nobody (decision 98). */
+    fun fcmTokens(uid: String) = "fcmTokens/$uid"
+
+    fun fcmToken(uid: String, token: String) = "fcmTokens/$uid/$token"
+
     /** How a role is written in `members` and `/userLists`. */
     fun roleValue(role: Role): String = role.name.lowercase(Locale.ROOT)
 
@@ -260,6 +265,26 @@ object RemoteWrites {
         "${userLists(uid)}/$listId" to null,
         "${presence(listId)}/$uid" to null,
     )
+
+    // --- Phase 9: the push registration and „Usuń moje dane" ---------------------------------
+
+    /** This device's FCM token, stamped by the server so the rules can insist on `now`. */
+    fun registerToken(uid: String, token: String): Map<String, Any?> =
+        mapOf(fcmToken(uid, token) to mapOf("at" to SERVER_TIME))
+
+    fun removeToken(uid: String, token: String): Map<String, Any?> = mapOf(fcmToken(uid, token) to null)
+
+    /**
+     * „Usuń moje dane" (decision 97), last: what is left of one user once their own lists are
+     * gone and they have left everybody else's. Each `/userLists` entry is removed by its own
+     * path, because the rules are written one list at a time and do not reach up to the parent.
+     */
+    fun forgetUser(uid: String, email: String?, listIds: Collection<String>): Map<String, Any?> = buildMap {
+        for (listId in listIds.distinct().sorted()) put("${userLists(uid)}/$listId", null)
+        put(user(uid), null)
+        put(fcmTokens(uid), null)
+        email?.let(::emailKey)?.let { put(emailIndex(it), null) }
+    }
 
     /** „Uczyń prywatną": every member goes, and with them their `/userLists` entries. */
     fun makePrivate(listId: String, ownerUid: String, memberUids: Collection<String>): Map<String, Any?> = buildMap {

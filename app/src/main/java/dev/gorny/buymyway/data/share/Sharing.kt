@@ -31,6 +31,8 @@ class Sharing(
     private val random: (ByteArray) -> Unit,
     private val clock: () -> Long = System::currentTimeMillis,
     private val timeoutMs: Long = SyncEngine.DEFAULT_TIMEOUT_MS,
+    /** Somebody was added to a list: ask the push sender for „Nowe udostępnione listy" (Phase 9). */
+    private val onShared: suspend (String) -> Unit = {},
 ) {
     data class Me(val uid: String, val name: String?)
 
@@ -94,6 +96,9 @@ class Sharing(
                 else -> {
                     ack(RemoteWrites.setMember(listId, uid, role, isNew = true))
                     engine.pull(user.uid, listId)
+                    // „Nowe udostępnione listy" (Phase 9): they are a member now, so the push
+                    // sender's own membership check passes.
+                    onShared(listId)
                     EmailInvite.Added(uid)
                 }
             }

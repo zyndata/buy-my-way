@@ -103,13 +103,47 @@ Check the verification on a phone with
 (*Execute as: me*, *Who has access: anyone*), with the script's Cloud project set to the
 Firebase project so `ScriptApp.getOAuthToken()` carries the `firebase.database` and
 `firebase.messaging` scopes. No service-account key exists anywhere. The deployment URL goes
-into `gradle.properties` as `BUYMYWAY_PUSH_ENDPOINT`. Re-deploying after a change is „Deploy →
-Manage deployments → edit → new version"; the URL does not change.
+into `gradle.properties` as `buymyway.pushUrl`, and the build turns it into
+`BuildConfig.PUSH_URL`; an **empty value builds an app that never pushes**, which is what a
+fork with no script of its own wants. Re-deploying after a change is „Deploy → Manage
+deployments → edit → new version"; the URL does not change.
 
 The Phase 0 skeleton has been deployed since 2026-09-21 (project "Buy My Way push" under the
-owner's account, Cloud project `270774397521`). Script properties: `FIREBASE_API_KEY`,
-`FIREBASE_PROJECT_ID`, and `FCM_TOKEN` for the skeleton's single target, which Phase 9
-replaces. What Phase 0 learned the hard way (STATE.md decisions 23 and 24):
+owner's account, Cloud project `270774397521`).
+
+### What Phase 9 changed, and what to do about it
+
+The script no longer pushes to one hard-coded device. It now checks that the caller is a
+member of the list, reads the other members' `/fcmTokens`, sends one data message per device,
+deletes a token FCM reports as unregistered, and rate-limits per list. Three things must be
+done in the Apps Script project **before the new app build can push anything**:
+
+1. **Paste both files again** (`push/Code.gs` and `push/appsscript.json`).
+2. **`appsscript.json` gained `https://www.googleapis.com/auth/firebase.database`**, without
+   which every database read answers 403 and no push ever goes out. A manifest change needs a
+   **new deployment version** (point 2 below) *and* a fresh authorisation (point 3): run
+   `doGet` in the editor and tick **every** box.
+3. **Add the script property `FIREBASE_DB_URL`** =
+   `https://buy-my-way-c3949-default-rtdb.europe-west1.firebasedatabase.app` (no trailing
+   slash). `FCM_TOKEN` is no longer read and can be deleted.
+
+Then check it, from any machine:
+
+```
+curl -s  <url>                              # {"ok":true}
+curl -sL -d '{"idToken":"x"}' <url>         # {"ok":false,"error":"unauthenticated"}
+```
+
+A **valid** token whose user is not on the list answers `{"ok":false,"error":"forbidden"}` —
+that is the phase's third acceptance criterion, and the way to get a real token by hand is
+`adb logcat` on a debug build, or the Firebase Auth REST `signInWithCustomToken`. Anything
+that answers with an HTML page means the authorisation is incomplete.
+
+**Publish the Phase 9 database rules before installing the Phase 9 app**, as with every phase
+since Phase 6: the older rules reject an unknown key, so a device that writes `/fcmTokens`
+against them is simply refused and never receives a push.
+
+What Phase 0 learned the hard way (STATE.md decisions 23 and 24) still holds:
 
 1. **Paste `appsscript.json` before the first deployment.** A deployment version keeps the
    manifest it was created with. A version made before the `oauthScopes` were pasted only has

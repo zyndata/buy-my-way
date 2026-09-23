@@ -4,7 +4,8 @@
   "runtimeVersion": "V8",
   "oauthScopes": [
     "https://www.googleapis.com/auth/script.external_request",
-    "https://www.googleapis.com/auth/firebase.messaging"
+    "https://www.googleapis.com/auth/firebase.messaging",
+    "https://www.googleapis.com/auth/firebase.database"
   ],
   "webapp": {
     "executeAs": "USER_DEPLOYING",

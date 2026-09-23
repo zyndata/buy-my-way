@@ -10,10 +10,11 @@ brought in from [Eat My Way](https://github.com/zyndata/eat-my-way) with one sha
 
 The interface is in **Polish**. The code, comments and documentation are in English.
 
-> **Status: early development. It works as a shopping list you can share: invite someone
-> by link or e-mail, and each of you sees the other's changes on the open list in about half
-> a second, photos included; you can dictate what to buy instead of typing it, and share a
-> week's list out of Eat My Way straight into it. Notifications for a closed app come next.**
+> **Status: early development, and feature-complete. It works as a shopping list you can share:
+> invite someone by link or e-mail, and each of you sees the other's changes on the open list in
+> about half a second, photos included; you can dictate what to buy instead of typing it, share a
+> week's list out of Eat My Way straight into it, and a phone with the app closed is told about
+> a change on a shared list. What is left is the 1.0 release itself.**
 > [PLAN.md](PLAN.md) holds the specification and the phases (Phase 11, Google Play, was
 > dropped); [STATE.md](STATE.md) records what has been decided and what is still
 > open.
@@ -61,7 +62,14 @@ The interface is in **Polish**. The code, comments and documentation are in Engl
 > to. Dictation then hears it as one thing of its own and puts it in that aisle. Nothing lands
 > there by itself: you add it, or tap „Zapamiętaj" on a line while dictating. The list is
 > private to your account and follows it to your other phone.
-> Phase 9, notifications for a closed app, is next.
+> Phase 9 is done: turn „Powiadomienia" on in Ustawienia and a phone with the app closed is
+> told when somebody changes a list you share — one notification per list, „Ania: +3, ✓ 2",
+> and tapping it opens that list already up to date. Nothing buzzes while you have the list
+> open, or for a list nobody else is on. There are switches for added items, bought items and
+> newly shared lists, and Ustawienia also has „Usuń moje dane", which removes from the server
+> everything belonging to your account. Nothing about *what* changed travels in the message,
+> and the app still starts no service and polls nothing.
+> Phase 10, the 1.0 release, is next.
 
 ## Screenshots
 

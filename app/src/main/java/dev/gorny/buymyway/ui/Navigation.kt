@@ -65,15 +65,24 @@ private val listIdArgument = listOf(navArgument("listId") { type = NavType.Strin
 fun BuyMyWayNavHost(
     invites: MutableStateFlow<String?> = MutableStateFlow(null),
     imports: MutableStateFlow<String?> = MutableStateFlow(null),
+    /** The list a tapped notification asks for (Phase 9, decision 95), until it is opened. */
+    opens: MutableStateFlow<String?> = MutableStateFlow(null),
 ) {
     val container = (LocalContext.current.applicationContext as BuyMyWayApp).container
     val nav = rememberNavController()
     val invite by invites.collectAsStateWithLifecycle()
     val shared by imports.collectAsStateWithLifecycle()
+    val opening by opens.collectAsStateWithLifecycle()
     LaunchedEffect(invite) {
         val token = invite ?: return@LaunchedEffect
         invites.value = null
         nav.navigate(Routes.invite(token))
+    }
+    // A notification was tapped: its list, already caught up by the worker the push started.
+    LaunchedEffect(opening) {
+        val listId = opening ?: return@LaunchedEffect
+        opens.value = null
+        nav.navigate(Routes.list(listId))
     }
     // The text itself stays in the flow: the import screen's view model takes it when it is
     // built, which is the one place that may not miss it.
@@ -115,6 +124,8 @@ fun BuyMyWayNavHost(
                         pendingOps = container.pendingOps,
                         signInWith = container::signIn,
                         signOutAll = container::signOut,
+                        notifications = container.notificationPrefs,
+                        deleteEverything = container::deleteAllMyData,
                     )
                 },
                 onBack = { nav.popBackStack(Routes.SETTINGS, inclusive = true) },

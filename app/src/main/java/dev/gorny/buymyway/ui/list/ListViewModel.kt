@@ -112,6 +112,12 @@ interface ListLive {
     fun sortView(listId: String): Flow<SortView>
 
     suspend fun setSortView(listId: String, view: SortView)
+
+    /**
+     * Whether this list is in front of the user right now (Phase 9). While it is, a push about
+     * it says nothing: the live listeners have already brought the change to the screen.
+     */
+    fun onScreen(listId: String, open: Boolean) = Unit
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -186,6 +192,9 @@ class ListViewModel(
         sweep()
         watchRemoteTicks()
     }
+
+    /** The screen was resumed or left (Phase 9): while it is shown, a push about it is silent. */
+    fun onScreen(open: Boolean) = live?.onScreen(listId, open) ?: Unit
 
     // --- Add bar --------------------------------------------------------------------------
 

@@ -78,6 +78,7 @@ import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.gorny.buymyway.R
 import dev.gorny.buymyway.core.model.Item
@@ -167,6 +168,13 @@ fun ListScreen(
         val itemId = galleryFor
         galleryFor = null
         if (uri != null && itemId != null) vm.setPhoto(itemId, opener(context, uri))
+    }
+
+    // While this list is resumed it is „on screen": a push about it is silent, and what it had
+    // counted is forgotten (Phase 9, decision 95).
+    LifecycleResumeEffect(vm.listId) {
+        vm.onScreen(true)
+        onPauseOrDispose { vm.onScreen(false) }
     }
 
     // Leaves the screen when the list is deleted, here or by someone else, or taken away.

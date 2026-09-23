@@ -4,6 +4,9 @@
     <!-- Dictation (PLAN.md Phase 7). Asked for at the first tap on the mic, never at start;
          the audio goes to the system recognizer only and is never stored by the app. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- Notifications (PLAN.md Phase 9). Asked for when the user turns them on in Ustawienia,
+         never at start; nothing at all is posted while that switch is off. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- A phone without a microphone still installs the app: it simply has no mic button. -->
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
 
@@ -59,6 +62,31 @@
                 <data android:mimeType="text/plain" />
             </intent-filter>
         </activity>
+
+        <!-- A change on a shared list, sent by the Apps Script (PLAN.md Phase 9, task 1). Data
+             only: a list id, three numbers and a name, never what changed. `exported` is
+             required by FCM, which is the only sender the framework lets reach it. -->
+        <service
+            android:name=".data.push.PushService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
+        <!-- The app's own delete intent, so a swiped notification stops counting. Not exported. -->
+        <receiver
+            android:name=".data.push.NotificationDismissed"
+            android:exported="false" />
+
+        <!-- Firebase Messaging's defaults, so a notification looks the same however it is
+             posted; the app builds its own, and these only cover the framework's fallback. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_notification" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="changes" />
 
         <!-- The camera app writes the photo it takes through this (PLAN.md Phase 6, task 1).
              TakePicture and the Photo Picker need no permission, and none is declared: no

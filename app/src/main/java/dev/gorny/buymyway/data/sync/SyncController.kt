@@ -45,6 +45,11 @@ class SyncController(
     private val scheduleOutbox: () -> Unit,
     /** Run after every successful flush: starts what waited for a list's upload (photos). */
     private val afterFlush: suspend () -> Unit = {},
+    /**
+     * Once per process for a signed-in account, with the connection held: the FCM registration
+     * and the 3-hourly catch-up (Phase 9, decisions 96 and 98).
+     */
+    private val afterSignIn: suspend (String) -> Unit = {},
     private val clock: () -> Long = System::currentTimeMillis,
 ) : DefaultLifecycleObserver {
 
@@ -121,6 +126,7 @@ class SyncController(
                     // Refused (an address the index cannot hold, say): the lists must still sync.
                     Log.w(TAG, "profile refused")
                 }
+                afterSignIn(uid)
                 profileSentFor = uid
             }
             engine.flush(uid)

@@ -142,6 +142,9 @@ class ListRepository(
     fun observeMembers(listId: String): Flow<List<Member>> =
         db.members().observeForList(listId).map { rows -> rows.map { it.toDomain() } }.distinctUntilChanged()
 
+    /** The members as last read, for the push sender (Phase 9) and anything else off a flow. */
+    suspend fun membersOf(listId: String): List<Member> = db.members().getForList(listId).map { it.toDomain() }
+
     /** Autocomplete for the add bar. */
     fun observeSuggestions(typed: String, limit: Int = 8): Flow<List<NameSuggestion>> =
         db.nameHistory().observeMatching(TextKey.fold(typed), limit)

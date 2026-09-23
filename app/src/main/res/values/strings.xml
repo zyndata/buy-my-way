@@ -256,4 +256,39 @@
     <string name="deleted_product">Usunięto „%1$s”</string>
     <string name="action_remember_product">Zapamiętaj</string>
     <string name="dictation_remembered">Zapamiętane</string>
+
+    <!-- Powiadomienia (Phase 9) -->
+    <string name="channel_changes">Zmiany na wspólnej liście</string>
+    <string name="channel_changes_hint">Ktoś dodał lub kupił coś na liście, którą z Tobą dzieli.</string>
+    <string name="channel_shared">Nowe udostępnione listy</string>
+    <string name="channel_shared_hint">Ktoś udostępnił Ci swoją listę zakupów.</string>
+    <string name="notify_a_list">Lista zakupów</string>
+    <string name="notify_added">+%1$d</string>
+    <string name="notify_checked">✓ %1$d</string>
+    <plurals name="notify_changed">
+        <item quantity="one">%d zmiana</item>
+        <item quantity="few">%d zmiany</item>
+        <item quantity="many">%d zmian</item>
+        <item quantity="other">%d zmian</item>
+    </plurals>
+    <string name="notify_by">%1$s: %2$s</string>
+    <string name="notify_shared_body">%1$s udostępnia Ci tę listę</string>
+    <string name="notify_somebody">Ktoś</string>
+
+    <string name="settings_notifications">Powiadomienia</string>
+    <string name="settings_notifications_enabled">Powiadamiaj o zmianach</string>
+    <string name="settings_notifications_hint">Tylko dla list, które dzielisz z kimś. Gdy masz listę otwartą na ekranie, nic nie brzęczy.</string>
+    <string name="settings_notify_added">Dodane produkty</string>
+    <string name="settings_notify_checked">Kupione produkty</string>
+    <string name="settings_notify_shared">Nowe udostępnione listy</string>
+    <string name="notifications_denied">Bez zgody na powiadomienia nic się nie pokaże. Możesz ją włączyć w ustawieniach aplikacji.</string>
+
+    <!-- Usuń moje dane (Phase 9, STATE.md decision 97) -->
+    <string name="settings_delete_data">Usuń moje dane</string>
+    <string name="settings_delete_data_hint">Kasuje z serwera wszystko, co należy do Twojego konta</string>
+    <string name="delete_data_title">Usunąć wszystkie dane?</string>
+    <string name="delete_data_body">Z serwera znikną: listy, których jesteś właścicielem (razem ze zdjęciami), Twoje członkostwo w cudzych listach, Twoje ustawienia i „Moje produkty”. Potem nastąpi wylogowanie i telefon też zostanie wyczyszczony. Tego nie da się cofnąć.</string>
+    <string name="delete_data_body_others">Kopie, które inni mają już na swoich telefonach, zostają u nich — to ich listy.</string>
+    <string name="action_delete_data">Usuń wszystko</string>
+    <string name="delete_data_failed">Nie udało się połączyć z serwerem. Nic nie zostało usunięte — spróbuj ponownie.</string>
 </resources>

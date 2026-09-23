@@ -17,7 +17,7 @@ Any deviation from [PLAN.md](PLAN.md) must be recorded here before proceeding.
 | 7     | Voice input                            | done    | 2026-09-23 |
 | 8     | Import from Eat My Way                 | done    | 2026-09-23 |
 | 8b    | „Moje produkty"                        | done    | 2026-09-23 |
-| 9     | Background, notifications & battery    | pending |           |
+| 9     | Background, notifications & battery    | done    | 2026-09-23 |
 | 10    | Release engineering & 1.0              | pending |           |
 | 11    | Google Play closed testing             | dropped | 2026-09-21 |
 
@@ -29,8 +29,8 @@ push sender's skeleton (`push/`, deployed), from Phase 1 the Android app's scaff
 Phase 2 its local data layer, from Phase 3 its screens for private lists, from Phase 4
 Google sign-in with the lists kept in Firebase Realtime Database, from Phase 5 sharing
 with other people and live changes, from Phase 6 photos on items, from Phase 7 dictation, and
-from Phase 8 the import of a shopping list shared out of Eat My Way, and from Phase 8b the
-user's own product words.
+from Phase 8 the import of a shopping list shared out of Eat My Way, from Phase 8b the
+user's own product words, and from Phase 9 notifications for a closed app.
 
 **Phase 0 done (2026-09-21).** Under `drive.file`, a shared file is invisible to the other
 member's copy of the app. So shared lists and photos move to Firebase Realtime Database and
@@ -413,6 +413,94 @@ half of the third criterion rests on the fake server and the rules tests; the ru
 project (the owner publishes them **before** installing this build — `docs/DEPLOYMENT.md` says
 why: the Phase 6 rules reject an unknown key under `prefs` and the whole preference push stops
 there); the Linux machine (open question 2).
+
+**Phase 9 done (2026-09-23).** A phone with the app closed is told about a change on a list it
+shares. „Powiadomienia" in Ustawienia is off until the user turns it on, which is the moment
+`POST_NOTIFICATIONS` is asked for; under it are switches for „Dodane produkty", „Kupione
+produkty" and „Nowe udostępnione listy". After RTDB acknowledges a change, the phone asks the
+Apps Script to push — one message per list, 5 s after that list goes quiet, and never for a
+private list, a list nobody else is on, or one every other member is looking at. The script
+checks that the caller is a member, rate-limits per list, reads the other members'
+`/fcmTokens`, sends one FCM v1 data message per device and deletes a token FCM reports as
+unregistered. The message carries a list id, three numbers and a name — no item name ever
+travels through FCM. The receiving phone posts „Ania: +3, ✓ 2 — Biedronka" on the „Zmiany na
+wspólnej liście" channel, adding to a tally it keeps per list, and a tap opens that list.
+Ustawienia also gained **„Usuń moje dane"** (decision 63's promise, open question 8), which
+removes from RTDB every list this user owns with its photos, their membership of everybody
+else's, and `/users/{uid}`, `/emailIndex`, `/fcmTokens` and `/userLists`, then signs out and
+empties the phone. Decisions 92–100.
+**What wakes the device, in full, after this phase:** the one-shot `OutboxWorker` (Phase 4),
+the one-shot `PhotoWorker` (Phase 6), a one-shot `CatchUpWorker` per list when a push arrives,
+and **one periodic `CatchUpWorker` every 3 hours** (`NetworkType.CONNECTED`,
+`requiresBatteryNotLow`), enqueued while signed in and cancelled at sign-out. That periodic run
+is the only periodic work in the app and exists only as insurance for a dropped push; it posts
+nothing. No foreground service, no alarm, no wakelock of the app's own, no polling. The
+catch-up worker is deliberately **not** expedited: below Android 12 WorkManager runs expedited
+work as a foreground service with a notification, which this project does not do, and the
+notification the user waits for is posted by `PushService` itself before any worker runs
+(decision 96). No new dependency: `firebase-messaging` has been on the classpath since Phase 1,
+and the one HTTPS POST is `HttpURLConnection`, not OkHttp (decision 92).
+Verified here: **81 rules tests** on the Firebase emulator (7 new: who may write `/fcmTokens`,
+that its node is exactly `{at: now}`, that **nobody** may read one, and the three writes „Usuń
+moje dane" makes — the owner's whole list with its photos and everyone's `/userLists` entry, a
+member leaving a list that stays its owner's, and the account's own nodes but nobody else's).
+Loosening the `at` check to accept a device's own clock made „the node is exactly { at: now }"
+fail, and it passed again when the rule was put back. **185 JVM tests** (11 new in
+`PushSignalTest`: which op counts as added, bought or changed; the sums; the order the parts
+are read in; the tally across two messages and across two people; a tally that survives being
+written down and a corrupt one that is simply no tally; a payload read as numbers; and what
+each switch hides). **152 instrumented entries on the API 35 emulator** (151 tests and the
+`TwoPhoneProbe` skip that AGP writes as a failure, decision 69; 31 new): 13 in `PushTest` (a
+token registered once and not rewritten, a rotated token replacing the old, sign-out taking it,
+a phone with no Play services simply not registering, another user's tokens unreadable; a burst
+of changes sent as one push with their sum, a private list and a one-member list waking nobody,
+a member who is looking at the list not being woken while one who is not still is, „shared" as
+its own kind, a background flush sending without waiting for the timer, and a build with no
+script URL never asking and never opening a connection), 11 in `NotificationsTest` (posted to
+the real notification manager and read back from the shade: nothing at all until the switch is
+on, „Ania: +3, ✓ 2" under the list's name on the right channel, a second message reading „+5,
+✓ 1" as one notification and not three, two people leaving it with no name, a list on screen
+neither shown nor counted, a switch hiding its own numbers and then nothing being posted at
+all, the „shared" sentence and channel, a list this phone does not know yet, opening the list
+taking the notification and its tally, both channels named in Polish, the deep link naming one
+list and nothing else, and `POST_NOTIFICATIONS` and `RECORD_AUDIO` being the only permissions
+the app ever asks a person for), 4 in `CatchUpWorkerTest` (the 3-hour period and its two
+constraints, a run per list that waits for a network, `KEEP` not restarting the clock at every
+sign-in, and sign-out leaving no periodic work) and 2 in `SyncEngineTest` (what is pushed about
+is counted by kind — two added, one bought, one edit and one rename — and a change that never
+reached RTDB is never pushed about, then announced exactly once when the network comes back).
+Lint clean.
+**The emulator, not the phone.** The owner's S10e was connected over `adb` but asleep and
+behind its lock screen, so every Compose test failed with „No compose hierarchies found in the
+app" — the activity cannot come to the front on a locked phone. The suite was run on the API 35
+emulator at CI's size instead (`wm size 1080x1920`, `wm density 480`, decision 79's lesson).
+Two of the new tests failed on the first run and were right to: a notification read straight
+back from the shade races the system process, so the tests now wait for it, and one test's
+`runBlocking` block ended in an expression, which JUnit rejects as „should be void".
+**Not verified — and this is most of the phase's acceptance:**
+- **The push end to end.** The Apps Script has *not* been redeployed: the finished `Code.gs`,
+  the new `firebase.database` scope in `appsscript.json` and the new `FIREBASE_DB_URL` script
+  property are in the repository, and `docs/DEPLOYMENT.md` says exactly what to do. Until that
+  is done and the Phase 9 rules are published, no push can go out at all. **The owner does
+  both before installing this build.**
+- **„A notification within 5 s on Wi-Fi and mobile data, p95 recorded"** (criterion 1) and
+  **„tapping it opens the list already updated"**: two phones and two accounts, the owner's to
+  do. Phase 0 measured the transport at 1.7 s warm and 2.7 s to a killed app (decision 24),
+  and the work this phase adds on top is a Room read and a DataStore edit, so the budget looks
+  comfortable — but that is an argument, not a measurement.
+- **The overnight battery check** (criterion 2): „both phones idle overnight, the app absent
+  from the battery screen, `batterystats` showing no wakelocks outside worker runs". Needs a
+  night and two phones. What *is* checked here is the shape of the background work: the
+  constraints, that there is exactly one periodic worker, and that the app asks for no
+  wakelock, alarm or battery-optimisation permission of its own.
+- **The endpoint refusing a request** (criterion 3): `curl` against the *old* deployment proves
+  nothing about the new one, so it waits for the redeployment. The commands are in
+  `docs/DEPLOYMENT.md`.
+- **Doze** (`adb shell dumpsys deviceidle force-idle`): needs a real push.
+- **Criterion 4, „notifications off → no notification, but the list is still fresh on open"**,
+  is covered by tests on both halves (`nothingIsShownUntilTheUserTurnsNotificationsOn`, and the
+  catch-up path that runs whatever the switches say) but not yet on a phone.
+- The Linux machine (open question 2).
 
 ## Decisions
 
@@ -1321,6 +1409,103 @@ Newest last. Every deviation from PLAN.md lands here **before** it is acted on.
     button reads „Zapamiętane"; nothing else in the sheet writes anything anywhere (task 2's
     „never on its own").
 
+### 2026-09-23 — Phase 9 (background, notifications & the battery verdict)
+
+92. **Phase 9 adds no dependency, and the one HTTPS call is `HttpURLConnection`, not OkHttp.**
+    `firebase-messaging` has been on the classpath since Phase 1 and is only now called, so it
+    is not new. PLAN.md's stack list names **OkHttp** „for the two plain HTTPS calls the app
+    makes outside Firebase: the push endpoint (Phase 9) and the GitHub update check (Phase
+    10)". Phase 9 makes one POST of ~200 bytes to one URL and reads a short JSON answer it
+    mostly ignores; `java.net.HttpURLConnection` does that in about forty lines, on a thread
+    the caller already owns. This is the same call decision 53 made about
+    `kotlinx-coroutines-play-services` and decision 70 about Coil: a library earns its place
+    when it carries weight, and one POST does not. Phase 10 may add OkHttp for the update
+    check if it wants it; nothing here stops it.
+93. **What the client sends, when, and what the payload carries.** PLAN.md's *Push sender*
+    says `POST {listId, kind}` „after a change is written, unless every other member is
+    present", debounced 5 s per list, and an FCM payload of `{listId, kind, count, actor}`.
+    Two refinements:
+    - **The counts travel per kind, not as one number.** The notification the plan asks for is
+      „Ania: +3, ✓ 2 — Biedronka", which one `count` cannot say. So the POST carries
+      `{listId, added, checked, changed}` and the data message carries all three plus `count`
+      (their sum), `kind` (which channel: `changes` or `shared`) and `actor` (the sender's
+      display name, which the other phones need to write „Ania" without a second read).
+      `core/push/PushSignal.kt` folds the ops that were just acknowledged into those three
+      numbers, and it is a pure function, so the JVM tests own it.
+    - **Only a shared list with somebody else on it is ever pushed about**, and only after the
+      ops are acknowledged — never before, so a push can never announce a change RTDB refused.
+      Presence is read once (`/lists/{listId}/presence`) while the connection is already open;
+      if every other member's presence is live, nothing is sent, because their screens have
+      the change already (that is what PLAN.md *Storage layout* says presence is for).
+    - The endpoint's URL is public by design (CLAUDE.md), so it lives in `gradle.properties`
+      as `buymyway.pushUrl` and reaches the code as a `BuildConfig` field. An empty value
+      switches pushing off, which is what every test and every fork without the script gets.
+94. **The notification switches are a device setting, not an account one.** The master switch
+    and the three per-kind switches („Dodane produkty", „Kupione produkty", „Nowe udostępnione
+    listy") live in DataStore and are **not** mirrored to `/users/{uid}/prefs`. One person may
+    carry the phone that should buzz in the shop and leave the tablet quiet, and that is a
+    property of the phone, not of the account. It also keeps the preference push (Phase 4,
+    decision 59) unchanged, and with it the rules. `POST_NOTIFICATIONS` is asked for at the
+    moment the master switch is turned on, never at start; a refusal leaves the switch off
+    with a sentence and a way to the app's settings, exactly as the microphone does
+    (decision 77).
+95. **A push never carries what changed, and the tally that makes „+3, ✓ 2" lives on the
+    phone.** The data message holds a list id, three numbers and a display name — no item
+    name ever travels through FCM (PLAN.md *Security*). The receiving phone adds the numbers
+    to a per-list tally in DataStore, so a second push five minutes later reads „+5, ✓ 3" and
+    not „+2, ✓ 1", and the tally survives the process dying between pushes. It is cleared when
+    the list is opened, when the notification is dismissed, and at sign-out. One notification
+    per list (its id is a stable hash of the list id), and tapping it opens that list through
+    `buymyway://list/{listId}`, which is the deep link the navigation graph already knows how
+    to answer.
+96. **The only periodic work in the app is one `CatchUpWorker` every 3 hours.** Constraints as
+    PLAN.md's *Battery policy* asks: `NetworkType.CONNECTED` and `requiresBatteryNotLow`. It is
+    unique periodic work, enqueued when the account state says signed in and cancelled at
+    sign-out, and it exists only as insurance for a push that FCM dropped — it posts no
+    notification, it only reads. WorkManager will not run it more often than every 15 minutes
+    whatever happens, and in Doze it waits for a maintenance window. The push path is the same
+    `CatchUpWorker` as an **expedited** one-shot for one list. So Phase 9 leaves the app with
+    exactly three background workers: `OutboxWorker` (decision 58), `PhotoWorker`
+    (decision 71) and this one.
+97. **„Usuń moje dane" ships here** (decision 63 and open question 8 put it in this phase,
+    „together with `/fcmTokens`, so one action removes everything"). In Ustawienia, behind a
+    dialog that says what goes and asks for a second tap. In order: the FCM token, then every
+    list this user **owns** (`/lists/{listId}` and `/photos/{listId}` whole, and the
+    `/userLists` entry of every member of it), then this user's membership of everybody
+    else's lists (their lists stay; the other members keep them), then `/users/{uid}` with its
+    prefs and invites, `/emailIndex/{key}`, `/fcmTokens/{uid}` and `/userLists/{uid}`. Then the
+    ordinary sign-out empties Room, DataStore and the photo caches. What it cannot reach is
+    what another member's phone holds in its own Room: a list they were given is already
+    theirs, and RTDB is not where their copy lives. The dialog says so in one sentence.
+98. **`/fcmTokens/{uid}/{token}` is written by that user and read by nobody.** The rules give
+    it `.write` for `auth.uid === $uid`, a shape of exactly `{at}` (a number, `now`), a token
+    key of at most 512 characters, and **no `.read` at any depth**. The Apps Script reads it
+    with `ScriptApp.getOAuthToken()`, which carries the project owner's `firebase.database`
+    scope and therefore bypasses the rules — that is the same admin path that lets it read
+    `/lists/{listId}/members` to check the caller, and it is why the script never needs a
+    service-account key (decision 5). A token is written at the first sync after sign-in and
+    on every `onNewToken`, removed at sign-out and by „Usuń moje dane", and deleted by the
+    script itself when FCM answers `UNREGISTERED` (decision 36's „other leftovers").
+99. **The script's rate limit is per list and per minute, and a rejected caller is told
+    nothing.** `CacheService` holds one counter per list for 60 s; over
+    `MAX_PUSHES_PER_MINUTE` the script answers `{"ok":true,"skipped":"rate"}` and sends
+    nothing, so a phone in a loop cannot spend the 20 000 daily fetches of decision 5. A
+    request with no token, a forged one, or one from a uid that is not in that list's members
+    gets `{"ok":false,"error":"unauthenticated"}` or `"forbidden"` and no detail about whether
+    the list exists.
+
+100. **The app stays on FCM's registration token, not the newer installation id.**
+     `firebase-messaging` 25.1.3 deprecates `getToken()` and `onNewToken` in favour of
+     `register()` / `onRegistered(installationId)`, and **both halves are gated on the same
+     manifest flag**: without `firebase_messaging_installation_id_enabled`, `register()` throws
+     and the token API works; with it, the other way round. The token is what Phase 0 measured
+     a push arriving on (decision 24), what the FCM v1 `message.token` field takes, and what
+     the script deletes when FCM answers `UNREGISTERED`. Switching would change the app, the
+     script and the node under `/fcmTokens` at once, for nothing this phase needs. So the two
+     call sites carry a narrow `@Suppress`, and the day the legacy flow is switched off is the
+     day the flag, `PushTokens` and the script's target field change together. Nothing else in
+     the app is affected: `/fcmTokens/{uid}/{token}` holds an opaque string either way.
+
 ## Open questions
 
 1. ~~Where do shared lists live, now that `drive.file` cannot cross users?~~ Answered by
@@ -1369,11 +1554,10 @@ Newest last. Every deviation from PLAN.md lands here **before** it is acted on.
    check stays useful after any console change:
    `curl -sL -d '{"idToken":"x"}' <script url>` must answer
    `{"ok":false,"error":"unauthenticated"}`, not an authorisation error page.
-8. **"Usuń moje dane" in the app?** Phase 9 (decision 63). The privacy page can only offer deletion by email until
-   the app has it. A Settings action that deletes the user's lists where they are the owner,
-   leaves the others, and removes `/users/{uid}`, `/emailIndex`, `/fcmTokens`,
-   `/userLists` and their photos is small once Phase 5 exists. It is proposed for Phase 5
-   or 9, and the owner decides when that phase starts.
+8. ~~**"Usuń moje dane" in the app?**~~ Built in Phase 9 (decision 97), exactly as this
+   question described it. Still to do **in the Eat My Way repository**: the privacy page says
+   deletion is by e-mail, and it can now say „w aplikacji: Ustawienia → Usuń moje dane"
+   instead. That goes with the Buy My Way section open question 6 asks for.
 9. **Limit sign-in to the household?** The RTDB rules (Phase 4) could accept writes only
    from uids listed under an `/allowed` node that only the owner can edit in the console.
    That would stop a stranger's Google account from using the quota even through our own
@@ -1384,7 +1568,9 @@ Newest last. Every deviation from PLAN.md lands here **before** it is acted on.
     is the sha256 of the writer's own email (decision 57). Phase 5, which reads the index for
     e-mail invites, decides whether that matters. One option: key by the email itself (dots
     encoded) and compare with `auth.token.email`.
-11. **Two of the README's screenshots are a phase behind.** `docs/screenshots/list-checking.png`
+11. **Two of the README's screenshots are a phase behind, and Ustawienia has never had one.**
+    Phase 9 gave Ustawienia a „Powiadomienia" section and „Usuń moje dane", and a screenshot of
+    a notification („Ania: +3, ✓ 2") would show the phase better than any sentence. `docs/screenshots/list-checking.png`
     shows the add bar without the mic that Phase 7 put there, and after Phase 8 `lists.png`
     shows Listy's top bar without the „⋮" that „Wklej ze schowka" lives in. Decision 47 leaves
     screenshots to the owner on a real phone (`adb exec-out screencap`), so they are theirs to

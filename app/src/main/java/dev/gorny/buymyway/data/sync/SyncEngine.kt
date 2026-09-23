@@ -3,6 +3,7 @@ package dev.gorny.buymyway.data.sync
 import androidx.room.withTransaction
 import dev.gorny.buymyway.core.model.Member
 import dev.gorny.buymyway.core.model.Op
+import dev.gorny.buymyway.core.push.PushSignal
 import dev.gorny.buymyway.core.sync.ListState
 import dev.gorny.buymyway.core.sync.Merge
 import dev.gorny.buymyway.core.sync.NodeCodec
@@ -48,6 +49,11 @@ class SyncEngine(
     private val timeoutMs: Long = DEFAULT_TIMEOUT_MS,
     /** A shared list was taken away (removed, or made private): its name, for a sentence. */
     private val onListLost: (String) -> Unit = {},
+    /**
+     * What RTDB has just acknowledged, by list, for the push sender (Phase 9, decision 93).
+     * It runs after the write, never before, so a push cannot announce a refused change.
+     */
+    private val onSent: suspend (Map<String, PushSignal.Counts>) -> Unit = {},
 ) {
     private val mutex = Mutex()
 
@@ -167,24 +173,33 @@ class SyncEngine(
             if (sendable.isEmpty()) return // waiting for a list's first upload
 
             // Queue them all at once, in order; the SDK keeps that order on the wire.
-            val sent = sendable.map { (opId, op) -> Triple(opId, op, remote.update(RemoteWrites.forOp(op, uid, known(op)))) }
+            val sent = sendable.map { (opId, op) ->
+                val known = known(op)
+                // The op that created the item is the one whose `at` is the item's `createdAt`:
+                // that is what tells „dodała 3" from „zmieniła 3" (decision 93).
+                val createdNow = (op as? Op.ItemPut)?.let { known.items[it.itemId]?.createdAt == op.at } == true
+                Sending(opId, op, PushSignal.kindOf(op, createdNow), remote.update(RemoteWrites.forOp(op, uid, known)))
+            }
             val done = mutableListOf<String>()
             val adopt = linkedSetOf<String>()
+            val pushable = mutableMapOf<String, PushSignal.Counts>()
             var stalled = false
-            for ((opId, op, pending) in sent) {
+            for (sending in sent) {
                 try {
-                    acknowledged(pending)
-                    done += opId
+                    acknowledged(sending.pending)
+                    done += sending.opId
+                    pushable[sending.op.listId] = (pushable[sending.op.listId] ?: PushSignal.Counts()) + sending.kind
                 } catch (e: RemoteDenied) {
                     refused(e)
-                    adopt += op.listId
-                    done += opId
+                    adopt += sending.op.listId
+                    done += sending.opId
                 } catch (_: RemoteFailure) {
                     stalled = true
                     break
                 }
             }
             db.outbox().delete(done)
+            if (pushable.isNotEmpty()) onSent(pushable)
             for (listId in adopt) {
                 try {
                     pullList(uid, listId, fromStart = true)
@@ -197,6 +212,14 @@ class SyncEngine(
             if (orphans.size + sendable.size < batch.size || batch.size < BATCH) return
         }
     }
+
+    /** One op on its way out, with what it will be worth saying once it is acknowledged. */
+    private class Sending(
+        val opId: String,
+        val op: Op,
+        val kind: PushSignal.Kind,
+        val pending: Deferred<Unit>,
+    )
 
     /** What a write must repeat as it is: the list's owner and creation, the item's creation. */
     private suspend fun known(op: Op): ListState {

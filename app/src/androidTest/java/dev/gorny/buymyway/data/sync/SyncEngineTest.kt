@@ -6,6 +6,7 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import dev.gorny.buymyway.core.model.BuiltinCategories
+import dev.gorny.buymyway.core.push.PushSignal
 import dev.gorny.buymyway.core.sync.Merge
 import dev.gorny.buymyway.data.ListRepository
 import dev.gorny.buymyway.data.local.AppDatabase
@@ -55,6 +56,9 @@ class SyncEngineTest {
             clock = { now },
             actor = { signedIn },
         )
+        /** What the push sender was told to say, by list (Phase 9, decision 93). */
+        val pushed = mutableMapOf<String, PushSignal.Counts>()
+
         val engine = SyncEngine(
             db = db,
             repo = repo,
@@ -62,6 +66,9 @@ class SyncEngineTest {
             prefs = PrefsSync(db, remote, defaultOrder.stored, listOrder.stored, SyncMarks(store), timeoutMs = TIMEOUT_MS),
             clock = { now },
             timeoutMs = TIMEOUT_MS,
+            onSent = { byList ->
+                for ((listId, counts) in byList) pushed[listId] = (pushed[listId] ?: PushSignal.Counts()) + counts
+            },
         )
 
         suspend fun sync() {
@@ -325,6 +332,61 @@ class SyncEngineTest {
         a.sync()
         assertEquals(BuiltinCategories.IDS, a.defaultOrder.order.first())
         assertFalse(a.defaultOrder.order.first() == order)
+    }
+
+    // --- What the push sender is told, and when (Phase 9, decision 93) ----------------------
+
+    @Test
+    fun whatIsPushedAboutIsCountedByKindAndOnlyOnceRtdbHasIt() = runBlocking {
+        val a = Phone(start = 1_000_000)
+        val listId = a.repo.createList("Sobota")
+        a.sync() // the list goes up whole; its own upload is not three items „added"
+        a.pushed.clear()
+
+        a.now++
+        val milk = a.repo.addItem(listId, "mleko").itemId
+        a.now++
+        a.repo.addItem(listId, "chleb")
+        a.now++
+        a.repo.setChecked(milk, true)
+        a.now++
+        a.repo.updateItem(milk, a.state(listId).items.getValue(milk).content.copy(note = "to duże"))
+        a.now++
+        a.repo.renameList(listId, "Niedziela")
+        a.sync()
+
+        assertEquals(
+            "two added, one bought, one edit and one rename",
+            PushSignal.Counts(added = 2, checked = 1, changed = 2),
+            a.pushed[listId],
+        )
+    }
+
+    @Test
+    fun aChangeThatNeverReachedRtdbIsNeverPushedAbout() = runBlocking {
+        val a = Phone(start = 1_000_000)
+        val listId = a.repo.createList("Sobota")
+        a.sync()
+        a.pushed.clear()
+
+        // Offline: the ops stay in the outbox and nothing is acknowledged.
+        a.remote.online = false
+        a.now++
+        a.repo.addItem(listId, "mleko")
+        try {
+            a.engine.flush(UID)
+            fail("an offline flush does not finish")
+        } catch (_: RemoteFailure) {
+            // expected
+        }
+        assertEquals("nothing is announced that the server has not taken", emptyMap<String, PushSignal.Counts>(), a.pushed)
+
+        // Once the network is back, the same change is announced exactly once.
+        a.remote.online = true
+        a.sync()
+        assertEquals(PushSignal.Counts(added = 1), a.pushed[listId])
+        a.sync()
+        assertEquals("a second sync has nothing left to say", PushSignal.Counts(added = 1), a.pushed[listId])
     }
 
     private companion object {

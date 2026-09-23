@@ -785,3 +785,88 @@ describe('the sort view preference (decision 67)', () => {
     await assertFails(db(BOB).ref(path).set({ value: 'alphabetical', updatedAt: T0 + 20 }));
   });
 });
+
+// --- Phase 9: the push registration and „Usuń moje dane" (decisions 97 and 98) --------------
+
+describe('fcmTokens', () => {
+  const TOKEN_A = 'fake-registration-token-a';
+
+  test('a user registers their own device, and nobody else does', async () => {
+    await assertSucceeds(db(ALICE).ref(`fcmTokens/${ALICE}/${TOKEN_A}`).set({ at: TIMESTAMP }));
+    await assertFails(db(BOB).ref(`fcmTokens/${ALICE}/${TOKEN_A}`).set({ at: TIMESTAMP }));
+    await assertFails(anonymous().ref(`fcmTokens/${ALICE}/${TOKEN_A}`).set({ at: TIMESTAMP }));
+  });
+
+  test('nobody reads a token, not even its own user: the script reads as the owner', async () => {
+    await seed(`fcmTokens/${ALICE}/${TOKEN_A}`, { at: T0 });
+    await assertFails(db(ALICE).ref(`fcmTokens/${ALICE}`).get());
+    await assertFails(db(ALICE).ref(`fcmTokens/${ALICE}/${TOKEN_A}`).get());
+    await assertFails(db(BOB).ref(`fcmTokens/${ALICE}`).get());
+  });
+
+  test('the node is exactly { at: now }', async () => {
+    const ref = db(ALICE).ref(`fcmTokens/${ALICE}/${TOKEN_A}`);
+    await assertFails(ref.set({ at: T0 })); // a device's own clock is not the server's
+    await assertFails(ref.set({ at: TIMESTAMP, listId: LIST })); // nothing else may ride along
+    await assertFails(ref.set(TIMESTAMP)); // not a bare value
+    await assertSucceeds(ref.set({ at: TIMESTAMP }));
+  });
+
+  test('a user removes their own registration at sign-out', async () => {
+    await seed(`fcmTokens/${ALICE}/${TOKEN_A}`, { at: T0 });
+    await assertFails(db(BOB).ref(`fcmTokens/${ALICE}/${TOKEN_A}`).remove());
+    await assertSucceeds(db(ALICE).ref(`fcmTokens/${ALICE}/${TOKEN_A}`).remove());
+    await seed(`fcmTokens/${ALICE}/${TOKEN_A}`, { at: T0 });
+    await assertSucceeds(db(ALICE).ref(`fcmTokens/${ALICE}`).remove());
+  });
+});
+
+describe('„Usuń moje dane" (decision 97)', () => {
+  beforeEach(seedShared);
+
+  test('the owner removes their whole list, its photos and everyone’s userLists entry', async () => {
+    await seed(`photos/${LIST}/${ITEM}`, { webp: 'x', w: 1, h: 1, by: ALICE, at: T0 });
+    await assertSucceeds(
+      db(ALICE).ref().update({
+        [`lists/${LIST}`]: null,
+        [`photos/${LIST}`]: null,
+        [`userLists/${ALICE}/${LIST}`]: null,
+        [`userLists/${BOB}/${LIST}`]: null,
+        [`userLists/${CAROL}/${LIST}`]: null,
+      }),
+    );
+  });
+
+  test('a member leaves everybody else’s lists, which stay theirs', async () => {
+    await assertSucceeds(
+      db(BOB).ref().update({
+        [`lists/${LIST}/members/${BOB}`]: null,
+        [`userLists/${BOB}/${LIST}`]: null,
+        [`lists/${LIST}/presence/${BOB}`]: null,
+      }),
+    );
+    // Alice's list is untouched: only Bob's membership went.
+    await assertSucceeds(db(ALICE).ref(`lists/${LIST}/meta`).get());
+    await assertFails(db(BOB).ref(`lists/${LIST}`).get());
+  });
+
+  test('the account’s own nodes go, and nobody else’s', async () => {
+    await seed(`fcmTokens/${ALICE}/token-a`, { at: T0 });
+    await seed(`users/${ALICE}`, { name: 'Alice', email: 'alice@example.test', updatedAt: T0 });
+    await seed('emailIndex/alice@example,test', ALICE);
+    const alice = withEmail(ALICE, 'alice@example.test');
+    await assertSucceeds(
+      alice.ref().update({
+        [`userLists/${ALICE}/${LIST}`]: null,
+        [`users/${ALICE}`]: null,
+        [`fcmTokens/${ALICE}`]: null,
+        'emailIndex/alice@example,test': null,
+      }),
+    );
+    // Somebody else's index entry is not Alice's to remove.
+    await seed('emailIndex/bob@example,test', BOB);
+    await assertFails(alice.ref('emailIndex/bob@example,test').remove());
+    await assertFails(alice.ref(`users/${BOB}`).remove());
+    await assertFails(alice.ref(`fcmTokens/${BOB}`).remove());
+  });
+});

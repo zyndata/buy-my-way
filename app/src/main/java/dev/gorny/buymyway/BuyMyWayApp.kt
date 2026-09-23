@@ -6,7 +6,9 @@ import androidx.datastore.preferences.core.edit
 import androidx.lifecycle.ProcessLifecycleOwner
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.FirebaseDatabase
+import com.google.firebase.messaging.FirebaseMessaging
 import dev.gorny.buymyway.core.categorize.Categorizer
+import dev.gorny.buymyway.core.push.PushSignal
 import dev.gorny.buymyway.core.categorize.NameIndex
 import dev.gorny.buymyway.core.voice.Dictation
 import dev.gorny.buymyway.core.model.SortView
@@ -25,12 +27,19 @@ import dev.gorny.buymyway.data.prefs.AccountRecord
 import dev.gorny.buymyway.data.prefs.CategoryOrderPreferences
 import dev.gorny.buymyway.data.prefs.ListOrderPreferences
 import dev.gorny.buymyway.data.prefs.ListSortPreferences
+import dev.gorny.buymyway.data.prefs.NotificationPreferences
 import dev.gorny.buymyway.data.prefs.SyncMarks
 import dev.gorny.buymyway.data.prefs.settingsDataStore
+import dev.gorny.buymyway.data.push.AppsScriptPush
+import dev.gorny.buymyway.data.push.CatchUpWorker
+import dev.gorny.buymyway.data.push.Notifications
+import dev.gorny.buymyway.data.push.PushSender
+import dev.gorny.buymyway.data.push.PushTokens
 import dev.gorny.buymyway.data.remote.FirebaseLiveSource
 import dev.gorny.buymyway.data.remote.FirebaseRemoteLists
 import dev.gorny.buymyway.data.remote.RemoteDenied
 import dev.gorny.buymyway.data.remote.RemoteFailure
+import dev.gorny.buymyway.data.remote.await
 import dev.gorny.buymyway.data.share.Sharing
 import dev.gorny.buymyway.data.sync.Connection
 import dev.gorny.buymyway.data.sync.LiveLists
@@ -45,6 +54,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -57,6 +67,8 @@ class BuyMyWayApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        // Cheap, idempotent, and needed before a push can arrive in this process (Phase 9).
+        container.notifications.ensureChannels()
         ProcessLifecycleOwner.get().lifecycle.addObserver(container.syncController)
     }
 }
@@ -158,6 +170,7 @@ class AppContainer(context: Context) {
             ),
             sessionValid = { account.checkSession() },
             onListLost = lostLists::add,
+            onSent = { byList -> pushSender.changed(byList) },
         )
     }
 
@@ -176,7 +189,82 @@ class AppContainer(context: Context) {
             connection = connection,
             me = { account.syncUid()?.let { uid -> Sharing.Me(uid, account.profile()?.takeIf { it.uid == uid }?.name) } },
             random = { bytes -> random.nextBytes(bytes) },
+            onShared = { listId -> pushSender.shared(listId) },
         )
+    }
+
+    // --- Push, notifications and the background (Phase 9) ----------------------------------
+
+    val notificationPrefs: NotificationPreferences by lazy {
+        NotificationPreferences(appContext.settingsDataStore)
+    }
+
+    val notifications: Notifications by lazy { Notifications(appContext, notificationPrefs) }
+
+    private val pushTokens: PushTokens by lazy {
+        PushTokens(
+            remote = remote,
+            dataStore = appContext.settingsDataStore,
+            // The registration token, not the installation id of the newer API (decision 100).
+            currentToken = {
+                @Suppress("DEPRECATION")
+                runCatching { FirebaseMessaging.getInstance().token.await() }.getOrNull()
+            },
+        )
+    }
+
+    /**
+     * Asks the Apps Script to push (decision 93). Without a URL — every test build, and any
+     * fork with no script of its own — it exists and does nothing.
+     */
+    private val pushSender: PushSender by lazy {
+        PushSender(
+            endpoint = BuildConfig.PUSH_URL.takeIf { it.isNotBlank() }?.let { AppsScriptPush(it) },
+            remote = remote,
+            members = { listId -> lists.membersOf(listId) },
+            me = { account.syncUid()?.let { uid -> PushSender.Me(uid, account.profile()?.takeIf { it.uid == uid }?.name) } },
+            idToken = { runCatching { FirebaseAuth.getInstance().currentUser?.getIdToken(false)?.await()?.token }.getOrNull() },
+            connection = connection,
+            scope = appScope,
+        )
+    }
+
+    /** Which list is on screen right now, so a push about it is silent (decision 95). */
+    @Volatile
+    private var listOnScreen: String? = null
+
+    /** A push has arrived ([dev.gorny.buymyway.data.push.PushService]). True when it was shown. */
+    suspend fun notifyOfPush(
+        listId: String,
+        kind: String,
+        counts: PushSignal.Counts,
+        actor: String?,
+    ): Boolean {
+        notifications.ensureChannels()
+        return notifications.onMessage(
+            listId = listId,
+            listName = database.lists().get(listId)?.name,
+            kind = kind,
+            counts = counts,
+            actor = actor,
+            onScreen = listOnScreen == listId,
+        )
+    }
+
+    /** [dev.gorny.buymyway.data.push.CatchUpWorker]'s work. True when nothing is left to retry. */
+    suspend fun catchUpInBackground(listId: String?): Boolean {
+        val uid = account.syncUid() ?: return true // signed out, or waiting to sign in again
+        return try {
+            connection.hold {
+                pushTokens.ensureRegistered(uid)
+                if (listId != null) sync.pull(uid, listId) else sync.catchUp(uid)
+            }
+            true
+        } catch (_: RemoteFailure) {
+            false
+        } catch (_: SyncEngine.SessionLost) {
+            true
+        }
     }
 
     /** Items' photos (Phase 6, decisions 70–72). */
@@ -214,6 +302,15 @@ class AppContainer(context: Context) {
         override fun sortView(listId: String) = listSort.view(listId)
 
         override suspend fun setSortView(listId: String, view: SortView) = listSort.set(listId, view)
+
+        /**
+         * The list screen is in front of the user (Phase 9): a push about this list says
+         * nothing, and whatever it was counting is forgotten, because the user is looking at it.
+         */
+        override fun onScreen(listId: String, open: Boolean) {
+            listOnScreen = if (open) listId else listOnScreen.takeIf { it != listId }
+            if (open) appScope.launch { notifications.clear(listId) }
+        }
     }
 
     val syncController: SyncController by lazy {
@@ -226,6 +323,10 @@ class AppContainer(context: Context) {
             scheduleOutbox = { OutboxWorker.enqueue(appContext) },
             // A list just uploaded may have photos waiting for it (decision 71).
             afterFlush = { if (photos.ready()) PhotoWorker.enqueue(appContext) },
+            afterSignIn = { uid ->
+                pushTokens.ensureRegistered(uid)
+                CatchUpWorker.schedulePeriodic(appContext)
+            },
         )
     }
 
@@ -258,9 +359,13 @@ class AppContainer(context: Context) {
      * more; then Room and DataStore, the account record with it. The lists stay in RTDB.
      */
     suspend fun signOut() {
+        // The push registration goes while the session that may write it still exists (Phase 9).
+        account.syncUid()?.let { uid -> connection.hold { pushTokens.unregister(uid) } }
         account.endSession(appContext)
         OutboxWorker.cancel(appContext)
         PhotoWorker.cancel(appContext)
+        CatchUpWorker.cancel(appContext)
+        notifications.clearAll()
         sync.exclusive {
             lists.clearAll()
             photos.clear()
@@ -268,11 +373,48 @@ class AppContainer(context: Context) {
         }
     }
 
+    /**
+     * „Usuń moje dane" (STATE.md decision 97, PLAN.md open question 8). Removes from RTDB every
+     * list this user owns, their membership of everybody else's, and the account's own nodes;
+     * then the ordinary [signOut] empties the phone. False when it could not be finished, and
+     * then nothing was signed out either, so it can simply be tried again.
+     */
+    suspend fun deleteAllMyData(): Boolean {
+        val uid = account.syncUid() ?: return false
+        val ok = try {
+            connection.hold {
+                pushTokens.unregister(uid)
+                val mine = database.lists().getAll().filter { database.listSync().get(it.id)?.synced == true }
+                for (entity in mine.filter { it.ownerUid == uid }) {
+                    val members = lists.membersOf(entity.id).map { it.uid }
+                    remote.update(RemoteWrites.removeList(entity.id, uid, members)).await()
+                }
+                for (entity in mine.filter { it.ownerUid != uid }) {
+                    // Their list stays theirs; this user simply stops being on it.
+                    remote.update(RemoteWrites.removeMember(entity.id, uid)).await()
+                }
+                remote.update(RemoteWrites.forgetUser(uid, account.profile()?.email, mine.map { it.id })).await()
+            }
+            true
+        } catch (_: Exception) {
+            // RemoteFailure, RemoteDenied or a timeout: nothing local is touched, so the user
+            // can try again once they have a network.
+            false
+        }
+        if (ok) signOut()
+        return ok
+    }
+
     /** [OutboxWorker]'s work. True when nothing is left to retry. */
     suspend fun sendOutboxInBackground(): Boolean {
         val uid = account.syncUid() ?: return true // signed out, or waiting to sign in again
         return try {
-            connection.hold { sync.flush(uid) } == 0
+            connection.hold {
+                val left = sync.flush(uid)
+                // The process may not live long enough for the 5 s debounce (decision 93).
+                pushSender.flushNow()
+                left
+            } == 0
         } catch (_: RemoteFailure) {
             false // no answer: WorkManager tries again later
         } catch (_: SyncEngine.SessionLost) {

@@ -251,6 +251,8 @@ class FakeServer {
             }
             "users" -> listId == uid
             "emailIndex" -> true
+            // Phase 9 (decision 98): this device's own registration, and nothing else's.
+            "fcmTokens" -> listId == uid
             "photos" -> photoWritable(uid, parts, proposed)
             else -> false
         }
@@ -302,6 +304,8 @@ class FakeServer {
             "users" -> parts.getOrNull(1) == uid || parts.getOrNull(2) in setOf("name", "email", "photoUrl")
             "invites" -> parts.size >= 2
             "photos" -> parts.size >= 2 && (ownerOf(parts[1]) == uid || role(uid, parts[1]) != null)
+            // Nobody reads a push registration; the Apps Script reads as the project's owner.
+            "fcmTokens" -> false
             else -> true
         }
         if (!readable) throw RemoteDenied("not readable")

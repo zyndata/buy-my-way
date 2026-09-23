@@ -1,6 +1,15 @@
 package dev.gorny.buymyway.ui.settings
 
+import android.Manifest
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
+import android.provider.Settings
 import androidx.activity.compose.LocalActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -17,6 +26,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -28,6 +39,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
@@ -61,9 +74,36 @@ fun SettingsScreen(
     val busy by vm.busy.collectAsStateWithLifecycle()
     val activity = LocalActivity.current
     val resources = LocalResources.current
+    val switches by vm.switches.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     val messages = rememberCoroutineScope()
     var confirmSignOut by rememberSaveable { mutableStateOf(false) }
+    var confirmDelete by rememberSaveable { mutableStateOf(false) }
+
+    // Notifications are asked for at the moment the switch is turned on, never at start
+    // (PLAN.md Phase 9, task 3). Below Android 13 there is nothing to ask.
+    val context = LocalContext.current
+    val denied = stringResource(R.string.notifications_denied)
+    val settingsLabel = stringResource(R.string.action_app_settings)
+    val askToPost = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) {
+            vm.setNotificationsEnabled(true)
+        } else {
+            messages.launch {
+                val answer = snackbar.showSnackbar(denied, actionLabel = settingsLabel)
+                if (answer == SnackbarResult.ActionPerformed) context.startActivity(appSettings(context))
+            }
+        }
+    }
+    val turnOn: () -> Unit = {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+        ) {
+            vm.setNotificationsEnabled(true)
+        } else {
+            askToPost.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
 
     val signIn: () -> Unit = {
         if (activity != null) {
@@ -108,7 +148,55 @@ fun SettingsScreen(
                     .padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 4.dp)
                     .semantics { heading() },
             )
-            AccountSection(account, pending, busy, onSignIn = signIn, onSignOut = { confirmSignOut = true })
+            AccountSection(
+                account = account,
+                pending = pending,
+                busy = busy,
+                onSignIn = signIn,
+                onSignOut = { confirmSignOut = true },
+                onDeleteData = { confirmDelete = true },
+            )
+            HorizontalDivider()
+            Text(
+                stringResource(R.string.settings_notifications),
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier
+                    .padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 4.dp)
+                    .semantics { heading() },
+            )
+            ListItem(
+                headlineContent = { Text(stringResource(R.string.settings_notifications_enabled)) },
+                supportingContent = { Text(stringResource(R.string.settings_notifications_hint)) },
+                trailingContent = {
+                    Switch(
+                        checked = switches.enabled,
+                        onCheckedChange = { on -> if (on) turnOn() else vm.setNotificationsEnabled(false) },
+                        modifier = Modifier.testTag("notifyEnabled"),
+                    )
+                },
+            )
+            NotificationSwitch(
+                label = stringResource(R.string.settings_notify_added),
+                checked = switches.added,
+                enabled = switches.enabled,
+                tag = "notifyAdded",
+                onChange = vm::setNotifyAdded,
+            )
+            NotificationSwitch(
+                label = stringResource(R.string.settings_notify_checked),
+                checked = switches.checked,
+                enabled = switches.enabled,
+                tag = "notifyChecked",
+                onChange = vm::setNotifyChecked,
+            )
+            NotificationSwitch(
+                label = stringResource(R.string.settings_notify_shared),
+                checked = switches.shared,
+                enabled = switches.enabled,
+                tag = "notifyShared",
+                onChange = vm::setNotifyShared,
+            )
             HorizontalDivider()
             ListItem(
                 headlineContent = { Text(stringResource(R.string.settings_default_order)) },
@@ -167,7 +255,66 @@ fun SettingsScreen(
             },
         )
     }
+
+    if (confirmDelete) {
+        val failed = stringResource(R.string.delete_data_failed)
+        AlertDialog(
+            onDismissRequest = { confirmDelete = false },
+            title = { Text(stringResource(R.string.delete_data_title)) },
+            text = {
+                Column {
+                    Text(stringResource(R.string.delete_data_body))
+                    Text(
+                        stringResource(R.string.delete_data_body_others),
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(top = 12.dp),
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        confirmDelete = false
+                        vm.deleteEverything { ok -> if (!ok) messages.launch { snackbar.showSnackbar(failed) } }
+                    },
+                ) {
+                    Text(stringResource(R.string.action_delete_data), color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmDelete = false }) { Text(stringResource(R.string.action_cancel)) }
+            },
+        )
+    }
 }
+
+/** One of the three per-kind switches; greyed out while the master switch is off. */
+@Composable
+private fun NotificationSwitch(
+    label: String,
+    checked: Boolean,
+    enabled: Boolean,
+    tag: String,
+    onChange: (Boolean) -> Unit,
+) {
+    ListItem(
+        headlineContent = {
+            Text(label, color = if (enabled) Color.Unspecified else MaterialTheme.colorScheme.outline)
+        },
+        trailingContent = {
+            Switch(
+                checked = checked && enabled,
+                enabled = enabled,
+                onCheckedChange = onChange,
+                modifier = Modifier.testTag(tag),
+            )
+        },
+    )
+}
+
+/** This app's page in the system settings, where a refused permission is turned back on. */
+private fun appSettings(context: Context): Intent =
+    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null))
 
 @Composable
 private fun AccountSection(
@@ -176,6 +323,7 @@ private fun AccountSection(
     busy: Boolean,
     onSignIn: () -> Unit,
     onSignOut: () -> Unit,
+    onDeleteData: () -> Unit,
 ) {
     when (account) {
         AccountState.Loading -> Unit
@@ -200,6 +348,16 @@ private fun AccountSection(
             ListItem(
                 headlineContent = { Text(stringResource(R.string.action_sign_out)) },
                 modifier = Modifier.clickable(enabled = !busy, onClick = onSignOut),
+            )
+            // Only where it can work: deleting needs a session to write with (decision 97).
+            ListItem(
+                headlineContent = {
+                    Text(stringResource(R.string.settings_delete_data), color = MaterialTheme.colorScheme.error)
+                },
+                supportingContent = { Text(stringResource(R.string.settings_delete_data_hint)) },
+                modifier = Modifier
+                    .clickable(enabled = !busy, onClick = onDeleteData)
+                    .testTag("deleteData"),
             )
         }
         is AccountState.SessionLost -> {

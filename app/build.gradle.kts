@@ -42,6 +42,15 @@ android {
         versionCode = appVersionCode
         versionName = appVersionName
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // The Apps Script push endpoint (PLAN.md Phase 9, task 2). It is a public id, not a
+        // secret (CLAUDE.md), and an empty value simply switches pushing off — which is what a
+        // fork with no script of its own, and every test build, gets.
+        buildConfigField(
+            "String",
+            "PUSH_URL",
+            "\"${providers.gradleProperty("buymyway.pushUrl").getOrElse("")}\"",
+        )
     }
 
     buildTypes {

@@ -132,6 +132,20 @@
         }
       }
     },
+    "fcmTokens": {
+      "$uid": {
+        ".write": "auth != null && auth.uid === $uid",
+        "$token": {
+          ".validate": "$token.length <= 512 && newData.hasChildren(['at'])",
+          "at": {
+            ".validate": "newData.isNumber() && newData.val() === now"
+          },
+          "$other": {
+            ".validate": false
+          }
+        }
+      }
+    },
     "emailIndex": {
       "$key": {
         ".read": "auth != null",
