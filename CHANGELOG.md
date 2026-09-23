@@ -37,11 +37,13 @@ project adheres to [Semantic Versioning](https://semver.org).
 - Phase 5 — sharing & real-time
 - Phase 6 — photos
 - Phase 7 — voice input
+- Cut a dictated sentence at the names this phone has seen
 
 ### Miscellaneous
 
 - Plan, workflow and repository hygiene
 - **spike:** Phase 0 spike app and push sender skeleton
+- Update CHANGELOG
 - Update CHANGELOG
 - Update CHANGELOG
 - Update CHANGELOG
