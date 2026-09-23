@@ -30,6 +30,7 @@ project adheres to [Semantic Versioning](https://semver.org).
 - Record what CI caught in phase 7
 - Phase 7 dictation verified offline on the S10e
 - Phase 8 CI run ids
+- Phase 8b CI run id
 
 ### Features
 
@@ -44,11 +45,13 @@ project adheres to [Semantic Versioning](https://semver.org).
 - Cut a dictated sentence at the names this phone has seen
 - Phase 8 — import from Eat My Way
 - Phase 8b — „Moje produkty"
+- Phase 9 — background, notifications & the battery verdict
 
 ### Miscellaneous
 
 - Plan, workflow and repository hygiene
 - **spike:** Phase 0 spike app and push sender skeleton
+- Update CHANGELOG
 - Update CHANGELOG
 - Update CHANGELOG
 - Update CHANGELOG
