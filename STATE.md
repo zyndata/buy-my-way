@@ -255,6 +255,15 @@ after „While using the app" the sheet opens with „Słucham…" and Android's
 indicator lit. „Zatrzymaj" ended it and, with no sound going in, the sheet said „Nie słyszę —
 spróbuj bliżej mikrofonu." and offered „Dyktuj dalej" — the error path end to end on a real
 recognizer.
+**Found on the way:** the first CI run (35832044810) was red where the machine here was green.
+CI's emulator is a phone and this one is a tablet, and four dictated lines pushed the sheet's
+buttons off a phone screen. Now only the lines scroll (at most 320 dp of them) and the title,
+the state and the buttons stay put. The same run showed the tests racing the emulator's own
+recognizer, which really listens, so the sheet now takes its `VoiceSource` from the screen and
+the test hands it one that opens no microphone; the test also grants `RECORD_AUDIO` through
+`UiAutomation`, because an install for a test run grants nothing and the sheet refuses to
+listen without it. Reproduced here by putting the tablet emulator at a phone's size
+(`adb shell wm size 1080x2280`, `wm density 440`), where the suite is green again.
 **Not verified:** actual Polish speech recognised into items (the emulator has no audio in, and
 the phones are the owner's) — this is the acceptance criterion „works offline when the Polish
 pack is installed", and it stays for the owner to check on the S10e; the network retry after a
