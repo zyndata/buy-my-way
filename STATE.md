@@ -449,8 +449,10 @@ fail, and it passed again when the rule was put back. **185 JVM tests** (11 new 
 `PushSignalTest`: which op counts as added, bought or changed; the sums; the order the parts
 are read in; the tally across two messages and across two people; a tally that survives being
 written down and a corrupt one that is simply no tally; a payload read as numbers; and what
-each switch hides). **152 instrumented entries on the API 35 emulator** (151 tests and the
-`TwoPhoneProbe` skip that AGP writes as a failure, decision 69; 31 new): 13 in `PushTest` (a
+each switch hides). **152 instrumented entries** (151 tests and the
+`TwoPhoneProbe` skip that AGP writes as a failure, decision 69; 31 new), on the API 35 emulator
+at CI's size (`wm size 1080x1920`, `wm density 480`, decision 79's lesson) **and on the owner's
+physical S10e**: 13 in `PushTest` (a
 token registered once and not rewritten, a rotated token replacing the old, sign-out taking it,
 a phone with no Play services simply not registering, another user's tokens unreadable; a burst
 of changes sent as one push with their sum, a private list and a one-member list waking nobody,
@@ -472,13 +474,20 @@ reached RTDB is never pushed about, then announced exactly once when the network
 Lint clean.
 **CI: run 35901890011 green on the first try**, all three jobs (lint + unit tests + build,
 the rules emulator, the instrumented emulator).
-**The emulator, not the phone.** The owner's S10e was connected over `adb` but asleep and
-behind its lock screen, so every Compose test failed with „No compose hierarchies found in the
-app" — the activity cannot come to the front on a locked phone. The suite was run on the API 35
-emulator at CI's size instead (`wm size 1080x1920`, `wm density 480`, decision 79's lesson).
-Two of the new tests failed on the first run and were right to: a notification read straight
-back from the shade races the system process, so the tests now wait for it, and one test's
-`runBlocking` block ended in an expression, which JUnit rejects as „should be void".
+**Also green on the physical S10e (Android 12, API 31): 152 entries, 151 tests, 2 m 7 s**, the
+only failure again being the `TwoPhoneProbe` skip. So the whole suite, the 29 new push and
+notification tests included, has now run on a real phone as well as on the emulator — and on
+**API 31**, which is exactly where decision 96 matters, since below Android 12 an expedited
+worker would have been a foreground service.
+**Two lessons on the way.** The first run on the S10e failed *every* Compose test with „No
+compose hierarchies found in the app": the phone was asleep behind its lock screen, and an
+activity cannot come to the front there. The owner removed the lock and it passed. The run
+before that, still locked, is also worth remembering: `connectedDebugAndroidTest` reported
+**BUILD SUCCESSFUL having run zero tests**, exactly as Phase 4 warned it can — a local run is
+evidence only together with its test count. Two of the new tests failed on their first emulator
+run and were right to: a notification read straight back from the shade races the system
+process, so the tests now wait for it, and one test's `runBlocking` block ended in an
+expression, which JUnit rejects as „should be void".
 **Not verified — and this is most of the phase's acceptance:**
 - **The push end to end.** The Apps Script has *not* been redeployed: the finished `Code.gs`,
   the new `firebase.database` scope in `appsscript.json` and the new `FIREBASE_DB_URL` script
@@ -502,6 +511,8 @@ back from the shade races the system process, so the tests now wait for it, and 
 - **Criterion 4, „notifications off → no notification, but the list is still fresh on open"**,
   is covered by tests on both halves (`nothingIsShownUntilTheUserTurnsNotificationsOn`, and the
   catch-up path that runs whatever the switches say) but not yet on a phone.
+- Two *physical* phones at once for the push itself. The suite's two-phone scenarios run
+  against the fake server, and the S10e alone cannot be sent a push by itself.
 - The Linux machine (open question 2).
 
 ## Decisions
