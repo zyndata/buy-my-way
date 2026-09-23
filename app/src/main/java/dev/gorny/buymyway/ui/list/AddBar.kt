@@ -17,6 +17,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.SuggestionChip
@@ -48,7 +49,8 @@ import dev.gorny.buymyway.core.parse.ItemParser
  * The add bar (PLAN.md Phase 3, task 3): one field that takes „2 kg ziemniaki, mleko",
  * autocomplete from the dictionary and this device's history above it, and the proposed
  * category as a chip that can be changed before adding. „+" and the keyboard's action add.
- * The mic joins in Phase 7.
+ * The mic (Phase 7) opens the review sheet; [onMic] is null on a phone with no recognizer, and
+ * then there is no mic button at all (Phase 7, task 4).
  */
 @Composable
 fun AddBar(
@@ -57,6 +59,7 @@ fun AddBar(
     onTyped: (String) -> Unit,
     onChooseCategory: (String) -> Unit,
     onAdd: (String) -> Boolean,
+    onMic: (() -> Unit)? = null,
 ) {
     var value by rememberSaveable(stateSaver = TextFieldValue.Saver) { mutableStateOf(TextFieldValue("")) }
     var picking by remember { mutableStateOf(false) }
@@ -134,10 +137,15 @@ fun AddBar(
                         .weight(1f)
                         .testTag("addField"),
                 )
+                if (onMic != null) {
+                    IconButton(onClick = onMic, modifier = Modifier.testTag("mic")) {
+                        Icon(painterResource(R.drawable.ic_mic), contentDescription = stringResource(R.string.action_dictate))
+                    }
+                }
                 FilledIconButton(
                     onClick = ::submit,
                     enabled = value.text.isNotBlank(),
-                    modifier = Modifier.padding(start = 8.dp),
+                    modifier = Modifier.padding(start = 4.dp),
                 ) {
                     Icon(painterResource(R.drawable.ic_add), contentDescription = stringResource(R.string.action_add))
                 }

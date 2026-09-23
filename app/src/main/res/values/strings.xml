@@ -187,4 +187,31 @@
     <string name="action_retry">Spróbuj ponownie</string>
     <string name="invite_expired">To zaproszenie wygasło. Poproś o nowe.</string>
     <string name="invite_not_found">Nie ma takiego zaproszenia. Poproś o nowy link.</string>
+
+    <!-- Dyktowanie (Phase 7) -->
+    <string name="action_dictate">Dyktuj</string>
+    <string name="action_stop_dictating">Zatrzymaj</string>
+    <string name="action_dictate_more">Dyktuj dalej</string>
+    <string name="action_add_all">Dodaj wszystkie</string>
+    <string name="action_remove_dictated">Usuń „%1$s” z listy do dodania</string>
+    <string name="dictation_title">Dyktowanie</string>
+    <string name="dictation_listening">Słucham…</string>
+    <string name="dictation_thinking">Rozpoznaję…</string>
+    <string name="dictation_hint">Powiedz, co kupić, np. „dwa kilo ziemniaków, mleko, masło i chleb”.</string>
+    <string name="dictation_empty">Nic jeszcze nie usłyszałem. Dotknij mikrofonu i mów.</string>
+    <string name="dictation_check">Sprawdź, zanim dodasz. Dotknij, aby poprawić.</string>
+    <string name="dictation_item_description">%1$s, kategoria: %2$s. Dotknij, aby poprawić</string>
+    <string name="mic_rationale_title">Mikrofon</string>
+    <string name="mic_rationale_body">Mikrofon jest potrzebny tylko wtedy, gdy dyktujesz zakupy; nagranie nie jest nigdzie zapisywane.</string>
+    <string name="action_allow">Zezwól</string>
+    <string name="mic_denied">Bez zgody na mikrofon nie da się dyktować. Możesz ją włączyć w ustawieniach aplikacji.</string>
+    <string name="action_app_settings">Ustawienia</string>
+    <string name="voice_error_no_speech">Nic nie usłyszałem. Dotknij mikrofonu i mów.</string>
+    <string name="voice_error_no_match">Nie słyszę — spróbuj bliżej mikrofonu.</string>
+    <string name="voice_error_audio">Nie udało się włączyć mikrofonu. Spróbuj ponownie.</string>
+    <string name="voice_error_network">Brak połączenia. Dyktowanie offline wymaga pakietu języka polskiego w ustawieniach telefonu.</string>
+    <string name="voice_error_permission">Aplikacja nie ma zgody na mikrofon.</string>
+    <string name="voice_error_busy">Rozpoznawanie mowy jest teraz zajęte. Spróbuj za chwilę.</string>
+    <string name="voice_error_language">Ten telefon nie rozpoznaje polskiej mowy. Doinstaluj język polski w ustawieniach telefonu.</string>
+    <string name="voice_error_other">Nie udało się rozpoznać mowy. Spróbuj ponownie.</string>
 </resources>

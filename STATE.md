@@ -14,7 +14,7 @@ Any deviation from [PLAN.md](PLAN.md) must be recorded here before proceeding.
 | 4     | Google sign-in & cloud persistence     | done    | 2026-09-22 |
 | 5     | Sharing & real-time                    | done    | 2026-09-22 |
 | 6     | Photos                                 | done    | 2026-09-22 |
-| 7     | Voice input                            | pending |           |
+| 7     | Voice input                            | done    | 2026-09-23 |
 | 8     | Import from Eat My Way                 | pending |           |
 | 9     | Background, notifications & battery    | pending |           |
 | 10    | Release engineering & 1.0              | pending |           |
@@ -27,7 +27,7 @@ The repository holds the plan, the workflow files, the repository hygiene (2026-
 push sender's skeleton (`push/`, deployed), from Phase 1 the Android app's scaffold, from
 Phase 2 its local data layer, from Phase 3 its screens for private lists, from Phase 4
 Google sign-in with the lists kept in Firebase Realtime Database, from Phase 5 sharing
-with other people and live changes, and from Phase 6 photos on items.
+with other people and live changes, from Phase 6 photos on items, and from Phase 7 dictation.
 
 **Phase 0 done (2026-09-21).** Under `drive.file`, a shared file is invisible to the other
 member's copy of the app. So shared lists and photos move to Firebase Realtime Database and
@@ -224,6 +224,44 @@ docs/DEPLOYMENT.md: publish Phase 6's rules **before** installing this build, be
 refuses to delete a list. Seen once on the emulator and not reproduced: the edit sheet closed
 itself when the camera returned. The test photo left on „mleko" in „Zakupy na sobote" is the
 owner's to remove.
+
+**Phase 7 done (2026-09-23).** The add bar has a mic. It asks for `RECORD_AUDIO` at the first
+tap (with a sentence where Android says to explain, and a way to the app's settings after a
+refusal), then opens „Dyktowanie": „Słucham…" with the words heard so far while speaking, and
+the finished sentence as one editable line per item with the department it would go to.
+„dwa kilo ziemniaków, mleko, masło i chleb" is four lines. A line is corrected in place („2 l
+mleko" re-reads name, quantity and unit through Phase 3's `ItemParser`), its category is
+changed on the chip, or it is dropped with „×". „Dyktuj dalej" says one more sentence into the
+same sheet; „Dodaj wszystkie" is the only thing that adds; „Anuluj" drops everything. The
+recognizer is `pl-PL`, free form, offline preferred, and it is created with the sheet and
+destroyed with it. A phone with no recognizer gets no mic button. Decisions 74–77.
+**What wakes the device:** nothing new. No worker, no service, no listener; the microphone is
+on only while the sheet is open. No new dependency.
+Verified: 114 JVM tests (20 new methods over ~75 utterances in `DictationTest`, written as the
+Polish recognizer hands text over). 74 instrumented tests on the API 35 emulator (14 new): five
+for what is asked of the recognizer (pl-PL, partial results, the offline preference and the
+retry that drops only it, no extra that would return audio, every error code mapped, and
+`RECORD_AUDIO` as the only new permission, read from the merged manifest at runtime) and nine
+Compose flows over the real screens, with the utterances a phone would hear handed to the view
+model: one sentence becomes four items with the right quantity, unit and category after one
+tap; nothing reaches the list before that tap; a second utterance adds to the same sheet; a
+line edited by hand and its category following the new name; a category changed on the chip; a
+line removed; „Anuluj" leaving nothing and the next dictation starting empty; the partial words
+shown while speaking; and the mic button present only when a recognizer is. 72 rules tests
+still pass (Phase 7 changes no rules). Lint clean.
+**By hand on the emulator (API 35 tablet, real on-device recognizer):** the mic appears in the
+add bar, the system prompt „Allow Buy My Way to record audio?" appears on the first tap, and
+after „While using the app" the sheet opens with „Słucham…" and Android's green microphone
+indicator lit. „Zatrzymaj" ended it and, with no sound going in, the sheet said „Nie słyszę —
+spróbuj bliżej mikrofonu." and offered „Dyktuj dalej" — the error path end to end on a real
+recognizer.
+**Not verified:** actual Polish speech recognised into items (the emulator has no audio in, and
+the phones are the owner's) — this is the acceptance criterion „works offline when the Polish
+pack is installed", and it stays for the owner to check on the S10e; the network retry after a
+language error; a phone with no recognizer at all (the rule is tested, the device is not); the
+Linux machine (open question 2). **To do:** `docs/screenshots/list-checking.png` shows the add
+bar without the mic, so it is one phase out of date; decision 47 leaves screenshots to the
+owner on a real phone.
 
 ## Decisions
 
@@ -949,6 +987,56 @@ Newest last. Every deviation from PLAN.md lands here **before** it is acted on.
     PNG, HEIF) on every API level. The app uses it only to read `TAG_ORIENTATION`, and the
     tests use it to write the EXIF they check is gone.
 
+### 2026-09-23 — Phase 7 (voice input)
+
+74. **No new dependency: dictation is `android.speech.SpeechRecognizer` and one pure parser.**
+    `core/voice/Dictation.kt` (PLAN.md names that path) splits an utterance and hands each part
+    to Phase 3's `ItemParser`, so a dictated „2 kg ziemniaki" and a typed one give the same
+    fields (decision 47 asked for exactly this). What dictation adds over typing: „i" / „oraz" /
+    „jeszcze" / „plus" / „a także" between items, what a person says before the list („kup
+    jeszcze…", „potrzebuję…", „poproszę…") and after it („proszę", „też"), „dwa razy mleko",
+    and the full stop the recognizer puts at the end. `data/voice/VoiceRecognizer.kt` wraps the
+    framework: `pl-PL`, free form, partial results, one alternative, and nothing that asks for
+    the audio itself. No cloud speech library and no Gemini, as decision 11 says.
+75. **Offline is preferred, with one retry over the network.** `EXTRA_PREFER_OFFLINE` is set on
+    every attempt, so a phone with the Polish pack never sends the speech anywhere. PLAN.md
+    says „when the device has the language pack", and there is no cheap way to ask: the
+    answer would be a `ACTION_GET_LANGUAGE_DETAILS` broadcast that says which languages exist,
+    not which are downloaded. So the app asks offline first and, if the recognizer answers
+    `ERROR_LANGUAGE_NOT_SUPPORTED` or `ERROR_LANGUAGE_UNAVAILABLE` (12 and 13, written out
+    because reading the API 31 constants is a lint error under minSdk 26), asks once more
+    without the preference and stops preferring offline for the rest of that screen. Every
+    other error becomes one Polish sentence, „Nie słyszę — spróbuj bliżej mikrofonu." among
+    them. **Not verified:** that retry, because both devices here answer in Polish offline
+    (the emulator) or were not available (the owner's phones).
+76. **The review sheet is one editable line per item, not a chip per item, and the stop button
+    lives in the sheet.** Two small deviations from PLAN.md:
+    - Task 3 says „parsed chips with category, edit inline". The category *is* a chip with a
+      menu, but the item itself is a text field holding the line as the add bar would read it
+      („2 kg ziemniaki"). A chip cannot be edited inline without turning into a field anyway,
+      and this way one field corrects a misheard name *and* a wrong quantity, through the same
+      `ItemParser` the add bar uses. A „×" drops a line.
+    - *Voice input* says „the mic button stays in the add bar; a second tap while listening
+      stops". The sheet covers the add bar while it is open, so the second tap is „Zatrzymaj"
+      in the sheet, in the same place where it then reads „Dyktuj dalej". The add bar's mic is
+      what opens the sheet, and it is not shown at all when
+      `SpeechRecognizer.isRecognitionAvailable` is false (task 4) or for a viewer (who has no
+      add bar).
+    Dictation never writes to the list: „Dodaj wszystkie" is the only thing that adds, and it
+    adds through the same `repo.addItem` as typing, so reviving a bought item (decision 36) and
+    the manual order (decision 67) work the same way.
+77. **What the microphone costs, and what wakes the device: nothing new.** `RECORD_AUDIO` is
+    asked for at the first tap on the mic, never at start, with a one-sentence rationale where
+    Android says the user has been asked before, and a refusal leaves a sentence with a way to
+    the app's settings. The recognizer is created when the sheet opens and destroyed when it
+    closes, so the microphone is on only while that sheet is on screen. The manifest also gains
+    `<uses-feature android:name="android.hardware.microphone" android:required="false">` (a
+    phone without one still installs) and a `<queries>` entry for
+    `android.speech.RecognitionService`, without which Android 11+ reports no recognizer at all
+    and the mic button would hide itself everywhere. **No background work, no service, no
+    network of ours:** the speech goes to the system recognizer and the app keeps no audio
+    (`onBufferReceived` is ignored, nothing is written to disk).
+
 ## Open questions
 
 1. ~~Where do shared lists live, now that `drive.file` cannot cross users?~~ Answered by
@@ -1012,3 +1100,8 @@ Newest last. Every deviation from PLAN.md lands here **before** it is acted on.
     is the sha256 of the writer's own email (decision 57). Phase 5, which reads the index for
     e-mail invites, decides whether that matters. One option: key by the email itself (dots
     encoded) and compare with `auth.token.email`.
+11. **The README's list screenshot is a phase behind.** `docs/screenshots/list-checking.png`
+    shows the add bar without the mic that Phase 7 put there. Decision 47 leaves screenshots
+    to the owner on a real phone (`adb exec-out screencap`), so it is theirs to re-take; the
+    other two (`lists.png`, `list-bought.png`) are unchanged by Phase 7. A screenshot of
+    „Dyktowanie" would be worth adding at the same time.

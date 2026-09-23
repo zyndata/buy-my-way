@@ -12,6 +12,9 @@ import dev.gorny.buymyway.core.model.Role
 import dev.gorny.buymyway.core.model.SortView
 import dev.gorny.buymyway.core.parse.ItemParser
 import dev.gorny.buymyway.core.text.TextKey
+import dev.gorny.buymyway.core.voice.Dictation
+import dev.gorny.buymyway.core.voice.VoiceError
+import dev.gorny.buymyway.core.voice.VoiceEvent
 import dev.gorny.buymyway.data.ListRepository
 import dev.gorny.buymyway.data.photo.ItemPhotos
 import dev.gorny.buymyway.data.photo.PhotoRef
@@ -63,6 +66,35 @@ data class AddBarState(
     /** True when the user picked [categoryId] on the chip rather than taking the proposal. */
     val chosen: Boolean = false,
 )
+
+/**
+ * One thing that was dictated, as the review sheet holds it before anything is added
+ * (PLAN.md Phase 7, task 3). [key] only tells two chips apart while the sheet is open.
+ */
+data class DictatedItem(
+    val key: Long,
+    val name: String,
+    val quantity: Double? = null,
+    val unit: String? = null,
+    val categoryId: String? = null,
+    /** True once the user picked [categoryId] themselves, so a proposal no longer overrides it. */
+    val chosen: Boolean = false,
+)
+
+/** The review sheet: open from the first tap on the mic until „Dodaj wszystkie" or „Anuluj". */
+data class DictationState(
+    val open: Boolean = false,
+    /** The microphone is on. */
+    val listening: Boolean = false,
+    /** Speech has ended and the recognizer is still working. */
+    val thinking: Boolean = false,
+    /** What is being heard right now; it is replaced by an item when the utterance ends. */
+    val partial: String = "",
+    val items: List<DictatedItem> = emptyList(),
+    val error: VoiceError? = null,
+) {
+    val busy: Boolean get() = listening || thinking
+}
 
 /** What the list screen needs besides the repository; absent where it is tested alone. */
 interface ListLive {
@@ -217,6 +249,124 @@ class ListViewModel(
             }
         }
         return true
+    }
+
+    // --- Dictation (Phase 7, task 3) ------------------------------------------------------
+
+    private val _dictation = MutableStateFlow(DictationState())
+
+    /** The review sheet's contents. Nothing here is on the list until „Dodaj wszystkie". */
+    val dictation: StateFlow<DictationState> = _dictation
+
+    private var dictatedKeys = 0L
+
+    /** The mic in the add bar: opens the review sheet, which starts listening. */
+    fun openDictation() {
+        if (!state.value.canEdit) return
+        dictatedKeys = 0
+        _dictation.value = DictationState(open = true)
+    }
+
+    /** „Anuluj", or the sheet dismissed: everything heard is dropped. */
+    fun closeDictation() {
+        _dictation.value = DictationState()
+    }
+
+    /** Everything the recognizer says while the sheet is open. */
+    fun onVoice(event: VoiceEvent) {
+        when (event) {
+            is VoiceEvent.Listening -> _dictation.update { it.copy(listening = true, thinking = false, partial = "", error = null) }
+            is VoiceEvent.Partial -> _dictation.update { if (it.listening) it.copy(partial = event.text) else it }
+            is VoiceEvent.Thinking -> _dictation.update { it.copy(listening = false, thinking = true) }
+            is VoiceEvent.Heard -> {
+                _dictation.update { it.copy(listening = false, thinking = false, partial = "") }
+                heard(event.text)
+            }
+            is VoiceEvent.Failed ->
+                _dictation.update { it.copy(listening = false, thinking = false, partial = "", error = event.error) }
+        }
+    }
+
+    /** One finished utterance becomes chips, each with the category it would be filed under. */
+    private fun heard(utterance: String) {
+        viewModelScope.launch {
+            val parsed = Dictation.parse(utterance)
+            val heard = parsed.map { item ->
+                DictatedItem(
+                    key = dictatedKeys++,
+                    name = item.name,
+                    quantity = item.quantity,
+                    unit = item.unit,
+                    categoryId = runCatching { repo.proposeCategory(listId, item.name) }.getOrNull(),
+                )
+            }
+            _dictation.update { state ->
+                // „Nie zrozumiałem" rather than a silent sheet when an utterance named nothing.
+                if (heard.isEmpty() && state.items.isEmpty()) {
+                    state.copy(error = VoiceError.NO_MATCH)
+                } else {
+                    state.copy(items = state.items + heard, error = if (heard.isEmpty()) VoiceError.NO_MATCH else null)
+                }
+            }
+        }
+    }
+
+    /**
+     * A chip edited by hand. [text] is read the way the add bar reads what is typed („2 kg
+     * ziemniaki"), so a wrong quantity is corrected in the same field as a wrong name. The
+     * category follows the new name unless the user chose one.
+     */
+    fun editDictated(key: Long, text: String) {
+        val parsed = ItemParser.parse(text)
+        _dictation.update { state ->
+            state.copy(
+                items = state.items.map {
+                    if (it.key == key) {
+                        it.copy(name = parsed?.name ?: text.trim(), quantity = parsed?.quantity, unit = parsed?.unit)
+                    } else {
+                        it
+                    }
+                },
+            )
+        }
+        val item = _dictation.value.items.firstOrNull { it.key == key } ?: return
+        if (item.chosen || item.name.isBlank()) return
+        viewModelScope.launch {
+            val proposed = runCatching { repo.proposeCategory(listId, item.name) }.getOrNull() ?: return@launch
+            _dictation.update { state ->
+                state.copy(
+                    items = state.items.map {
+                        if (it.key == key && !it.chosen && it.name == item.name) it.copy(categoryId = proposed) else it
+                    },
+                )
+            }
+        }
+    }
+
+    fun setDictatedCategory(key: Long, categoryId: String) {
+        _dictation.update { state ->
+            state.copy(items = state.items.map { if (it.key == key) it.copy(categoryId = categoryId, chosen = true) else it })
+        }
+    }
+
+    fun removeDictated(key: Long) {
+        _dictation.update { state -> state.copy(items = state.items.filterNot { it.key == key }) }
+    }
+
+    /** „Dodaj wszystkie": the chips become items, in the order they were said. */
+    fun addDictated() {
+        val heard = _dictation.value.items.filter { it.name.isNotBlank() }
+        _dictation.value = DictationState()
+        if (heard.isEmpty()) return
+        val placeLast = state.value.detail?.view == SortView.MANUAL
+        viewModelScope.launch {
+            for (item in heard) {
+                val result = runCatching {
+                    repo.addItem(listId, item.name, item.quantity, item.unit, categoryId = item.categoryId, placeLast = placeLast)
+                }.getOrNull()
+                if (result is ListRepository.AddResult.Revived) revivedNames.send(item.name)
+            }
+        }
     }
 
     // --- Rows -----------------------------------------------------------------------------

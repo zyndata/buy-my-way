@@ -161,6 +161,23 @@ can show is measured by hand:
 `ANDROID_SERIAL` picks one device when several are connected. Without it, Gradle's
 connected tasks use every device `adb` sees.
 
+## Dictation (Phase 7)
+
+`DictationTest` (JVM) covers the parser over ~75 utterances, and `DictationFlowsTest` drives
+the review sheet by handing the view model the `VoiceEvent`s a phone would produce, so neither
+needs a microphone. What needs a real one:
+
+- **Speaking Polish into it.** An API 35 emulator has a recognizer (its on-device service
+  answers, and the error path „Nie słyszę — spróbuj bliżej mikrofonu." can be seen there by
+  tapping „Zatrzymaj" in silence), but no audio goes in, so the words themselves are checked on
+  a phone: tap the mic in the add bar, say „dwa kilo ziemniaków, mleko, masło i chleb", and
+  four lines should appear with their departments.
+- **Offline.** Turn off Wi-Fi and mobile data with the Polish pack installed (Ustawienia
+  systemowe → Języki → Mowa / Rozpoznawanie mowy); dictation should still work, because the
+  app always asks with `EXTRA_PREFER_OFFLINE` (STATE.md decision 75).
+- **A phone with no recognizer** has no mic button at all. `adb shell pm query-services -a
+  android.speech.RecognitionService` says whether a device has one.
+
 ## Reference material
 
 `D:\Work\eat-my-way\android\` (outside this repository) holds decompiled third-party apps kept

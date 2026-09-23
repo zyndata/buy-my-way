@@ -12,9 +12,10 @@ The interface is in **Polish**. The code, comments and documentation are in Engl
 
 > **Status: early development. It works as a shopping list you can share: invite someone
 > by link or e-mail, and each of you sees the other's changes on the open list in about half
-> a second, photos included. Dictation, the Eat My Way import and notifications for a closed
-> app come next.** [PLAN.md](PLAN.md) holds the specification and the phases (Phase 11, Google
-> Play, was dropped); [STATE.md](STATE.md) records what has been decided and what is still
+> a second, photos included, and you can dictate what to buy instead of typing it. The Eat My
+> Way import and notifications for a closed app come next.**
+> [PLAN.md](PLAN.md) holds the specification and the phases (Phase 11, Google Play, was
+> dropped); [STATE.md](STATE.md) records what has been decided and what is still
 > open.
 > Phase 0, a spike on Drive sharing and the Google project, is done. Its verdict: another
 > member cannot read a shared Drive file under the `drive.file` scope, so shared lists live in
@@ -44,7 +45,12 @@ The interface is in **Polish**. The code, comments and documentation are in Engl
 > gallery, without giving the app the camera, storage or photo permission. It is shrunk to at
 > most 800 px and 80 kB, turned the right way up and stripped of everything the camera wrote
 > into it, location above all, before it leaves the phone. It shows in the row and opens full
-> screen. Phase 7, dictation, is next.
+> screen.
+> Phase 7 is done: the mic in the add bar takes a whole sentence — „dwa kilo ziemniaków,
+> mleko, masło i chleb" — and shows it as four lines with their departments, to correct before
+> „Dodaj wszystkie" adds them. Nothing is added without that tap, the speech goes to the
+> phone's own recognizer and nowhere else, and it is preferred offline. Phase 8, the import
+> from Eat My Way, is next.
 
 ## Screenshots
 
@@ -67,6 +73,10 @@ The interface is in **Polish**. The code, comments and documentation are in Engl
   no polling.
 - **Nothing you did not ask for.** No premium tier, no ads, no leaflets, no price tracking, no
   analytics, no location or contacts permission.
+- **Say it instead of typing it.** The mic reads one sentence as many items, with their
+  quantities and departments, and always asks you to look before anything is added. It uses
+  the recognizer that is already on the phone, offline where the Polish pack is installed; the
+  app records nothing itself and keeps no audio.
 - **Speaks Eat My Way.** The nine departments of the shop are the same, so a shared week's list
   lands in the right places, quantities and all.
 

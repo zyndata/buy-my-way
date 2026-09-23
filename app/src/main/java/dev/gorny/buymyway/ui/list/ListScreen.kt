@@ -1,9 +1,16 @@
 package dev.gorny.buymyway.ui.list
 
+import android.Manifest
+import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.provider.Settings
+import android.speech.SpeechRecognizer
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.core.app.ActivityCompat
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -37,6 +44,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -110,8 +118,35 @@ fun ListScreen(
     var boughtOpen by rememberSaveable { mutableStateOf(false) }
     val pendingPhotos by vm.pendingPhotos.collectAsStateWithLifecycle()
     val photoBusy by vm.photoBusy.collectAsStateWithLifecycle()
+    val dictation by vm.dictation.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    // A phone with no speech recognizer gets no mic button at all (Phase 7, task 4).
+    val canDictate = remember { SpeechRecognizer.isRecognitionAvailable(context) }
+    var askingMic by rememberSaveable { mutableStateOf(false) }
+    val deniedMic = stringResource(R.string.mic_denied)
+    val settingsLabel = stringResource(R.string.action_app_settings)
+    val askMic = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) {
+            vm.openDictation()
+        } else {
+            scope.launch {
+                val answer = vm.held.snackbar.showSnackbar(deniedMic, actionLabel = settingsLabel)
+                if (answer == SnackbarResult.ActionPerformed) context.startActivity(appSettings(context))
+            }
+        }
+    }
+    val onMic: () -> Unit = {
+        val activity = context as? Activity
+        when {
+            context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED ->
+                vm.openDictation()
+            // One sentence on why, but only where Android says the user has been asked before.
+            activity != null && ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.RECORD_AUDIO) ->
+                askingMic = true
+            else -> askMic.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
     // Which item the camera or the gallery is choosing for: kept across process death, since
     // the camera app may be in front long enough for Android to end this one.
     var cameraFor by rememberSaveable { mutableStateOf<String?>(null) }
@@ -195,6 +230,7 @@ fun ListScreen(
                     onTyped = vm::onTyped,
                     onChooseCategory = vm::chooseCategory,
                     onAdd = vm::add,
+                    onMic = if (canDictate) onMic else null,
                 )
             }
         },
@@ -225,6 +261,36 @@ fun ListScreen(
             initial = detail.list.name,
             onConfirm = { renaming = false; vm.rename(it) },
             onDismiss = { renaming = false },
+        )
+    }
+
+    if (askingMic) {
+        AlertDialog(
+            onDismissRequest = { askingMic = false },
+            title = { Text(stringResource(R.string.mic_rationale_title)) },
+            text = { Text(stringResource(R.string.mic_rationale_body)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    askingMic = false
+                    askMic.launch(Manifest.permission.RECORD_AUDIO)
+                }) {
+                    Text(stringResource(R.string.action_allow))
+                }
+            },
+            dismissButton = { TextButton(onClick = { askingMic = false }) { Text(stringResource(R.string.action_cancel)) } },
+        )
+    }
+
+    if (dictation.open && detail != null) {
+        DictationSheet(
+            state = dictation,
+            categories = detail.categories,
+            onEvent = vm::onVoice,
+            onEdit = vm::editDictated,
+            onChooseCategory = vm::setDictatedCategory,
+            onRemove = vm::removeDictated,
+            onAddAll = vm::addDictated,
+            onDismiss = vm::closeDictation,
         )
     }
 
@@ -303,6 +369,11 @@ private object CameraFile {
 
     fun uri(context: Context): Uri = FileProvider.getUriForFile(context, "${context.packageName}.photos", file(context))
 }
+
+/** This app's page in the system settings, where a refused microphone is turned back on. */
+private fun appSettings(context: Context): Intent =
+    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null))
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
 
 /** Reads a picked image with the application's resolver: it is read after the screen may be gone. */
 private fun opener(context: Context, uri: Uri): () -> InputStream {

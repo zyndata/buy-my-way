@@ -1,6 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- Dictation (PLAN.md Phase 7). Asked for at the first tap on the mic, never at start;
+         the audio goes to the system recognizer only and is never stored by the app. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- A phone without a microphone still installs the app: it simply has no mic button. -->
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
+
+    <!-- From Android 11 an app sees another only if it says so. Without this the recognizer
+         is reported as missing and the mic button would hide itself on every phone. -->
+    <queries>
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
+    </queries>
+
     <application
         android:name=".BuyMyWayApp"
         android:allowBackup="false"
