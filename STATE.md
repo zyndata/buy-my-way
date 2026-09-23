@@ -489,31 +489,69 @@ run and were right to: a notification read straight back from the shade races th
 process, so the tests now wait for it, and one test's `runBlocking` block ended in an
 expression, which JUnit rejects as „should be void".
 **Not verified — and this is most of the phase's acceptance:**
-- **The push end to end.** The Apps Script has *not* been redeployed: the finished `Code.gs`,
-  the new `firebase.database` scope in `appsscript.json` and the new `FIREBASE_DB_URL` script
-  property are in the repository, and `docs/DEPLOYMENT.md` says exactly what to do. Until that
-  is done and the Phase 9 rules are published, no push can go out at all. **The owner does
-  both before installing this build.**
-- **„A notification within 5 s on Wi-Fi and mobile data, p95 recorded"** (criterion 1) and
-  **„tapping it opens the list already updated"**: two phones and two accounts, the owner's to
-  do. Phase 0 measured the transport at 1.7 s warm and 2.7 s to a killed app (decision 24),
-  and the work this phase adds on top is a Room read and a DataStore edit, so the budget looks
-  comfortable — but that is an argument, not a measurement.
+- ~~**The push end to end.**~~ **Done on 2026-09-23, on two phones and two accounts, against
+  the real project** (see the „Brought live" note below). The rules were published, the Apps
+  Script redeployed, and a change on the S10e produced a notification on a closed S23 reading
+  the list's name over the other member's display name and „✓ 1", on the „Zmiany na wspólnej
+  liście" channel.
+- ~~**„A notification within 5 s …, p95 recorded"** (criterion 1)~~ **Measured**, 13 rounds
+  over both networks; the criterion itself was amended first (decision 101). Still to check by
+  hand: **tapping the notification opens the list already updated** — the deep link and the
+  catch-up are tested, the tap is not.
 - **The overnight battery check** (criterion 2): „both phones idle overnight, the app absent
   from the battery screen, `batterystats` showing no wakelocks outside worker runs". Needs a
   night and two phones. What *is* checked here is the shape of the background work: the
   constraints, that there is exactly one periodic worker, and that the app asks for no
   wakelock, alarm or battery-optimisation permission of its own.
-- **The endpoint refusing a request** (criterion 3): `curl` against the *old* deployment proves
-  nothing about the new one, so it waits for the redeployment. The commands are in
-  `docs/DEPLOYMENT.md`.
+- **The endpoint refusing a request** (criterion 3): **half done.** Against the live Phase 9
+  deployment, `GET` answers `{"ok":true,"missingScopes":[],"db":200}` and a forged token
+  `{"ok":false,"error":"unauthenticated"}`. The *non-member* half still wants the throwaway
+  account of `docs/DEPLOYMENT.md`; the code path is covered by the script's membership check
+  and was exercised the hard way (see „Brought live").
 - **Doze** (`adb shell dumpsys deviceidle force-idle`): needs a real push.
 - **Criterion 4, „notifications off → no notification, but the list is still fresh on open"**,
   is covered by tests on both halves (`nothingIsShownUntilTheUserTurnsNotificationsOn`, and the
   catch-up path that runs whatever the switches say) but not yet on a phone.
-- Two *physical* phones at once for the push itself. The suite's two-phone scenarios run
-  against the fake server, and the S10e alone cannot be sent a push by itself.
+- **What FCM does with a backlog.** A phone offline for a while gets its queued messages on
+  reconnect (no `collapse_key`, default TTL), but past ~100 pending FCM drops them and calls
+  `onDeletedMessages()`, **which this app does not implement** — so that phone would get no
+  notification and would wait for the 3-hourly catch-up. Five lines would close it. Not tested
+  either way; the airplane-mode round is still to do.
 - The Linux machine (open question 2).
+
+**Phase 9 brought live (2026-09-23, after the phase was committed).** The rules were published
+and the Apps Script redeployed, and the push then worked end to end on two phones and two
+accounts: a tick on the S10e reached a **closed** S23, showing the list's name over the actor's
+display name and „✓ 1", on the „Zmiany na wspólnej liście" channel — the shape decision 95
+specifies. Timings and the amended criterion are decision
+101. Four faults stood between „the phase is green" and „a notification arrives", and every one
+of them was silent:
+1. **`push/appsscript.json` was committed empty** (b55ed72, restored in 9ffcf9c): a shell
+   heredoc clobbered it. Anyone pasting „the repository's manifest" into the editor pasted
+   nothing. Nothing in this project reads that file, so nothing caught it.
+2. **The manifest was missing `https://www.googleapis.com/auth/userinfo.email`.** The database's
+   REST API accepts an OAuth token only with **both** that and `firebase.database`; with the
+   latter alone it answers `401 Unauthorized request.` — which is indistinguishable from a grant
+   that was never given, and survives revoking access and consenting again, because the scope
+   being asked for was never the missing one.
+3. **„Authorise by running `doGet`" was useless advice** (it had been in docs/DEPLOYMENT.md
+   since Phase 0). `doGet` only builds a string with `ContentService`, needs no scope at all, so
+   Apps Script never prompts and the run looks successful. `selfTest()` now touches every scope
+   the sender needs, and prints the ones the token is actually missing.
+4. **The editor and the deployment disagreed.** `selfTest` read the database fine while the
+   deployed web app could not: a web app runs with the manifest of *its own version*, and the
+   version predated the four-scope manifest. `doGet` now reports the **deployment's** missing
+   scopes and database status, so one `curl` settles it.
+The first three produced the same symptom — the script answering `forbidden`, because a
+database it cannot read looks exactly like a list the caller is not a member of. The script now
+answers `misconfigured` with the reason instead, and the app logs the script's own words rather
+than „push not sent". **Lesson for Phase 10 and for anything like this again: a deployment step
+that cannot be verified from the machine doing the work will hide a fault for hours. Every one
+of these was diagnosable in seconds once something printed what was actually true.**
+**Also found by hand:** a phone left `am force-stop`ped receives no push at all (FCM broadcasts
+carry `FLAG_EXCLUDE_STOPPED_PACKAGES`), so „closed" in these checks means `am kill`; and
+`dumpsys notification | grep <package>` always matches, because the dump lists every package's
+channels — a live record is `pkg=<package>`. Both are in docs/DEPLOYMENT.md now.
 
 ## Decisions
 
@@ -1518,6 +1556,34 @@ Newest last. Every deviation from PLAN.md lands here **before** it is acted on.
      call sites carry a narrow `@Suppress`, and the day the legacy flow is switched off is the
      day the flag, `PushTokens` and the script's target field change together. Nothing else in
      the app is affected: `/fcmTokens/{uid}/{token}` holds an opaque string either way.
+
+101. **The „within 5 s" acceptance criterion is amended to „within ~10 s, of which 5 s is the
+     debounce" (owner, 2026-09-23, measured).** PLAN.md asked for two things that cannot both
+     hold: a notification „within 5 s" of the change, and a push „debounced 5 s per list, so a
+     burst of ten items is one push". The debounce alone spends the whole budget. Measured on
+     two phones against the real project, timed end to end on one clock (the PC's, decision 16's
+     principle: tap driven by `adb`, the other phone's notification shade polled until it
+     changes):
+
+     | B's network | n | median | min | max |
+     |---|---|---|---|---|
+     | Wi-Fi | 8 | 9.16 s | 8.56 s | 10.80 s |
+     | mobile data (LTE) | 5 | 9.38 s | 9.08 s | 9.96 s |
+
+     Take off the 5 s debounce and the part actually in our hands — presence read, POST, the
+     script's token check and two database reads, FCM, the notification — is **≈ 4.2 s median
+     and ≈ 5.8 s at worst**, which matches Phase 0's transport figures (decision 24) plus an
+     Apps Script cold start. The two networks are indistinguishable. The owner chose to record
+     the number as it is rather than shorten the debounce: ten ticks becoming one push is worth
+     more than five seconds nobody standing in a shop will notice. Shortening it stays
+     available as a one-constant change (`PushSender.DEBOUNCE_MS`).
+102. **A notification needs no Firebase session; only FCM.** Found while testing: the S23's
+     session had been ended (by revoking the OAuth grant, decision 23 again) and it *still*
+     received and posted every notification, because `PushService` reads only Room and
+     DataStore. What a session-less phone cannot do is catch up, so the notification is right
+     and the list behind it is stale until the user signs in again. That is the correct order of
+     events, and it is why the notification carries no item name: it never asserts anything the
+     phone has not read for itself.
 
 ## Open questions
 

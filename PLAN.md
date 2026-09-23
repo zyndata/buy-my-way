@@ -769,8 +769,11 @@ with the next release.
 
 ### Acceptance criteria
 
-- [ ] App closed on phone B: a change on phone A produces a notification on B within 5 s on
-      Wi-Fi and mobile data (p95 recorded); tapping it opens the list already updated.
+- [ ] App closed on phone B: a change on phone A produces a notification on B **within ~10 s,
+      of which 5 s is the deliberate per-list debounce**, on Wi-Fi and mobile data (p95
+      recorded); tapping it opens the list already updated. *(Amended 2026-09-23 after the
+      first live measurement, STATE.md decision 101: „within 5 s" and the 5 s debounce this
+      same document specifies cannot both hold, and the debounce earns its keep.)*
 - [ ] Both phones idle overnight with the app installed: the app is absent from the battery
       screen and `batterystats` shows no wakelocks outside worker runs.
 - [ ] The push endpoint rejects a request without a valid token and one from a non-member
