@@ -111,9 +111,45 @@ function handle_(e) {
   return reply_({ ok: true, sent: sent, dropped: dropped, scriptMs: Date.now() - started });
 }
 
-/** Health check: GET the deployment URL. */
+/**
+ * Health check: GET the deployment URL.
+ *
+ * It answers for the **deployment**, not for the editor, which is the whole point: a web app
+ * runs with the manifest of its own version, so the editor can hold every scope while the
+ * deployed code holds none. `selfTest` cannot see that; this can. It reports no secret — scope
+ * names are in the public repository and `db` is one HTTP status.
+ */
 function doGet() {
-  return reply_({ ok: true });
+  var props = PropertiesService.getScriptProperties();
+  var answer = { ok: true };
+  try {
+    answer.missingScopes = missingScopes_();
+    var url = props.getProperty('FIREBASE_DB_URL');
+    answer.db = url ? dbStatus_(url) : 'FIREBASE_DB_URL not set';
+  } catch (err) {
+    answer.diagnostics = String(err).slice(0, 200);
+  }
+  return reply_(answer);
+}
+
+/** Which of the scopes the sender needs are not in the running context's token. */
+function missingScopes_() {
+  var needed = ['firebase.database', 'firebase.messaging', 'userinfo.email', 'script.external_request'];
+  var res = UrlFetchApp.fetch(
+    'https://oauth2.googleapis.com/tokeninfo?access_token=' + encodeURIComponent(ScriptApp.getOAuthToken()),
+    { muteHttpExceptions: true }
+  );
+  if (res.getResponseCode() !== 200) return 'unknown';
+  var granted = String(JSON.parse(res.getContentText()).scope || '');
+  return needed.filter(function (s) { return granted.indexOf(s) < 0; });
+}
+
+/** The HTTP status of a shallow read, which is what every push depends on. */
+function dbStatus_(url) {
+  return UrlFetchApp.fetch(url + '/lists.json?shallow=true', {
+    headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() },
+    muteHttpExceptions: true,
+  }).getResponseCode();
 }
 
 /**

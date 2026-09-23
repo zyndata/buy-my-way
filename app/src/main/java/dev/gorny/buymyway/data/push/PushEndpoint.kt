@@ -74,10 +74,10 @@ class AppsScriptPush(
                 }
                 json["ok"]?.toString() == "true" -> true
                 else -> {
-                    // One of the script's own words — `forbidden`, `unauthenticated`,
-                    // `misconfigured` — never anything the caller sent. Without this line a
-                    // failed push is indistinguishable from one that was never tried.
-                    Log.i(TAG, "endpoint refused: ${json["error"]?.toString()?.take(40)}")
+                    // The script's own answer, which holds its word for the refusal and, for a
+                    // misconfiguration, what is wrong. It is generated entirely by the script:
+                    // nothing the caller sent, and never a token, is echoed back into it.
+                    Log.i(TAG, "endpoint refused: ${answer.take(300)}")
                     false
                 }
             }
