@@ -392,6 +392,8 @@ rename and move, delete undone with „Cofnij", delete committed when the snackb
 `DictationFlowsTest` („Zapamiętaj" offered only on the unknown name, storing it with the chip's
 department, and adding the items adding nothing more; the department taken from the chip).
 Lint clean.
+**CI: run 35890114413 green on the first try**, all three jobs (lint + unit tests + build, the
+rules emulator, the instrumented emulator).
 **The four acceptance criteria:** a curated name is one item of its own in its department with
 no further tap (`dictationCutsAtACuratedName`, `aCuratedDepartmentIsWhatTheAddBarProposes`,
 `aCuratedNameIsOneItemOfItsOwn` on the JVM); nothing reaches „Moje produkty" unasked
