@@ -136,6 +136,22 @@ function selfTest() {
     console.log('%s: %s', key, props.getProperty(key) ? 'set' : 'MISSING');
   });
 
+  // What the script's token actually carries, which is the thing worth seeing: a manifest
+  // change that was never re-authorised looks exactly like a correct one from in here.
+  var token = ScriptApp.getOAuthToken();
+  var info = UrlFetchApp.fetch(
+    'https://oauth2.googleapis.com/tokeninfo?access_token=' + encodeURIComponent(token),
+    { muteHttpExceptions: true }
+  );
+  if (info.getResponseCode() === 200) {
+    var granted = String(JSON.parse(info.getContentText()).scope || '').split(' ');
+    console.log('granted scopes:\n  %s', granted.join('\n  '));
+    ['firebase.database', 'firebase.messaging', 'userinfo.email', 'script.external_request'].forEach(function (needed) {
+      var has = granted.some(function (s) { return s.indexOf(needed) >= 0; });
+      if (!has) console.error('MISSING scope: %s', needed);
+    });
+  }
+
   var url = props.getProperty('FIREBASE_DB_URL');
   if (!url) return;
   if (url.slice(-1) === '/') console.warn('FIREBASE_DB_URL ends in a slash; remove it');
@@ -154,7 +170,8 @@ function selfTest() {
     console.error(
       code === 404
         ? 'FIREBASE_DB_URL looks wrong.'
-        : 'The firebase.database scope is not in force: check appsscript.json is saved, run this again and tick every box.'
+        : 'A scope is missing above, or was never re-authorised. The database REST API needs BOTH ' +
+          'firebase.database AND userinfo.email; with only the first it answers 401.'
     );
   }
 }

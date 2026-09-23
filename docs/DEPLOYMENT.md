@@ -158,8 +158,11 @@ In the [Apps Script project](https://script.google.com/home):
 1. **`Code.gs`** ← the whole of [`push/Code.gs`](../push/Code.gs). It is a rewrite, not an edit.
 2. **`appsscript.json`** ← [`push/appsscript.json`](../push/appsscript.json). If the file is not
    shown: ⚙ **Project Settings** → tick *„Show appsscript.json manifest file in editor"*.
-   The new line is `https://www.googleapis.com/auth/firebase.database`, without which every
-   database read answers **403** and no push ever goes out.
+   Two lines are new: `https://www.googleapis.com/auth/firebase.database` **and**
+   `https://www.googleapis.com/auth/userinfo.email`. The database's REST API needs **both** —
+   with the database scope alone it answers `401 Unauthorized request.`, which reads like a
+   missing grant and is not one. That cost an evening the first time (`selfTest` now prints the
+   scopes the token really carries, so it cannot cost a second).
 
 #### Step 3 — the script property
 
@@ -191,9 +194,18 @@ so the consent screen actually appears, and its log says which part is wrong:
 FIREBASE_API_KEY: set
 FIREBASE_PROJECT_ID: set
 FIREBASE_DB_URL: set
-database read: HTTP 200          ← 401/403: the scope is not in force
+granted scopes:
+  https://www.googleapis.com/auth/firebase.database
+  https://www.googleapis.com/auth/firebase.messaging
+  https://www.googleapis.com/auth/script.external_request
+  https://www.googleapis.com/auth/userinfo.email
+database read: HTTP 200          ← 401: a scope is missing (userinfo.email above all)
                                  ← 404: FIREBASE_DB_URL is wrong
 ```
+
+It names any scope that is missing. A manifest that was edited but never re-authorised looks
+identical to a correct one everywhere else, which is why this prints what the **token** holds
+rather than what the file says.
 
 The log is under *Wykonania / Executions* in the editor's left bar.
 
