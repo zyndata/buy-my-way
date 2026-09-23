@@ -175,10 +175,27 @@ longer read and can be deleted.
 
 #### Step 4 — authorise again, ticking every box
 
-The manifest changed, so the old grant is not enough. In the editor, pick the function `doGet`
-and **Run** → *Review permissions* → choose the account → *Advanced* → *Go to Buy My Way push
-(unsafe)* → **tick every checkbox** → Allow. A partial grant is remembered and fails later with
-„you do not have permission to call UrlFetchApp.fetch" (STATE.md decision 23).
+The manifest changed, so the old grant is not enough. In the editor pick the function
+**`selfTest`** — *not* `doGet` — and **Run** → *Review permissions* → choose the account →
+*Advanced* → *Go to Buy My Way push (unsafe)* → **tick every checkbox** → Allow. A partial grant
+is remembered and fails later with „you do not have permission to call UrlFetchApp.fetch"
+(STATE.md decision 23).
+
+**Why `selfTest` and not `doGet`.** `doGet` only builds a string with `ContentService`, which
+needs no scope at all, so Apps Script never asks for anything and the run „succeeds" while
+`firebase.database` is still ungranted — the script then reads nothing and every push comes back
+`forbidden`. `selfTest` calls `UrlFetchApp` and reads the database with the script's own token,
+so the consent screen actually appears, and its log says which part is wrong:
+
+```
+FIREBASE_API_KEY: set
+FIREBASE_PROJECT_ID: set
+FIREBASE_DB_URL: set
+database read: HTTP 200          ← 401/403: the scope is not in force
+                                 ← 404: FIREBASE_DB_URL is wrong
+```
+
+The log is under *Wykonania / Executions* in the editor's left bar.
 
 #### Step 5 — deploy a *new version*
 

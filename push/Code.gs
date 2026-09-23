@@ -116,6 +116,49 @@ function doGet() {
   return reply_({ ok: true });
 }
 
+/**
+ * **Run this from the editor after any change to `appsscript.json`, not `doGet`.**
+ *
+ * `doGet` only builds a string, so it needs no scope at all and Apps Script never asks for one
+ * — which makes a missing `firebase.database` grant look like a working script. This function
+ * touches every scope the sender needs (`UrlFetchApp`, and the OAuth token against the
+ * database), so the consent screen appears; tick **every** box. It then prints exactly what is
+ * wrong, which saves guessing at a `forbidden` later:
+ *
+ *   Wykonania / Executions → the log shows each property and the real HTTP status of a read.
+ *
+ * 200 → the sender can read the database. 401/403 → the `firebase.database` scope is not in
+ * force. 404 → `FIREBASE_DB_URL` is wrong (a trailing slash or the wrong region).
+ */
+function selfTest() {
+  var props = PropertiesService.getScriptProperties();
+  ['FIREBASE_API_KEY', 'FIREBASE_PROJECT_ID', 'FIREBASE_DB_URL'].forEach(function (key) {
+    console.log('%s: %s', key, props.getProperty(key) ? 'set' : 'MISSING');
+  });
+
+  var url = props.getProperty('FIREBASE_DB_URL');
+  if (!url) return;
+  if (url.slice(-1) === '/') console.warn('FIREBASE_DB_URL ends in a slash; remove it');
+
+  // Shallow: keys only, so this downloads nothing however many lists there are.
+  var res = UrlFetchApp.fetch(url + '/lists.json?shallow=true', {
+    headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() },
+    muteHttpExceptions: true,
+  });
+  var code = res.getResponseCode();
+  console.log('database read: HTTP %s', code);
+  if (code === 200) {
+    console.log('OK — the sender can read the database. Now: Deploy → Manage deployments → New version.');
+  } else {
+    console.error('%s', res.getContentText().slice(0, 300));
+    console.error(
+      code === 404
+        ? 'FIREBASE_DB_URL looks wrong.'
+        : 'The firebase.database scope is not in force: check appsscript.json is saved, run this again and tick every box.'
+    );
+  }
+}
+
 /** One FCM v1 data message. Returns 'ok', 'gone' (unregistered) or 'failed'. */
 function sendTo_(props, token, data) {
   var res = UrlFetchApp.fetch(
