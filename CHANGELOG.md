@@ -30,11 +30,13 @@ project adheres to [Semantic Versioning](https://semver.org).
 - Phase 4 — Google sign-in & cloud persistence
 - Phase 5 — sharing & real-time
 - Phase 6 — photos
+- Phase 7 — voice input
 
 ### Miscellaneous
 
 - Plan, workflow and repository hygiene
 - **spike:** Phase 0 spike app and push sender skeleton
+- Update CHANGELOG
 - Update CHANGELOG
 - Update CHANGELOG
 - Update CHANGELOG
