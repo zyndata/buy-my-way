@@ -84,6 +84,8 @@ import dev.gorny.buymyway.core.model.Item
 import dev.gorny.buymyway.core.model.ListDetail
 import dev.gorny.buymyway.core.model.SortView
 import dev.gorny.buymyway.core.text.QuantityFormat
+import dev.gorny.buymyway.core.voice.VoiceSource
+import dev.gorny.buymyway.data.voice.VoiceRecognizer
 import dev.gorny.buymyway.data.photo.PhotoRef
 import dev.gorny.buymyway.ui.common.DragHandle
 import dev.gorny.buymyway.ui.common.NameDialog
@@ -105,6 +107,8 @@ fun ListScreen(
     onBack: () -> Unit,
     onOpenCategoryOrder: () -> Unit,
     onOpenShare: () -> Unit,
+    /** What „Dyktowanie" listens with; a test hands it utterances instead of a microphone. */
+    voice: VoiceSource? = null,
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
     val addBar by vm.addBar.collectAsStateWithLifecycle()
@@ -122,7 +126,8 @@ fun ListScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     // A phone with no speech recognizer gets no mic button at all (Phase 7, task 4).
-    val canDictate = remember { SpeechRecognizer.isRecognitionAvailable(context) }
+    val canDictate = remember(voice) { voice != null || SpeechRecognizer.isRecognitionAvailable(context) }
+    val phoneVoice = remember(context) { VoiceRecognizer(context) }
     var askingMic by rememberSaveable { mutableStateOf(false) }
     val deniedMic = stringResource(R.string.mic_denied)
     val settingsLabel = stringResource(R.string.action_app_settings)
@@ -285,6 +290,7 @@ fun ListScreen(
         DictationSheet(
             state = dictation,
             categories = detail.categories,
+            voice = voice ?: phoneVoice,
             onEvent = vm::onVoice,
             onEdit = vm::editDictated,
             onChooseCategory = vm::setDictatedCategory,

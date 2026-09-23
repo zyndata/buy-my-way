@@ -27,6 +27,22 @@ enum class VoiceError {
     OTHER,
 }
 
+/**
+ * What the review sheet listens with. The app's own is `data/voice/VoiceRecognizer`, wrapping
+ * Android's `SpeechRecognizer`; a test hands the sheet one that says what a phone would have
+ * heard, so the screens are tested without a microphone.
+ */
+interface VoiceSource {
+    /** Starts one utterance. [onEvent] hears everything until [VoiceEvent.Heard] or [VoiceEvent.Failed]. */
+    fun start(onEvent: (VoiceEvent) -> Unit)
+
+    /** Ends the utterance and takes what was said so far. */
+    fun stop()
+
+    /** Gives the microphone back. */
+    fun release()
+}
+
 /** What the recognizer tells the screen while an utterance is being said. */
 sealed interface VoiceEvent {
     /** The microphone is on. */

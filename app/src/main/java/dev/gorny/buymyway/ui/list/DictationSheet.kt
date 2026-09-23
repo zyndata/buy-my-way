@@ -55,7 +55,7 @@ import dev.gorny.buymyway.core.model.CategoryInfo
 import dev.gorny.buymyway.core.text.QuantityFormat
 import dev.gorny.buymyway.core.voice.VoiceError
 import dev.gorny.buymyway.core.voice.VoiceEvent
-import dev.gorny.buymyway.data.voice.VoiceRecognizer
+import dev.gorny.buymyway.core.voice.VoiceSource
 
 /**
  * The review sheet (PLAN.md Phase 7, task 3). Dictation never writes to the list: what was
@@ -63,13 +63,15 @@ import dev.gorny.buymyway.data.voice.VoiceRecognizer
  * „Dodaj wszystkie" adds them. „Dyktuj dalej" says one more sentence into the same sheet.
  *
  * The recognizer belongs to this sheet: it is started when the sheet opens and given back when
- * it closes, so the microphone is on only while this is on screen.
+ * it closes, so the microphone is on only while this is on screen. [voice] is the app's
+ * `VoiceRecognizer`, or, in a test, one that says what a phone would have heard.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DictationSheet(
     state: DictationState,
     categories: List<CategoryInfo>,
+    voice: VoiceSource,
     onEvent: (VoiceEvent) -> Unit,
     onEdit: (Long, String) -> Unit,
     onChooseCategory: (Long, String) -> Unit,
@@ -79,26 +81,24 @@ fun DictationSheet(
 ) {
     val context = LocalContext.current
     val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val recognizer = remember { VoiceRecognizer(context) }
 
     fun listen() {
         if (context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             onEvent(VoiceEvent.Failed(VoiceError.PERMISSION))
             return
         }
-        recognizer.start(onEvent)
+        voice.start(onEvent)
     }
 
     // The mic goes on with the sheet and is given back with it, whatever closed it.
     LaunchedEffect(Unit) { listen() }
-    DisposableEffect(Unit) { onDispose { recognizer.release() } }
+    DisposableEffect(Unit) { onDispose { voice.release() } }
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheet) {
         Column(
             verticalArrangement = Arrangement.spacedBy(12.dp),
             modifier = Modifier
                 .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
                 .navigationBarsPadding()
                 .imePadding()
                 .padding(start = 24.dp, end = 24.dp, bottom = 24.dp)
@@ -106,18 +106,26 @@ fun DictationSheet(
         ) {
             Text(stringResource(R.string.dictation_title), style = MaterialTheme.typography.titleLarge)
             Status(state)
-            state.items.forEach { item ->
-                DictatedRow(
-                    item = item,
-                    categories = categories,
-                    onEdit = { text -> onEdit(item.key, text) },
-                    onChooseCategory = { id -> onChooseCategory(item.key, id) },
-                    onRemove = { onRemove(item.key) },
-                )
+            // Only the lines scroll. „Dodaj wszystkie" stays in sight however many were heard.
+            Column(
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier
+                    .heightIn(max = 320.dp)
+                    .verticalScroll(rememberScrollState()),
+            ) {
+                state.items.forEach { item ->
+                    DictatedRow(
+                        item = item,
+                        categories = categories,
+                        onEdit = { text -> onEdit(item.key, text) },
+                        onChooseCategory = { id -> onChooseCategory(item.key, id) },
+                        onRemove = { onRemove(item.key) },
+                    )
+                }
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 FilledTonalButton(
-                    onClick = { if (state.busy) recognizer.stop() else listen() },
+                    onClick = { if (state.busy) voice.stop() else listen() },
                     modifier = Modifier.testTag("dictateMore"),
                 ) {
                     Icon(

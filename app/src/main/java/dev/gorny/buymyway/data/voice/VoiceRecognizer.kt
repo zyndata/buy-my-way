@@ -11,6 +11,7 @@ import android.speech.SpeechRecognizer
 import androidx.annotation.RequiresPermission
 import dev.gorny.buymyway.core.voice.VoiceError
 import dev.gorny.buymyway.core.voice.VoiceEvent
+import dev.gorny.buymyway.core.voice.VoiceSource
 
 /**
  * Android's `SpeechRecognizer` for one language (PLAN.md *Voice input*), wrapped so the screen
@@ -24,7 +25,7 @@ import dev.gorny.buymyway.core.voice.VoiceEvent
  *
  * Must be used from the main thread, as `SpeechRecognizer` requires.
  */
-class VoiceRecognizer(private val context: Context) {
+class VoiceRecognizer(private val context: Context) : VoiceSource {
 
     private var recognizer: SpeechRecognizer? = null
     private var listener: ((VoiceEvent) -> Unit)? = null
@@ -36,7 +37,7 @@ class VoiceRecognizer(private val context: Context) {
 
     /** Starts one utterance. [onEvent] hears everything until [VoiceEvent.Heard] or [VoiceEvent.Failed]. */
     @RequiresPermission(Manifest.permission.RECORD_AUDIO)
-    fun start(onEvent: (VoiceEvent) -> Unit) {
+    override fun start(onEvent: (VoiceEvent) -> Unit) {
         listener = onEvent
         retried = false
         if (!available) {
@@ -47,7 +48,7 @@ class VoiceRecognizer(private val context: Context) {
     }
 
     /** Ends the utterance and takes what was said so far: the second tap on the mic. */
-    fun stop() {
+    override fun stop() {
         recognizer?.stopListening()
     }
 
@@ -58,7 +59,7 @@ class VoiceRecognizer(private val context: Context) {
     }
 
     /** Gives the microphone back. The screen calls this when it goes away. */
-    fun release() {
+    override fun release() {
         listener = null
         recognizer?.destroy()
         recognizer = null

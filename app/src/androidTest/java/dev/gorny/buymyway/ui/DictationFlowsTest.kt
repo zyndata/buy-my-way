@@ -14,11 +14,13 @@ import androidx.compose.ui.test.performTextReplacement
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
 import dev.gorny.buymyway.R
 import dev.gorny.buymyway.core.model.BuiltinCategories
 import dev.gorny.buymyway.core.model.Item
 import dev.gorny.buymyway.core.voice.VoiceError
 import dev.gorny.buymyway.core.voice.VoiceEvent
+import dev.gorny.buymyway.core.voice.VoiceSource
 import dev.gorny.buymyway.data.ListRepository
 import dev.gorny.buymyway.data.local.AppDatabase
 import dev.gorny.buymyway.ui.list.AddBar
@@ -39,9 +41,10 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * Dictation on the real screens (PLAN.md Phase 7, task 3). The recognizer is not spoken to:
- * the utterances a phone would hear are handed to the view model as [VoiceEvent]s, which is
- * everything the review sheet ever sees. What a microphone does is the owner's by-hand check.
+ * Dictation on the real screens (PLAN.md Phase 7, task 3). No microphone is opened: the screen
+ * is given a [VoiceSource] that says nothing on its own, and the utterances a phone would have
+ * heard are handed to the view model as [VoiceEvent]s — everything the review sheet ever sees.
+ * What a real recognizer does is the owner's by-hand check.
  */
 @OptIn(ExperimentalTestApi::class)
 @RunWith(AndroidJUnit4::class)
@@ -56,6 +59,10 @@ class DictationFlowsTest {
 
     @Before
     fun open() {
+        // The sheet refuses to listen without it, exactly as it does on a phone; an install for
+        // a test run grants nothing by itself.
+        InstrumentationRegistry.getInstrumentation().uiAutomation
+            .grantRuntimePermission(context.packageName, android.Manifest.permission.RECORD_AUDIO)
         db = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java).build()
         repo = ListRepository(
             db = db,
@@ -79,9 +86,27 @@ class DictationFlowsTest {
 
     private fun items(listId: String): List<Item> = runBlocking { repo.loadState(listId).items.values.toList() }
 
+    /** A recognizer that opens no microphone and never says anything by itself. */
+    private class SilentVoice : VoiceSource {
+        var listening = 0
+        var released = 0
+
+        override fun start(onEvent: (VoiceEvent) -> Unit) {
+            listening++
+        }
+
+        override fun stop() = Unit
+
+        override fun release() {
+            released++
+        }
+    }
+
+    private val voice = SilentVoice()
+
     private fun showList(listId: String): ListViewModel {
         val vm = ListViewModel(repo, listId, { _, _ -> emptyList() }, scope)
-        compose.setContent { BuyMyWayTheme { ListScreen(vm, onBack = {}, onOpenCategoryOrder = {}, onOpenShare = {}) } }
+        compose.setContent { BuyMyWayTheme { ListScreen(vm, onBack = {}, onOpenCategoryOrder = {}, onOpenShare = {}, voice = voice) } }
         waitFor { exists(hasTestTag("addField")) }
         return vm
     }
@@ -105,9 +130,11 @@ class DictationFlowsTest {
 
         dictate(vm, "dwa kilo ziemniaków, mleko, masło i chleb")
         waitFor { exists(hasTestTag("dictated:chleb")) }
-        compose.onNodeWithTag("dictated:ziemniaków").assertIsDisplayed()
-        compose.onNodeWithTag("dictated:mleko").assertIsDisplayed()
-        compose.onNodeWithTag("dictated:masło").assertIsDisplayed()
+        // All four are in the sheet; on a small screen the lines scroll and the buttons do not.
+        assertEquals(true, exists(hasTestTag("dictated:ziemniaków")))
+        assertEquals(true, exists(hasTestTag("dictated:mleko")))
+        assertEquals(true, exists(hasTestTag("dictated:masło")))
+        compose.onNodeWithTag("addAll").assertIsDisplayed()
         // The proposed categories are shown before anything is added.
         assertEquals(true, exists(hasText("Nabiał i jaja")))
         assertEquals("dictation never writes directly", emptyList<Item>(), items(listId))
@@ -135,7 +162,11 @@ class DictationFlowsTest {
 
         dictate(vm, "mleko")
         waitFor { exists(hasTestTag("dictated:mleko")) }
-        compose.onNodeWithText(text(R.string.action_dictate_more)).assertIsDisplayed()
+        // The sheet started listening by itself, and now offers „Dyktuj dalej".
+        assertEquals(1, voice.listening)
+        waitFor { exists(hasText(text(R.string.action_dictate_more))) }
+        compose.onNodeWithText(text(R.string.action_dictate_more)).performClick()
+        waitFor { voice.listening == 2 }
         compose.runOnUiThread { vm.onVoice(VoiceEvent.Heard("dwa chleby")) }
         waitFor { exists(hasTestTag("dictated:chleby")) }
 
@@ -209,6 +240,8 @@ class DictationFlowsTest {
         waitFor { exists(hasTestTag("dictated:chleb")) }
         compose.onNodeWithText(text(R.string.action_cancel)).performClick()
         waitFor { !exists(hasTestTag("dictationSheet")) }
+        // The microphone is given back with the sheet.
+        waitFor { voice.released == 1 }
 
         compose.waitForIdle()
         assertEquals(emptyList<Item>(), items(listId))
