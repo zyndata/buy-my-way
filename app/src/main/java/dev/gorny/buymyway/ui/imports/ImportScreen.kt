@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -33,7 +35,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -81,22 +85,28 @@ fun ImportScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
             ) {
-                Text(
-                    stringResource(
-                        if (state.source.fromEatMyWay) R.string.import_source_eatmyway else R.string.import_source_text,
-                    ),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.testTag("importSource"),
-                )
+                // Source and count share a row: on a short phone every line this header does
+                // not take is a line of the list the person can actually see.
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        stringResource(
+                            if (state.source.fromEatMyWay) R.string.import_source_eatmyway else R.string.import_source_text,
+                        ),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.weight(1f).testTag("importSource"),
+                    )
+                    if (!state.isEmpty) {
+                        Text(
+                            pluralStringResource(R.plurals.import_count, state.lines.size, state.lines.size),
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.testTag("importCount"),
+                        )
+                    }
+                }
                 if (state.isEmpty) {
                     Text(stringResource(R.string.import_nothing), modifier = Modifier.testTag("importEmpty"))
                 } else {
-                    Text(
-                        pluralStringResource(R.plurals.import_count, state.lines.size, state.lines.size),
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.testTag("importCount"),
-                    )
                     Text(
                         stringResource(R.string.import_check),
                         style = MaterialTheme.typography.bodySmall,
@@ -199,11 +209,15 @@ private fun TargetPicker(vm: ImportViewModel, state: ImportUiState) {
             }
         }
         if (chosen is ImportTarget.NewList) {
+            // „Gotowe" puts the keyboard away, so the button below is never left under it.
+            val focus = LocalFocusManager.current
             OutlinedTextField(
                 value = chosen.name,
                 onValueChange = vm::rename,
                 label = { Text(stringResource(R.string.import_list_name)) },
                 singleLine = true,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { focus.clearFocus() }),
                 modifier = Modifier.fillMaxWidth().testTag("importListName"),
             )
         }

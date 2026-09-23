@@ -322,17 +322,37 @@ The emulator here is a tablet, so it was put at a phone's size for the run (`wm 
 entries: 103 tests and `TwoPhoneProbe`, which skips itself without its argument (decision 69)
 and which AGP writes into the XML as a failure while the task still passes — the same entry CI
 has been green with since Phase 5.
+**The first CI run (35868841823) was red where this machine was green, and it was right.**
+CI's emulator has no hardware profile, so it is **360 × 640 dp** — shorter than the 411 × 731 dp
+this machine's tablet was put at, and shorter than any phone the app has been run on. Two of the
+new Compose tests broke on it:
+- `theSharedListIsShownGroupedUnderItsDepartments` asserted that all three lines were displayed
+  at once. On a 640 dp screen the third is below the fold, and a `LazyColumn` does not even
+  compose it. The test now scrolls the list to each line first (`performScrollToNode`), which is
+  what a person does, and the same for the „×" it taps. Reproduced here by putting the emulator
+  at `wm size 1080x1920`, `wm density 480`, where it failed with the same sentence.
+- `theNewListsNameCanBeChangedBeforeImporting` timed out waiting for the import. It types into
+  the new list's name, and a CI emulator has no hardware keyboard, so a soft one opens over the
+  button below. The **screen** was changed rather than only the test: the name field now carries
+  `ImeAction.Done` and clears focus on it, so „Gotowe" puts the keyboard away — a real phone
+  wanted that anyway — and the test taps it as a person would.
+The header was also made one row shorter (source and count share a line), because on a 640 dp
+screen every line the header does not take is a line of the list that can be seen.
 **Found on the way (a lesson about this machine, not about the code):** the first two full runs
 were red, and neither was the phase's doing. The first failed a Phase 7 dictation test on a
 5 s Compose timeout while `testDebugUnitTest` was running beside it — the instrumented suite
 must have the machine to itself. The second aborted inside the new `oneTapMakesTheListAndFillsIt`
 after ~90 tests, on an emulator that had been up since 21 September and by then was drawing
 frames in 6 s (`app_time_stats: avg=6147ms`); no assertion failed and no process crashed, the
-runner simply never got a verdict. Both passed when run alone. The suite was then run once more
-on a cold-booted emulator with nothing else on the machine: **104 entries, one probe skip, zero
+runner simply never got a verdict. Both passed when run alone. The suite was then run on a
+cold-booted emulator with nothing else on the machine: **104 entries, one probe skip, zero
 failures**. The import test's wait was raised from 10 s to 30 s anyway — the import is a few
 database writes, so the wait is only about how loaded the machine is, and waiting longer costs
-nothing when the work is already done.
+nothing when the work is already done. A **third** full run, at CI's 360 × 640 dp, was green on
+all nine import flows and flaked once more on a Phase 7 dictation test, which then passed alone
+— the same 5 s timeout, the same machine, and a test CI itself has never failed. This emulator
+under a full suite is simply not a reliable witness; **CI is**, which is why the phase is not
+called done until its run is green.
 **Not verified:** sharing from the real Eat My Way app on a phone — the fixture is a
 reconstruction, not a capture (decision 84), so the owner's first real share is the last check;
 the Linux machine (open question 2).

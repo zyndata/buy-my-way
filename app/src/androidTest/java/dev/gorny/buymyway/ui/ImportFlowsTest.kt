@@ -2,12 +2,16 @@ package dev.gorny.buymyway.ui
 
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performTextReplacement
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelStore
@@ -106,19 +110,29 @@ class ImportFlowsTest {
         repo.observeItems(listId).first().filter { Merge.isVisible(it, repo.loadState(listId).list) }
     }
 
+    /**
+     * A line of the preview, scrolled into view first. The lines are a lazy list, so on a short
+     * phone the last of them is not composed until it is scrolled to — which is what a person
+     * does too, and what a CI emulator's screen makes unavoidable.
+     */
+    private fun line(text: String) = compose
+        .onNodeWithTag("importLines")
+        .performScrollToNode(hasText(text))
+        .let { compose.onNodeWithText(text) }
+
     @Test
     fun theSharedListIsShownGroupedUnderItsDepartments() {
         show(export)
         compose.onNodeWithTag("importSource").assertIsDisplayed()
         compose.onNodeWithText(text(R.string.import_source_eatmyway)).assertIsDisplayed()
-        compose.onNodeWithText("Warzywa i owoce").assertIsDisplayed()
-        compose.onNodeWithText("Nabiał i jaja").assertIsDisplayed()
-        compose.onNodeWithText("Cebula").assertIsDisplayed()
-        compose.onNodeWithText("Ziemniaki").assertIsDisplayed()
-        compose.onNodeWithText("Mleko 2%").assertIsDisplayed()
+        line("Warzywa i owoce").assertIsDisplayed()
+        line("Cebula").assertIsDisplayed()
         // The amounts are shown as the list will hold them.
-        compose.onNodeWithText("2 szt.").assertIsDisplayed()
-        compose.onNodeWithText("1,5 kg").assertIsDisplayed()
+        line("2 szt.").assertIsDisplayed()
+        line("Ziemniaki").assertIsDisplayed()
+        line("1,5 kg").assertIsDisplayed()
+        line("Nabiał i jaja").assertIsDisplayed()
+        line("Mleko 2%").assertIsDisplayed()
     }
 
     @Test
@@ -149,7 +163,11 @@ class ImportFlowsTest {
     fun theNewListsNameCanBeChangedBeforeImporting() {
         show(export)
         compose.onNodeWithTag("importListName").performTextReplacement("Sobota")
-        compose.onNodeWithTag("doImport").performClick()
+        // „Gotowe", as a person would tap it: the keyboard goes away and the button below is
+        // in the clear. An emulator with no hardware keyboard always raises one.
+        compose.onNodeWithTag("importListName").performImeAction()
+        compose.waitForIdle()
+        compose.onNodeWithTag("doImport").assertIsDisplayed().performClick()
         compose.waitUntil(WAIT_MS) { landed != null }
         assertEquals("Sobota", runBlocking { repo.observeList(landed!!.first).first()!!.list.name })
     }
@@ -157,7 +175,9 @@ class ImportFlowsTest {
     @Test
     fun aLineRemovedInThePreviewIsNotImported() {
         show(export)
-        compose.onNodeWithContentDescription(context.getString(R.string.action_remove_imported, "Ziemniaki")).performClick()
+        val remove = context.getString(R.string.action_remove_imported, "Ziemniaki")
+        compose.onNodeWithTag("importLines").performScrollToNode(hasContentDescription(remove))
+        compose.onNodeWithContentDescription(remove).performClick()
         compose.onNodeWithTag("doImport").performClick()
         compose.waitUntil(WAIT_MS) { landed != null }
 
