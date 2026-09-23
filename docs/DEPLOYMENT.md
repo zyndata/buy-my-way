@@ -192,13 +192,14 @@ keeps the manifest it was created with. The URL does not change, so
 
 ```bash
 URL=$(grep buymyway.pushUrl gradle.properties | cut -d= -f2-)
-curl -s  "$URL"                              # {"ok":true}
+curl -sL "$URL"                              # {"ok":true}
 curl -sL -d '{"idToken":"x"}' "$URL"         # {"ok":false,"error":"unauthenticated"}
 ```
 
-Use `-d` and let curl follow the 302 (`-sL`), not `-X POST`: an Apps Script web app answers a
-POST with a redirect to `script.googleusercontent.com`. An **HTML page** in the answer means the
-authorisation is incomplete — go back to step 4.
+**`-L` on both**, and `-d` rather than `-X POST`: an Apps Script web app answers *every* verb
+with a 302 to `script.googleusercontent.com`, so without `-L` the body comes back empty and the
+check looks broken when it is not. An **HTML page** in the answer means the authorisation is
+incomplete — go back to step 4.
 
 #### Step 7 — make the phones register
 
@@ -209,6 +210,22 @@ before the rules were published will not try again until it is restarted:
 ```bash
 adb -s <serial> shell am force-stop dev.gorny.buymyway
 # then open the app and leave it in the foreground for a few seconds
+```
+
+**Never leave a phone force-stopped while testing a push.** `am force-stop` puts the package
+into Android's *stopped* state, and FCM broadcasts carry `FLAG_EXCLUDE_STOPPED_PACKAGES`, so a
+force-stopped app receives nothing at all — the test then fails for a reason that has nothing to
+do with the app. „Closed" for the purposes of the acceptance criterion means the **process** is
+gone, not the package stopped: launch the app once, send it to the background
+(`input keyevent KEYCODE_HOME`), then `adb shell am kill dev.gorny.buymyway`, which is what
+Phase 0 used (STATE.md decision 24).
+
+Detecting the notification on the other phone needs care too:
+`dumpsys notification --noredact | grep dev.gorny.buymyway` **always matches**, because that
+dump also lists every package's channels and app settings. Grep for a live record instead:
+
+```bash
+adb -s <serial> shell "dumpsys notification --noredact | grep -c 'pkg=dev.gorny.buymyway'"
 ```
 
 **Then confirm on the [data page](https://console.firebase.google.com/project/buy-my-way-c3949/database/buy-my-way-c3949-default-rtdb/data):**

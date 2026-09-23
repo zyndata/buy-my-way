@@ -30,6 +30,16 @@ var MAX_PUSHES_PER_MINUTE = 20;
 var MAX_COUNT = 9999;
 
 function doPost(e) {
+  try {
+    return handle_(e);
+  } catch (err) {
+    // A misconfiguration must never look like an HTML error page to the phone, and must say
+    // which one it is: this is what the first live test of Phase 9 cost an evening over.
+    return reply_({ ok: false, error: 'misconfigured', detail: String(err).slice(0, 200) });
+  }
+}
+
+function handle_(e) {
   var started = Date.now();
   var props = PropertiesService.getScriptProperties();
   var body;
@@ -37,6 +47,9 @@ function doPost(e) {
     body = JSON.parse(e.postData.contents);
   } catch (err) {
     return reply_({ ok: false, error: 'bad request' });
+  }
+  if (!props.getProperty('FIREBASE_DB_URL')) {
+    return reply_({ ok: false, error: 'misconfigured', detail: 'FIREBASE_DB_URL script property is not set' });
   }
 
   var uid = verifyIdToken_(body.idToken, props.getProperty('FIREBASE_API_KEY'));
@@ -47,9 +60,14 @@ function doPost(e) {
   var kind = body.kind === 'shared' ? 'shared' : 'changes';
 
   // The caller must be on the list. The owner counts as a member: the app writes an owner
-  // entry the moment a list is shared (RemoteWrites.share).
-  var members = dbGet_(props, '/lists/' + listId + '/members') || {};
-  if (!members[uid]) return reply_({ ok: false, error: 'forbidden' });
+  // entry the moment a list is shared (RemoteWrites.share). A database that cannot be read at
+  // all is reported as itself, never as „you are not a member": those two look identical from
+  // the phone, and the first is a deployment fault while the second is a decision.
+  var members = dbGet_(props, '/lists/' + listId + '/members');
+  if (members === DB_UNREACHABLE) {
+    return reply_({ ok: false, error: 'misconfigured', detail: 'cannot read the database: check the firebase.database scope and FIREBASE_DB_URL' });
+  }
+  if (!members || !members[uid]) return reply_({ ok: false, error: 'forbidden' });
 
   if (!allow_(listId)) return reply_({ ok: true, skipped: 'rate' });
 
@@ -61,7 +79,8 @@ function doPost(e) {
   var total = counts.added + counts.checked + counts.changed;
   if (kind === 'changes' && total === 0) return reply_({ ok: true, skipped: 'nothing' });
 
-  var actor = dbGet_(props, '/users/' + uid + '/name') || '';
+  var actorNode = dbGet_(props, '/users/' + uid + '/name');
+  var actor = (!actorNode || actorNode === DB_UNREACHABLE) ? '' : actorNode;
   var data = {
     listId: listId,
     kind: kind,
@@ -76,7 +95,8 @@ function doPost(e) {
   var dropped = 0;
   for (var memberUid in members) {
     if (memberUid === uid) continue;
-    var tokens = dbGet_(props, '/fcmTokens/' + memberUid, { shallow: true }) || {};
+    var tokens = dbGet_(props, '/fcmTokens/' + memberUid, { shallow: true });
+    if (!tokens || tokens === DB_UNREACHABLE) continue;
     for (var token in tokens) {
       var outcome = sendTo_(props, token, data);
       if (outcome === 'gone') {
@@ -145,6 +165,12 @@ function verifyIdToken_(idToken, apiKey) {
   return users && users.length ? users[0].localId : null;
 }
 
+/**
+ * Told apart from „the node is empty": a 403 (the firebase.database scope was never granted)
+ * or a 404 (FIREBASE_DB_URL is wrong) is a deployment fault, not an answer.
+ */
+var DB_UNREACHABLE = { unreachable: true };
+
 /** A database read as the project owner: the rules do not apply to this token. */
 function dbGet_(props, path, options) {
   var url = props.getProperty('FIREBASE_DB_URL') + path + '.json';
@@ -153,7 +179,10 @@ function dbGet_(props, path, options) {
     headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() },
     muteHttpExceptions: true,
   });
-  if (res.getResponseCode() !== 200) return null;
+  if (res.getResponseCode() !== 200) {
+    console.error('database read failed: %s %s', res.getResponseCode(), res.getContentText().slice(0, 200));
+    return DB_UNREACHABLE;
+  }
   var text = res.getContentText();
   return text === 'null' || text === '' ? null : JSON.parse(text);
 }

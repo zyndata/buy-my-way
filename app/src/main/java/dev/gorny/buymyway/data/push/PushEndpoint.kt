@@ -1,5 +1,6 @@
 package dev.gorny.buymyway.data.push
 
+import android.util.Log
 import dev.gorny.buymyway.core.push.PushSignal
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -58,12 +59,28 @@ class AppsScriptPush(
             }
             connection.outputStream.use { it.write(body) }
             val code = connection.responseCode
-            if (code != HttpURLConnection.HTTP_OK) return@withContext false
+            if (code != HttpURLConnection.HTTP_OK) {
+                Log.i(TAG, "endpoint answered HTTP $code")
+                return@withContext false
+            }
             // The answer says what the script did; nothing here depends on it beyond `ok`.
             val answer = connection.inputStream.bufferedReader().use { it.readText() }
-            runCatching { Json.parseToJsonElement(answer) }.getOrNull()?.let { element ->
-                (element as? JsonObject)?.get("ok")?.toString() == "true"
-            } ?: false
+            val json = runCatching { Json.parseToJsonElement(answer) }.getOrNull() as? JsonObject
+            when {
+                json == null -> {
+                    // An HTML page, almost always: the script's authorisation is incomplete.
+                    Log.i(TAG, "endpoint did not answer JSON")
+                    false
+                }
+                json["ok"]?.toString() == "true" -> true
+                else -> {
+                    // One of the script's own words — `forbidden`, `unauthenticated`,
+                    // `misconfigured` — never anything the caller sent. Without this line a
+                    // failed push is indistinguishable from one that was never tried.
+                    Log.i(TAG, "endpoint refused: ${json["error"]?.toString()?.take(40)}")
+                    false
+                }
+            }
         } catch (_: IOException) {
             false // no network, or the script did not answer: a missed push, nothing more
         } finally {
@@ -73,5 +90,6 @@ class AppsScriptPush(
 
     private companion object {
         const val TIMEOUT_MS = 15_000
+        const val TAG = "BuyMyWayPush"
     }
 }
