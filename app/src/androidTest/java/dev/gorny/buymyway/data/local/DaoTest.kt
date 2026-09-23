@@ -137,4 +137,15 @@ class DaoTest {
         assertEquals(listOf("Masło", "Mleko"), db.nameHistory().observeMatching("m", 2).first().map { it.name })
         assertEquals("Mleko owsiane", db.nameHistory().get("mleko owsiane")?.name)
     }
+
+    /** What dictation may cut an utterance at, besides the dictionary (decision 80). */
+    @Test
+    fun nameHistoryGivesItsFoldedNamesMostUsedFirst() = runTest {
+        db.nameHistory().upsert(NameHistoryEntity("mleko", "Mleko", "nabial", 10, 5))
+        db.nameHistory().upsert(NameHistoryEntity("chleb wiejski", "Chleb wiejski", "pieczywo", 20, 9))
+        db.nameHistory().upsert(NameHistoryEntity("maslo", "Masło", "nabial", 30, 1))
+
+        assertEquals(listOf("chleb wiejski", "mleko", "maslo"), db.nameHistory().keys(10))
+        assertEquals(listOf("chleb wiejski"), db.nameHistory().keys(1))
+    }
 }

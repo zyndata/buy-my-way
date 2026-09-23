@@ -7,6 +7,7 @@ import androidx.lifecycle.ProcessLifecycleOwner
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.FirebaseDatabase
 import dev.gorny.buymyway.core.categorize.Categorizer
+import dev.gorny.buymyway.core.categorize.NameIndex
 import dev.gorny.buymyway.core.voice.Dictation
 import dev.gorny.buymyway.core.model.SortView
 import dev.gorny.buymyway.core.sync.RemoteWrites
@@ -91,10 +92,17 @@ class AppContainer(context: Context) {
     /** Dictionary names for the add bar's autocomplete. */
     suspend fun suggestNames(typed: String, limit: Int): List<String> = categorizer().suggest(typed, limit)
 
-    /** Where one dictated thing ends and the next begins, when nothing was said between them. */
+    /**
+     * Where one dictated thing ends and the next begins, when nothing was said between them:
+     * the bundled dictionary, and the names this phone has already seen (decision 80). The
+     * second is what makes „chleb wiejski" a thing of its own once it has been bought once.
+     */
     suspend fun knownNames(): Dictation.KnownNames {
         val categorizer = categorizer()
-        return Dictation.KnownNames { words, from -> categorizer.knownNameLength(words, from) }
+        val mine = NameIndex.ofFolded(database.nameHistory().keys(OWN_NAMES))
+        return Dictation.KnownNames { words, from ->
+            maxOf(categorizer.knownNameLength(words, from), mine.lengthAt(words, from))
+        }
     }
 
     // --- Account and sync (Phase 4) --------------------------------------------------------
@@ -287,5 +295,8 @@ class AppContainer(context: Context) {
 
     private companion object {
         const val PRODUCTS_ASSET = "products-pl.json"
+
+        /** How many of this phone's own names dictation may cut at; the rest are rarer. */
+        const val OWN_NAMES = 500
     }
 }

@@ -16,6 +16,7 @@ Any deviation from [PLAN.md](PLAN.md) must be recorded here before proceeding.
 | 6     | Photos                                 | done    | 2026-09-22 |
 | 7     | Voice input                            | done    | 2026-09-23 |
 | 8     | Import from Eat My Way                 | pending |           |
+| 8b    | „Moje produkty"                        | pending |           |
 | 9     | Background, notifications & battery    | pending |           |
 | 10    | Release engineering & 1.0              | pending |           |
 | 11    | Google Play closed testing             | dropped | 2026-09-21 |
@@ -224,6 +225,9 @@ docs/DEPLOYMENT.md: publish Phase 6's rules **before** installing this build, be
 refuses to delete a list. Seen once on the emulator and not reproduced: the edit sheet closed
 itself when the camera returned. The test photo left on „mleko" in „Zakupy na sobote" is the
 owner's to remove.
+
+**Phase 8b („Moje produkty") was added to PLAN.md on 2026-09-23**, out of Phase 7's daily use
+(decisions 80–81). It is not started.
 
 **Phase 7 done (2026-09-23).** The add bar has a mic. It asks for `RECORD_AUDIO` at the first
 tap (with a sentence where Android says to explain, and a way to the app's settings after a
@@ -1074,6 +1078,28 @@ Newest last. Every deviation from PLAN.md lands here **before** it is acted on.
     across the screen and „Dodaj wszystkie" was squeezed into a circle with its label broken
     into „Doda j wszy stkie". „Dyktuj dalej" / „Zatrzymaj" is now full width above, with
     „Anuluj" and „Dodaj wszystkie" on the row below.
+
+80. **Dictation also cuts at the names this phone has already seen (owner, 2026-09-23).** The
+    `name_history` table is the names the user has typed or dictated before, and it costs
+    nothing to use: `NameIndex` is the matcher pulled out of `Categorizer`, and
+    `AppContainer.knownNames()` now asks the dictionary and the 500 most-used of those names,
+    taking whichever knows more words. So „chleb wiejski" becomes a thing of its own once it
+    has been bought once, without any new storage, rules or screen. Used for **cutting only**,
+    never for the department, which keeps its own memory (decision 59). A typo in the history
+    is mostly harmless here, because the match is by stem: a stored „mlekoo" still meets a
+    spoken „mleko" and behaves like the right word. What it cannot do is let the user curate
+    anything, which is what Phase 8b is for.
+81. **„Moje produkty" is per account and never automatic (owner, 2026-09-23), added to
+    PLAN.md as Phase 8b.** Asked at the end of Phase 7: should new products go to a list in
+    Firebase that everyone edits, or to an individual one? Chosen: individual, in
+    `/users/{uid}/prefs`, which is already private to that account and already has its rules.
+    A list every signed-in user may edit is a shared namespace with no review and no way to
+    undo someone else's „ser zólty" except by editing their entry; the curated shared list
+    the owner wanted already exists as `products-pl.json` in this repository, changed in a
+    commit and shipped with the next release. A per-list vocabulary (editable by that list's
+    editors) was considered and dropped: the word would then help only on that list, and not
+    on the user's own private ones. Nothing is learned automatically — the user taps
+    „Zapamiętaj" — because automatic learning is how a dictionary fills with typos.
 
 ## Open questions
 

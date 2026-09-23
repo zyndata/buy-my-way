@@ -243,6 +243,13 @@ interface NameHistoryDao {
     @Query("SELECT * FROM name_history WHERE `key` = :key")
     suspend fun get(key: String): NameHistoryEntity?
 
+    /**
+     * The folded names this phone has seen, most used first: where dictation may cut an
+     * utterance, besides the bundled dictionary (STATE.md decision 80).
+     */
+    @Query("SELECT `key` FROM name_history ORDER BY useCount DESC, lastUsedAt DESC LIMIT :limit")
+    suspend fun keys(limit: Int): List<String>
+
     /** Entries used after [at]: what the category memory has not sent yet (decision 59). */
     @Query("SELECT * FROM name_history WHERE lastUsedAt > :at ORDER BY lastUsedAt LIMIT :limit")
     suspend fun usedAfter(at: Long, limit: Int): List<NameHistoryEntity>

@@ -1,6 +1,7 @@
 package dev.gorny.buymyway.core.voice
 
 import dev.gorny.buymyway.core.categorize.Categorizer
+import dev.gorny.buymyway.core.categorize.NameIndex
 import dev.gorny.buymyway.core.parse.ParsedItem
 import dev.gorny.buymyway.core.text.TextKey
 import org.junit.Assert.assertEquals
@@ -109,6 +110,43 @@ class DictationTest {
     fun anUnknownWordDoesNotStartAnItem() {
         checkSpoken("chleb wiejski", item("chleb wiejski"))
         checkSpoken("mleko od Zosi chleb", item("mleko od Zosi"), item("chleb"))
+    }
+
+    /**
+     * Besides the dictionary, dictation cuts at the names this phone has already seen
+     * (STATE.md decision 80), so what someone buys keeps working even if it was never in
+     * `products-pl.json`.
+     */
+    @Test
+    fun theNamesThisPhoneHasSeenAreCutAtToo() {
+        // As Room holds them: folded, most used first.
+        val mine = NameIndex.ofFolded(listOf("chleb wiejski", "kefir malinowy", "dropsy owsiane"))
+        val both = Dictation.KnownNames { words, from ->
+            maxOf(categorizer.knownNameLength(words, from), mine.lengthAt(words, from))
+        }
+
+        assertEquals(
+            listOf(item("chleb wiejski"), item("mleko")),
+            Dictation.parse("chleb wiejski mleko", both),
+        )
+        assertEquals(
+            listOf(item("dropsy owsiane", 2.0), item("kefir malinowy")),
+            Dictation.parse("dwa dropsy owsiane kefir malinowy", both),
+        )
+        // Two names the dictionary has never heard of are one line without the history.
+        assertEquals(
+            listOf(item("dropsy owsiane kefir malinowy", 2.0)),
+            Dictation.parse("dwa dropsy owsiane kefir malinowy", known),
+        )
+    }
+
+    /** A name stored with a typo still meets the word as it is said: the stem is what matches. */
+    @Test
+    fun aTypoInTheHistoryDoesNotBreakTheCut() {
+        val mine = NameIndex.ofFolded(listOf("mlekoo", "chlebek"))
+
+        assertEquals(1, mine.lengthAt(listOf("mleko"), 0))
+        assertEquals(1, mine.lengthAt(listOf("chleb"), 0))
     }
 
     /** A quantity at the end belongs to the name before it, not to what follows. */

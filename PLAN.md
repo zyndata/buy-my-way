@@ -712,6 +712,45 @@ measured.
 - [ ] Importing the same text twice into the same list sums quantities and adds no duplicate.
 - [ ] Any random text shared to the app becomes a line-per-item list, never a crash.
 
+## Phase 8b — „Moje produkty": the words dictation knows
+
+Added after Phase 7, from daily use (STATE.md decisions 78–81). The bundled dictionary
+(`products-pl.json`, 662 names) decides where one dictated thing ends, and Phase 7 added the
+names this phone has already seen. What is missing is a list the user curates on purpose:
+words the dictionary has never heard of, added with one tap, with the department they belong
+to. Deliberately **not** learned automatically — that is how a dictionary fills with typos —
+and deliberately **per account**, not shared: a list everyone can edit is a shared namespace
+with no review, and one person's „ser zólty" would quietly spoil the other's dictation. The
+shared, curated list is `products-pl.json` in this repository, changed in a commit and shipped
+with the next release.
+
+### Tasks
+
+1. Storage: a Room table (`own_product`: folded key, name, categoryId, stamps) in schema v3
+   with its migration, so it works signed out and offline; mirrored to
+   `/users/{uid}/prefs/products/{key}` (`{name, categoryId, at, changedAt}`, last-writer-wins
+   by `at`, read back by `changedAt` in the catch-up, exactly as `categoryMemory` is). Rules:
+   one more key under `prefs`, the same shape as `categoryMemory`, with its tests — and the
+   owner publishes them **before** the build is installed (the Phase 6 lesson).
+2. „Zapamiętaj" in the dictation review sheet: on a line the user has corrected, one tap
+   stores the name with the department shown on its chip. Never on its own.
+3. Ustawienia → „Moje produkty": add, rename, change the department, delete, with „Cofnij"
+   after a delete as elsewhere.
+4. `NameIndex` gains the user's own products beside the dictionary and the phone's history, and
+   `Categorizer.categorize` takes their department as a correction, so one entry fixes both
+   where an item is cut and which aisle it lands in.
+
+### Acceptance criteria
+
+- [ ] A name the dictionary has never heard of („chleb wiejski"), added once in „Moje
+      produkty", is one item of its own the next time it is dictated in a sentence, in its
+      department, with no further tap.
+- [ ] Nothing reaches „Moje produkty" without the user asking for it: dictating and adding
+      items leaves the list untouched.
+- [ ] The list follows the account to another phone, and a phone that is signed out keeps its
+      own and shows no one else's.
+- [ ] The rules refuse a write to another user's products (rules test).
+
 ## Phase 9 — Background, notifications & the battery verdict
 
 ### Tasks

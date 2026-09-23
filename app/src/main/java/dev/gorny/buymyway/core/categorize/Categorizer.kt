@@ -66,39 +66,15 @@ class Categorizer(dictionary: Dictionary) {
         return winners.singleOrNull() ?: BuiltinCategories.FALLBACK
     }
 
-    private val byLength: Map<Int, List<Entry>> = entries.groupBy { it.words.size }
-
-    private val longestEntry: Int = byLength.keys.maxOrNull() ?: 0
+    private val index = NameIndex(entries.map { it.words })
 
     /**
-     * How many of [words], from [from] on, name one thing this dictionary knows — the longest
-     * such run, or 0 when none does. Dictation cuts an utterance with it, because a phone's
-     * recognizer writes no commas: „ziemniaków mleko masło" is three things, while „mleko
-     * kokosowe" and „papier toaletowy" are one each, since the dictionary holds them whole.
-     *
-     * [words] are folded ([TextKey.words]). The match is stricter than [categorize]'s: a word
-     * may carry two more letters than the entry, no more, so „ziemniaków" still meets
-     * „ziemniaki" while „pomarańczowy" no longer meets „pomarańcze" and cannot start an item
-     * of its own in „sok pomarańczowy".
+     * How many of [words], from [from] on, name one thing this dictionary knows (see
+     * [NameIndex]). Dictation cuts an utterance with it, because a phone's recognizer writes
+     * no commas: „ziemniaków mleko masło" is three things, while „mleko kokosowe" and „papier
+     * toaletowy" are one each, since the dictionary holds them whole.
      */
-    fun knownNameLength(words: List<String>, from: Int): Int {
-        for (length in minOf(longestEntry, words.size - from) downTo 1) {
-            val window = words.subList(from, from + length)
-            if (window.any { word -> word.any(Char::isDigit) || word in stopWords || word in quantityWords }) continue
-            if (byLength[length].orEmpty().any { entry -> namesTheSameThing(entry.words, window) }) return length
-        }
-        return 0
-    }
-
-    /** Every word of the entry meets a different word of the window, in any order. */
-    private fun namesTheSameThing(entryWords: List<String>, window: List<String>): Boolean {
-        val used = BooleanArray(window.size)
-        for (entryWord in entryWords) {
-            val index = window.indices.firstOrNull { !used[it] && closeEnough(window[it], entryWord) } ?: return false
-            used[index] = true
-        }
-        return true
-    }
+    fun knownNameLength(words: List<String>, from: Int): Int = index.lengthAt(words, from)
 
     /**
      * Dictionary names for the add bar's autocomplete: those that start with what was typed
@@ -158,14 +134,6 @@ class Categorizer(dictionary: Dictionary) {
         private const val SHORT_WORD = 5
         private const val MAX_ENDING = 3
 
-        /**
-         * How many letters a word may carry beyond the dictionary entry and still be taken for
-         * the same thing when dictation decides where one item ends („ziemniaków" ↔
-         * „ziemniaki"). Three would let a derived adjective in („pomarańczowy" ↔ „pomarańcze"),
-         * and an adjective belongs to the noun before it, not to a new item.
-         */
-        private const val STRICT_ENDING = 2
-
         private val json = Json { ignoreUnknownKeys = true }
 
         fun fromJson(text: String): Categorizer = Categorizer(json.decodeFromString(Dictionary.serializer(), text))
@@ -184,8 +152,11 @@ class Categorizer(dictionary: Dictionary) {
 
         /** Drops numbers, units, counts and little words: what is left names the product. */
         internal fun meaningful(words: List<String>): List<String> = words.filter { word ->
-            word !in stopWords && word !in quantityWords && word.none(Char::isDigit)
+            !saysHowMuch(word) && word.none(Char::isDigit)
         }
+
+        /** Whether a folded word is a unit, a count or a little word, and so names nothing. */
+        internal fun saysHowMuch(word: String): Boolean = word in stopWords || word in quantityWords
 
         /**
          * How many letters two folded words share when one could be an inflected form of the
@@ -200,13 +171,6 @@ class Categorizer(dictionary: Dictionary) {
             if (prefix < LONG_STEM && minOf(input.length, entry.length) > SHORT_WORD) return 0
             if (entry.length - prefix > MAX_ENDING || input.length - prefix > MAX_ENDING) return 0
             return prefix
-        }
-
-        /** [matchLength], with the tighter ending [STRICT_ENDING] allows on the spoken side. */
-        internal fun closeEnough(input: String, entry: String): Boolean {
-            if (input == entry) return true
-            val matched = matchLength(input, entry)
-            return matched > 0 && input.length - matched <= STRICT_ENDING
         }
     }
 }
