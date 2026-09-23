@@ -194,6 +194,27 @@ object NodeCodec {
         return Memory(key, name, categoryId, node.long("at") ?: 0)
     }
 
+    /**
+     * One of „Moje produkty" (Phase 8b): a name the user curated, with its department. A
+     * deleted entry keeps both and is marked, so the delete reaches the other phone
+     * (decision 88).
+     */
+    data class OwnProduct(val key: String, val name: String, val categoryId: String, val at: Long, val deleted: Boolean = false)
+
+    fun ownProductToNode(product: OwnProduct): Map<String, Any> = buildMap {
+        put("name", product.name)
+        put("categoryId", product.categoryId)
+        put("at", product.at)
+        if (product.deleted) put("deleted", true)
+        put(RemoteWrites.CHANGED_AT, RemoteWrites.SERVER_TIME)
+    }
+
+    fun ownProductFromNode(key: String, node: Map<String, Any?>): OwnProduct? {
+        val name = node.string("name")?.takeIf { it.isNotEmpty() } ?: return null
+        val categoryId = node.string("categoryId")?.takeIf { it.isNotEmpty() } ?: return null
+        return OwnProduct(key, name, categoryId, node.long("at") ?: 0, node.boolean("deleted") ?: false)
+    }
+
     // --- Lenient readers ------------------------------------------------------------------
 
     private fun Map<String, Any?>.string(key: String): String? = this[key] as? String

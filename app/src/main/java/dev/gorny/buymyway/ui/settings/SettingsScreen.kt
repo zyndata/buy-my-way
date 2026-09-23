@@ -29,6 +29,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -44,12 +45,17 @@ import kotlinx.coroutines.launch
 
 /**
  * Ustawienia (PLAN.md *Screens*): the account (Phase 4), the default category order for new
- * lists, the theme (it follows the system), the version. Notifications, backup and the update
+ * lists, „Moje produkty" (Phase 8b), the theme (it follows the system), the version. Notifications, backup and the update
  * check join in their phases.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(vm: SettingsViewModel, onBack: () -> Unit, onOpenDefaultOrder: () -> Unit) {
+fun SettingsScreen(
+    vm: SettingsViewModel,
+    onBack: () -> Unit,
+    onOpenDefaultOrder: () -> Unit,
+    onOpenOwnProducts: () -> Unit,
+) {
     val account by vm.account.collectAsStateWithLifecycle()
     val pending by vm.pending.collectAsStateWithLifecycle()
     val busy by vm.busy.collectAsStateWithLifecycle()
@@ -108,6 +114,13 @@ fun SettingsScreen(vm: SettingsViewModel, onBack: () -> Unit, onOpenDefaultOrder
                 headlineContent = { Text(stringResource(R.string.settings_default_order)) },
                 supportingContent = { Text(stringResource(R.string.settings_default_order_hint)) },
                 modifier = Modifier.clickable(onClick = onOpenDefaultOrder),
+            )
+            ListItem(
+                headlineContent = { Text(stringResource(R.string.settings_own_products)) },
+                supportingContent = { Text(stringResource(R.string.settings_own_products_hint)) },
+                modifier = Modifier
+                    .clickable(onClick = onOpenOwnProducts)
+                    .testTag("ownProducts"),
             )
             HorizontalDivider()
             ListItem(

@@ -23,6 +23,7 @@ import kotlinx.serialization.json.Json
         OutboxOpEntity::class,
         ListSyncEntity::class,
         NameHistoryEntity::class,
+        OwnProductEntity::class,
     ],
 )
 @TypeConverters(Converters::class)
@@ -34,12 +35,13 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun outbox(): OutboxDao
     abstract fun listSync(): ListSyncDao
     abstract fun nameHistory(): NameHistoryDao
+    abstract fun ownProducts(): OwnProductDao
 
     companion object {
         const val NAME = "buymyway.db"
 
         /** The current schema version; the exported schemas in app/schemas are named after it. */
-        const val VERSION = 2
+        const val VERSION = 3
 
         /**
          * Every migration, oldest first. Each new version adds its step here and a case to the
@@ -51,6 +53,23 @@ abstract class AppDatabase : RoomDatabase() {
             object : Migration(1, 2) {
                 override fun migrate(db: SupportSQLiteDatabase) {
                     db.execSQL("ALTER TABLE items ADD COLUMN manualKey REAL")
+                }
+            },
+            // v3: „Moje produkty" (PLAN.md Phase 8b, STATE.md decisions 88 and 89).
+            object : Migration(2, 3) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL(
+                        """
+                        CREATE TABLE IF NOT EXISTS `own_product` (
+                            `key` TEXT NOT NULL,
+                            `name` TEXT NOT NULL,
+                            `categoryId` TEXT NOT NULL,
+                            `at` INTEGER NOT NULL,
+                            `deletedAt` INTEGER,
+                            PRIMARY KEY(`key`)
+                        )
+                        """,
+                    )
                 }
             },
         )

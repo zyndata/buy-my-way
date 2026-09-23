@@ -7,6 +7,7 @@ import dev.gorny.buymyway.core.model.Role
 import dev.gorny.buymyway.core.model.ShoppingList
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 class NodeCodecTest {
@@ -87,5 +88,25 @@ class NodeCodecTest {
 
         val odd = NodeCodec.memberFromNode("list-1", "uid-b", mapOf("role" to "superuser"))
         assertEquals(Role.VIEWER, odd.role)
+    }
+
+    /** „Moje produkty" (Phase 8b, STATE.md decision 88). */
+    @Test
+    fun ownProductsRoundTripAndCarryTheirTombstone() {
+        val live = NodeCodec.OwnProduct("chleb wiejski", "Chleb wiejski", "pieczywo", 42)
+        val node = NodeCodec.ownProductToNode(live)
+        assertEquals("Chleb wiejski", node["name"])
+        assertEquals(RemoteWrites.SERVER_TIME, node[RemoteWrites.CHANGED_AT])
+        // A live entry says nothing about deletion; a deleted one keeps its name and says so.
+        assertFalse(node.containsKey("deleted"))
+        assertEquals(live, NodeCodec.ownProductFromNode(live.key, node))
+
+        val deleted = live.copy(at = 43, deleted = true)
+        assertEquals(true, NodeCodec.ownProductToNode(deleted)["deleted"])
+        assertEquals(deleted, NodeCodec.ownProductFromNode(deleted.key, NodeCodec.ownProductToNode(deleted)))
+
+        // A node that is not one is rejected rather than invented.
+        assertNull(NodeCodec.ownProductFromNode("k", mapOf("name" to "", "categoryId" to "inne", "at" to 1L)))
+        assertNull(NodeCodec.ownProductFromNode("k", mapOf("name" to "Ser", "at" to 1L)))
     }
 }

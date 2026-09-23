@@ -16,9 +16,13 @@ class SyncMarks(private val dataStore: DataStore<Preferences>) {
         LIST_ORDER_SENT(longPreferencesKey("sync.listOrderSentAt")),
         MEMORY_SENT(longPreferencesKey("sync.memorySentAt")),
         LIST_SORT_SENT(longPreferencesKey("sync.listSortSentAt")),
+        PRODUCTS_SENT(longPreferencesKey("sync.productsSentAt")),
 
         /** Server time: the largest `changedAt` of a category memory entry read. */
         MEMORY_SEEN(longPreferencesKey("sync.memorySeenUpTo")),
+
+        /** Server time: the largest `changedAt` of a „Moje produkty" entry read. */
+        PRODUCTS_SEEN(longPreferencesKey("sync.productsSeenUpTo")),
     }
 
     suspend fun get(mark: Mark): Long = dataStore.data.first()[mark.key] ?: 0

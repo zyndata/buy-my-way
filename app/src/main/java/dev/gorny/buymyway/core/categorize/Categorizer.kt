@@ -42,11 +42,11 @@ class Categorizer(dictionary: Dictionary) {
     }
 
     /**
-     * The category id for [name]. [corrections] are the user's own choices, keyed by
-     * [TextKey.fold] of the name; they win over the dictionary.
+     * The category id for [name], from the dictionary alone. The user's own choices — „Moje
+     * produkty" and the category memory — are applied a step higher, in `ListRepository`
+     * (STATE.md decision 90).
      */
-    fun categorize(name: String, corrections: Map<String, String> = emptyMap()): String {
-        corrections[TextKey.fold(name)]?.let { return it }
+    fun categorize(name: String): String {
         val words = meaningful(TextKey.words(name))
         if (words.isEmpty()) return BuiltinCategories.FALLBACK
 

@@ -260,3 +260,27 @@ interface NameHistoryDao {
     @Query("DELETE FROM name_history")
     suspend fun deleteAll()
 }
+
+@Dao
+interface OwnProductDao {
+    /** „Moje produkty" on screen: what the user curated, alphabetically as Room sorts. */
+    @Query("SELECT * FROM own_product WHERE deletedAt IS NULL ORDER BY name")
+    fun observeAll(): Flow<List<OwnProductEntity>>
+
+    @Query("SELECT * FROM own_product WHERE `key` = :key")
+    suspend fun get(key: String): OwnProductEntity?
+
+    /** The live entries, for the department proposal and for where dictation may cut. */
+    @Query("SELECT * FROM own_product WHERE deletedAt IS NULL")
+    suspend fun all(): List<OwnProductEntity>
+
+    /** Entries set after [at]: what has not been mirrored to `/users/{uid}/prefs` yet. */
+    @Query("SELECT * FROM own_product WHERE at > :at ORDER BY at LIMIT :limit")
+    suspend fun setAfter(at: Long, limit: Int): List<OwnProductEntity>
+
+    @Upsert
+    suspend fun upsert(product: OwnProductEntity)
+
+    @Query("DELETE FROM own_product")
+    suspend fun deleteAll()
+}

@@ -60,6 +60,10 @@ class MigrationTest {
             // v2 (decision 67): an item from before has no „Ręcznie" position yet.
             assertNull(db.items().get("i1")?.manualKey)
             assertEquals("nabial", db.nameHistory().get("mleko")?.categoryId)
+            // v3 (Phase 8b): the table is there and empty; nothing is learned automatically.
+            assertEquals(emptyList<OwnProductEntity>(), db.ownProducts().all())
+            db.ownProducts().upsert(OwnProductEntity("chleb wiejski", "Chleb wiejski", "pieczywo", 5, null))
+            assertEquals("pieczywo", db.ownProducts().get("chleb wiejski")?.categoryId)
         } finally {
             db.close()
         }

@@ -113,6 +113,23 @@ data class NameHistoryEntity(
     @ColumnInfo(defaultValue = "1") val useCount: Int,
 )
 
+/**
+ * „Moje produkty" (Phase 8b): words the user curated on purpose, with the department they
+ * belong to. Per account and never learned automatically (decision 81). A deleted entry stays
+ * as a tombstone, so the delete reaches the user's other phone (decision 88).
+ */
+@Entity(tableName = "own_product")
+data class OwnProductEntity(
+    /** `TextKey.fold(name)`. */
+    @PrimaryKey val key: String,
+    val name: String,
+    /** Always one of the nine built-in departments (decision 89). */
+    val categoryId: String,
+    /** When this entry was last set on any of the user's phones; last-writer-wins by it. */
+    val at: Long,
+    val deletedAt: Long?,
+)
+
 fun ListEntity.toDomain() = ShoppingList(id, name, ownerUid, shared, categoryOrder, createdAt, updatedAt, updatedBy, clearedAt, deletedAt)
 
 fun ShoppingList.toEntity() = ListEntity(id, name, ownerUid, shared, categoryOrder, createdAt, updatedAt, updatedBy, clearedAt, deletedAt)

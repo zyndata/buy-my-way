@@ -22,6 +22,7 @@ import dev.gorny.buymyway.data.local.AppDatabase
 import dev.gorny.buymyway.data.local.ListSyncEntity
 import dev.gorny.buymyway.data.local.NameHistoryEntity
 import dev.gorny.buymyway.data.local.OutboxOpEntity
+import dev.gorny.buymyway.data.local.OwnProductEntity
 import dev.gorny.buymyway.data.local.toDomain
 import dev.gorny.buymyway.data.local.toEntity
 import dev.gorny.buymyway.data.prefs.CategoryOrderSource
@@ -31,6 +32,9 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import java.util.UUID
+
+/** One of „Moje produkty": a name the user curated, with the department they gave it. */
+data class OwnProduct(val key: String, val name: String, val categoryId: String)
 
 /** A name the add bar can offer, with the category it was last filed under. */
 data class NameSuggestion(val name: String, val categoryId: String)
@@ -586,6 +590,7 @@ class ListRepository(
         db.outbox().deleteAll()
         db.listSync().deleteAll()
         db.nameHistory().deleteAll()
+        db.ownProducts().deleteAll()
     }
 
     /** The whole of one list as the merge sees it, tombstones included. */
@@ -639,12 +644,65 @@ class ListRepository(
         return item
     }
 
+    // --- „Moje produkty" (Phase 8b) -------------------------------------------------------
+
+    /** What Ustawienia → „Moje produkty" shows: the live entries, by name. */
+    fun observeOwnProducts(): Flow<List<OwnProduct>> = db.ownProducts().observeAll()
+        .map { rows -> rows.map { OwnProduct(it.key, it.name, it.categoryId) } }
+        .distinctUntilChanged()
+
+    /** The folded names the user curated: where dictation may also cut (PLAN.md task 4). */
+    suspend fun ownProductKeys(): List<String> = db.ownProducts().all().map { it.key }
+
     /**
-     * The category the add bar proposes for [name]: the one this name was last filed under on
-     * this device, if this list still has it, or the dictionary's guess.
+     * „Zapamiętaj", and the screen's add and edit: one name with the department it belongs to.
+     * Renaming is a new key and a tombstone on the old one, because the key *is* the folded
+     * name. Returns the key of the entry that now holds it.
+     */
+    suspend fun setOwnProduct(name: String, categoryId: String, replacing: String? = null): String {
+        val cleaned = cleanName(name, TextLimits.ITEM_NAME)
+        val key = TextKey.fold(cleaned)
+        require(key.isNotEmpty()) { "a product name must hold a letter or a digit" }
+        require(BuiltinCategories.isBuiltin(categoryId)) { "a product's department must be a built-in one" }
+        val at = stamp(db.ownProducts().get(key)?.at)
+        db.withTransaction {
+            if (replacing != null && replacing != key) deleteOwnProduct(replacing)
+            db.ownProducts().upsert(OwnProductEntity(key, cleaned, categoryId, at, deletedAt = null))
+        }
+        return key
+    }
+
+    /** A tombstone, so the delete reaches the user's other phone (decision 88). */
+    suspend fun deleteOwnProduct(key: String) {
+        val known = db.ownProducts().get(key) ?: return
+        val at = stamp(known.at)
+        db.ownProducts().upsert(known.copy(at = at, deletedAt = at))
+    }
+
+    /** „Cofnij" after a delete: the entry as it was, set again now. */
+    suspend fun restoreOwnProduct(key: String) {
+        val known = db.ownProducts().get(key) ?: return
+        if (known.deletedAt == null) return
+        val at = stamp(known.at)
+        db.ownProducts().upsert(known.copy(at = at, deletedAt = null))
+    }
+
+    /** Later than what is stored, even if this phone's clock is not (as a stamped preference does). */
+    private fun stamp(previous: Long?): Long = maxOf(clock(), (previous ?: 0) + 1)
+
+    /**
+     * The category the add bar proposes for [name]: the department the user gave this name in
+     * „Moje produkty", else the one it was last filed under on this device if this list still
+     * has that category, else the dictionary's guess (STATE.md decision 90).
      */
     suspend fun proposeCategory(listId: String, name: String): String =
-        rememberedCategory(listId, name) ?: categorize(name)
+        ownProductCategory(name) ?: rememberedCategory(listId, name) ?: categorize(name)
+
+    /** A curated department is always one of the nine, so it is usable in every list (decision 89). */
+    private suspend fun ownProductCategory(name: String): String? =
+        db.ownProducts().get(TextKey.fold(name))
+            ?.takeIf { it.deletedAt == null && BuiltinCategories.isBuiltin(it.categoryId) }
+            ?.categoryId
 
     /** The user's last choice for this name, if that category is usable in this list. */
     private suspend fun rememberedCategory(listId: String, name: String): String? {

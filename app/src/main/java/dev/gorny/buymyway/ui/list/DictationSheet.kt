@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AssistChip
@@ -43,11 +44,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import dev.gorny.buymyway.R
@@ -75,6 +78,7 @@ fun DictationSheet(
     onEvent: (VoiceEvent) -> Unit,
     onEdit: (Long, String) -> Unit,
     onChooseCategory: (Long, String) -> Unit,
+    onRemember: (Long) -> Unit,
     onRemove: (Long) -> Unit,
     onAddAll: () -> Unit,
     onDismiss: () -> Unit,
@@ -119,6 +123,7 @@ fun DictationSheet(
                         categories = categories,
                         onEdit = { text -> onEdit(item.key, text) },
                         onChooseCategory = { id -> onChooseCategory(item.key, id) },
+                        onRemember = { onRemember(item.key) },
                         onRemove = { onRemove(item.key) },
                     )
                 }
@@ -211,6 +216,7 @@ private fun DictatedRow(
     categories: List<CategoryInfo>,
     onEdit: (String) -> Unit,
     onChooseCategory: (String) -> Unit,
+    onRemember: () -> Unit,
     onRemove: () -> Unit,
 ) {
     var text by rememberSaveable(item.key) {
@@ -222,6 +228,7 @@ private fun DictatedRow(
 
     Column(verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.testTag("dictated:${item.name}")) {
         Row(verticalAlignment = Alignment.CenterVertically) {
+            val focus = LocalFocusManager.current
             OutlinedTextField(
                 value = text,
                 onValueChange = {
@@ -229,7 +236,13 @@ private fun DictatedRow(
                     onEdit(it)
                 },
                 singleLine = true,
-                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
+                // „Gotowe" puts the keyboard away: with it open there is no room for the
+                // buttons below on a short screen (the Phase 8 lesson, decision 79's cousin).
+                keyboardOptions = KeyboardOptions(
+                    capitalization = KeyboardCapitalization.Sentences,
+                    imeAction = ImeAction.Done,
+                ),
+                keyboardActions = KeyboardActions(onDone = { focus.clearFocus() }),
                 modifier = Modifier
                     .weight(1f)
                     .testTag("dictatedField:${item.key}"),
@@ -240,24 +253,40 @@ private fun DictatedRow(
         }
         if (category != null) {
             val description = stringResource(R.string.dictation_item_description, item.name, category.name)
-            Box {
-                AssistChip(
-                    onClick = { picking = true },
-                    label = { Text(category.name) },
-                    modifier = Modifier
-                        .heightIn(min = 32.dp)
-                        .testTag("dictatedCategory:${item.key}")
-                        .semantics { contentDescription = description },
-                )
-                DropdownMenu(expanded = picking, onDismissRequest = { picking = false }) {
-                    categories.forEach { option ->
-                        DropdownMenuItem(
-                            text = { Text(option.name) },
-                            onClick = {
-                                picking = false
-                                onChooseCategory(option.id)
-                            },
-                        )
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Box {
+                    AssistChip(
+                        onClick = { picking = true },
+                        label = { Text(category.name) },
+                        modifier = Modifier
+                            .heightIn(min = 32.dp)
+                            .testTag("dictatedCategory:${item.key}")
+                            .semantics { contentDescription = description },
+                    )
+                    DropdownMenu(expanded = picking, onDismissRequest = { picking = false }) {
+                        categories.forEach { option ->
+                            DropdownMenuItem(
+                                text = { Text(option.name) },
+                                onClick = {
+                                    picking = false
+                                    onChooseCategory(option.id)
+                                },
+                            )
+                        }
+                    }
+                }
+                // Only a word no dictionary here knows, and only in one of the nine departments:
+                // „Moje produkty" belongs to the account, a list's own category does not.
+                if (item.remembered) {
+                    Text(
+                        stringResource(R.string.dictation_remembered),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.testTag("remembered:${item.key}"),
+                    )
+                } else if (item.canRemember && category.builtin) {
+                    TextButton(onClick = onRemember, modifier = Modifier.testTag("remember:${item.key}")) {
+                        Text(stringResource(R.string.action_remember_product))
                     }
                 }
             }

@@ -294,6 +294,7 @@ fun ListScreen(
             onEvent = vm::onVoice,
             onEdit = vm::editDictated,
             onChooseCategory = vm::setDictatedCategory,
+            onRemember = vm::rememberDictated,
             onRemove = vm::removeDictated,
             onAddAll = vm::addDictated,
             onDismiss = vm::closeDictation,

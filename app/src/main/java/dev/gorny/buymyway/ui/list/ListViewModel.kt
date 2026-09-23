@@ -80,6 +80,10 @@ data class DictatedItem(
     val categoryId: String? = null,
     /** True once the user picked [categoryId] themselves, so a proposal no longer overrides it. */
     val chosen: Boolean = false,
+    /** True when no dictionary knows this name yet, so „Zapamiętaj" is worth offering (decision 91). */
+    val canRemember: Boolean = false,
+    /** True once „Zapamiętaj" has put it in „Moje produkty". */
+    val remembered: Boolean = false,
 )
 
 /** The review sheet: open from the first tap on the mic until „Dodaj wszystkie" or „Anuluj". */
@@ -302,6 +306,7 @@ class ListViewModel(
                     quantity = item.quantity,
                     unit = item.unit,
                     categoryId = runCatching { repo.proposeCategory(listId, item.name) }.getOrNull(),
+                    canRemember = isNew(item.name, known),
                 )
             }
             _dictation.update { state ->
@@ -334,15 +339,45 @@ class ListViewModel(
             )
         }
         val item = _dictation.value.items.firstOrNull { it.key == key } ?: return
-        if (item.chosen || item.name.isBlank()) return
+        if (item.name.isBlank()) return
         viewModelScope.launch {
-            val proposed = runCatching { repo.proposeCategory(listId, item.name) }.getOrNull() ?: return@launch
+            val known = runCatching { knownNames() }.getOrDefault(Dictation.KnownNames.NONE)
+            // A corrected line is a different name, so it may now be one worth remembering.
+            val fresh = isNew(item.name, known)
+            val proposed = if (item.chosen) null else runCatching { repo.proposeCategory(listId, item.name) }.getOrNull()
             _dictation.update { state ->
                 state.copy(
                     items = state.items.map {
-                        if (it.key == key && !it.chosen && it.name == item.name) it.copy(categoryId = proposed) else it
+                        when {
+                            it.key != key || it.name != item.name -> it
+                            proposed == null || it.chosen -> it.copy(canRemember = fresh, remembered = false)
+                            else -> it.copy(categoryId = proposed, canRemember = fresh, remembered = false)
+                        }
                     },
                 )
+            }
+        }
+    }
+
+    /** Whether no dictionary this phone has knows [name] whole, so it is worth curating. */
+    private fun isNew(name: String, known: Dictation.KnownNames): Boolean {
+        val words = TextKey.words(name)
+        return words.isNotEmpty() && known.lengthAt(words, 0) < words.size
+    }
+
+    /**
+     * „Zapamiętaj" on a dictated line (PLAN.md Phase 8b, task 2): the name, with the department
+     * on its chip, joins „Moje produkty". Nothing else in the sheet writes anything.
+     */
+    fun rememberDictated(key: Long) {
+        val item = _dictation.value.items.firstOrNull { it.key == key } ?: return
+        val categoryId = item.categoryId ?: return
+        if (item.name.isBlank()) return
+        viewModelScope.launch {
+            runCatching { repo.setOwnProduct(item.name, categoryId) }.onSuccess {
+                _dictation.update { state ->
+                    state.copy(items = state.items.map { if (it.key == key) it.copy(remembered = true) else it })
+                }
             }
         }
     }

@@ -42,6 +42,9 @@ object RemoteWrites {
 
     fun listSort(uid: String) = "users/$uid/prefs/listSort"
 
+    /** „Moje produkty" (Phase 8b): the user's own words, private to their account. */
+    fun ownProducts(uid: String) = "users/$uid/prefs/products"
+
     fun members(listId: String) = "lists/$listId/members"
 
     fun member(listId: String, uid: String) = "lists/$listId/members/$uid"

@@ -16,7 +16,7 @@ Any deviation from [PLAN.md](PLAN.md) must be recorded here before proceeding.
 | 6     | Photos                                 | done    | 2026-09-22 |
 | 7     | Voice input                            | done    | 2026-09-23 |
 | 8     | Import from Eat My Way                 | done    | 2026-09-23 |
-| 8b    | „Moje produkty"                        | pending |           |
+| 8b    | „Moje produkty"                        | done    | 2026-09-23 |
 | 9     | Background, notifications & battery    | pending |           |
 | 10    | Release engineering & 1.0              | pending |           |
 | 11    | Google Play closed testing             | dropped | 2026-09-21 |
@@ -29,7 +29,8 @@ push sender's skeleton (`push/`, deployed), from Phase 1 the Android app's scaff
 Phase 2 its local data layer, from Phase 3 its screens for private lists, from Phase 4
 Google sign-in with the lists kept in Firebase Realtime Database, from Phase 5 sharing
 with other people and live changes, from Phase 6 photos on items, from Phase 7 dictation, and
-from Phase 8 the import of a shopping list shared out of Eat My Way.
+from Phase 8 the import of a shopping list shared out of Eat My Way, and from Phase 8b the
+user's own product words.
 
 **Phase 0 done (2026-09-21).** Under `drive.file`, a shared file is invisible to the other
 member's copy of the app. So shared lists and photos move to Firebase Realtime Database and
@@ -228,7 +229,7 @@ itself when the camera returned. The test photo left on „mleko" in „Zakupy n
 owner's to remove.
 
 **Phase 8b („Moje produkty") was added to PLAN.md on 2026-09-23**, out of Phase 7's daily use
-(decisions 80–81). It is not started.
+(decisions 80–81).
 
 **Phase 7 done (2026-09-23), all three acceptance criteria met.** The add bar has a mic. It asks for `RECORD_AUDIO` at the first
 tap (with a sentence where Android says to explain, and a way to the app's settings after a
@@ -359,6 +360,57 @@ called done until its run is green.
 **Not verified:** sharing from the real Eat My Way app on a phone — the fixture is a
 reconstruction, not a capture (decision 84), so the owner's first real share is the last check;
 the Linux machine (open question 2).
+
+**Phase 8b done (2026-09-23), three of four acceptance criteria met here and the fourth by the
+rules tests.** Ustawienia → „Moje produkty" is the user's own short dictionary: add a name with
+the department it belongs to, rename it, move it to another department, delete it with „Cofnij".
+„Zapamiętaj" in the dictation sheet does the same in one tap, and it is offered only on a line
+whose name no dictionary here knows (decision 91). One entry fixes both things at once:
+dictation cuts an utterance at that name, so „chleb wiejski" is one item of its own, and the add
+bar proposes its department ahead of the category memory and the dictionary (decision 90).
+It is stored in Room (schema v3, `own_product`), so it works signed out and offline, and
+mirrored to `/users/{uid}/prefs/products`, last-writer-wins per name by `at`, read back by
+`changedAt` exactly as `categoryMemory` is. A delete travels as a tombstone (decision 88),
+because a catch-up only ever sees nodes that exist. A department is always one of the nine
+built-in ones (decision 89). Decisions 88–91. **What wakes the device:** nothing new. No worker,
+no service, no listener; the products ride along in the preference push and pull that Phase 4
+already makes. No new dependency.
+Verified: 174 JVM tests (2 new: the curated cut in `DictationTest`, the node and its tombstone in
+`NodeCodecTest`; one Phase 2 test was rewritten, because `Categorizer.categorize` no longer takes
+`corrections` — decision 90 moved them to `ListRepository`). 74 rules tests on the Firebase
+emulator (2 new: the node's shape, the server `changedAt`, the newer `at`, the tombstone and the
+`changedAt` query; and that nobody else reads or writes another user's products — the phase's
+fourth acceptance criterion). Loosening the `at` check made the first of them fail. 121
+instrumented entries on the API 35 emulator (17 new; 120 tests and the `TwoPhoneProbe` skip that
+AGP writes as a failure, decision 69): 9 in `OwnProductsTest` (the folded key and the name as it
+was typed, a rename that leaves no stray row, a tombstone with a newer stamp, a stamp that moves
+even when the clock does not, only a built-in department, the department beating the memory, the
+cut over the index the app builds from Room, sign-out taking the lot), 2 in `SyncEngineTest` (the
+list following the account to the other phone and a delete crossing with it; a signed-out phone
+keeping its own and seeing no one else's), 4 in `OwnProductsFlowsTest` (add with a department,
+rename and move, delete undone with „Cofnij", delete committed when the snackbar closes) and 2 in
+`DictationFlowsTest` („Zapamiętaj" offered only on the unknown name, storing it with the chip's
+department, and adding the items adding nothing more; the department taken from the chip).
+Lint clean.
+**The four acceptance criteria:** a curated name is one item of its own in its department with
+no further tap (`dictationCutsAtACuratedName`, `aCuratedDepartmentIsWhatTheAddBarProposes`,
+`aCuratedNameIsOneItemOfItsOwn` on the JVM); nothing reaches „Moje produkty" unasked
+(`addingAndTickingItemsLeavesMojeProduktyUntouched`, and the „Zapamiętaj" flow asserts the list
+is untouched until that tap); the list follows the account and a signed-out phone keeps its own
+(`mojeProduktyFollowsTheAccountToTheOtherPhoneAndSoDoesADelete`,
+`aSignedOutPhoneKeepsItsOwnProductsAndSeesNoOneElses`); the rules refuse a write to another
+user's products (`nobody else reads or writes another user's products`).
+**Found on the way:** the „Zapamiętaj" button made a dictated line taller, and on a 360 × 640 dp
+screen with the keyboard up „Dodaj wszystkie" went under it — a tap on the button then reached
+the keyboard and nothing was added. The line now carries `ImeAction.Done` and clears focus on it,
+so „Gotowe" puts the keyboard away, which is Phase 8's lesson about the import screen met a
+second time. The emulator here was run at CI's size for the suite (`wm size 1080x1920`,
+`wm density 480`), which is where it was caught.
+**Not verified:** two *physical* phones (the emulator has no Google account), so the account
+half of the third criterion rests on the fake server and the rules tests; the rules on the real
+project (the owner publishes them **before** installing this build — `docs/DEPLOYMENT.md` says
+why: the Phase 6 rules reject an unknown key under `prefs` and the whole preference push stops
+there); the Linux machine (open question 2).
 
 ## Decisions
 
@@ -1231,6 +1283,41 @@ Newest last. Every deviation from PLAN.md lands here **before** it is acted on.
     import screen's view model takes the text with `getAndUpdate { null }` when it is built —
     the one place that cannot miss it — so leaving the screen and coming back cannot import the
     same text twice, and the navigate does not fire again.
+
+### 2026-09-23 — Phase 8b („Moje produkty")
+
+88. **A deleted product is a tombstone, so the delete crosses to the other phone.** PLAN.md
+    gives the node four fields (`{name, categoryId, at, changedAt}`); a deleted entry keeps all
+    four and gains `deleted: true`, and the Room row keeps a `deletedAt`. Without it a delete
+    could not travel: the catch-up reads `/users/{uid}/prefs/products` by `changedAt`
+    (decision 54), which only ever returns nodes that *exist*, so a removed node would simply
+    come back from the other phone's copy at the next pull, exactly as an item without a
+    tombstone would. Last-writer-wins by `at` then covers a delete on one phone racing a rename
+    on the other. Nothing prunes these tombstones: one is a name, a department and two numbers,
+    and there can never be more of them than the names the user has typed by hand.
+89. **A product's department is one of the nine built-in ones.** „Moje produkty" belongs to the
+    account, not to a list (decision 81), and a list's own categories belong to that list — an
+    id from one list would mean nothing in another, and the entry would silently fall back. So
+    the screen offers `BuiltinCategories.ALL` and nothing else, which also means a product's
+    department is usable in every list without the check `rememberedCategory` has to make.
+90. **The user's own product beats the category memory, which beats the dictionary.** PLAN.md
+    task 4 says „`Categorizer.categorize` takes their department as a correction". It is one
+    step higher, in `ListRepository.proposeCategory`, because a `Categorizer` is built from the
+    asset file and has no database, while the repository already makes the same lookup for the
+    category memory. The order is deliberate: „Moje produkty" is the only one of the three the
+    user can see and edit, so a curated entry wins over what a name happened to be filed under
+    last. The cost, and it is the honest one: moving an item to another department on the list
+    screen no longer changes the proposal for a name that is in „Moje produkty" — that entry is
+    changed in „Moje produkty", which is decision 81's stance („nothing is learned
+    automatically") applied to the other direction too. `Categorizer.categorize`'s `corrections`
+    parameter, unused since Phase 2, is dropped.
+91. **„Zapamiętaj" appears only on a dictated line whose name is not known already.** The words
+    worth curating are the ones the dictionary and the phone's own history have never heard of
+    („chleb wiejski"), and that is exactly the question `NameIndex` already answers for the cut.
+    A line whose whole name is known carries no button, so the sheet stays as it was for the 662
+    names that need nothing. One tap stores the name with the department on its chip and the
+    button reads „Zapamiętane"; nothing else in the sheet writes anything anywhere (task 2's
+    „never on its own").
 
 ## Open questions
 

@@ -140,6 +140,35 @@ class DictationTest {
         )
     }
 
+    /**
+     * „Moje produkty" (PLAN.md Phase 8b): the same cut, from the list the user curates on
+     * purpose. This is the parser half of the phase's first acceptance criterion — a name the
+     * dictionary has never heard of is one item of its own the next time it is dictated.
+     */
+    @Test
+    fun aCuratedNameIsOneItemOfItsOwn() {
+        // Before it is curated, two things the dictionary has never heard of are one line.
+        assertEquals(
+            listOf(item("dropsy owsiane kefir malinowy")),
+            Dictation.parse("dropsy owsiane kefir malinowy", known),
+        )
+
+        // As Room holds „Moje produkty": the folded name is the key.
+        val curated = NameIndex.ofFolded(listOf("dropsy owsiane"))
+        val withMine = Dictation.KnownNames { words, from ->
+            maxOf(categorizer.knownNameLength(words, from), curated.lengthAt(words, from))
+        }
+        assertEquals(
+            listOf(item("dropsy owsiane"), item("kefir malinowy")),
+            Dictation.parse("dropsy owsiane kefir malinowy", withMine),
+        )
+        // In the middle of a sentence, and with a quantity of its own.
+        assertEquals(
+            listOf(item("masło"), item("dropsy owsiane", 2.0), item("ziemniaków", 3.0, "kg")),
+            Dictation.parse("masło dwa dropsy owsiane trzy kilo ziemniaków", withMine),
+        )
+    }
+
     /** A name stored with a typo still meets the word as it is said: the stem is what matches. */
     @Test
     fun aTypoInTheHistoryDoesNotBreakTheCut() {

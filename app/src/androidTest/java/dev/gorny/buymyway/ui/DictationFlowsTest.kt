@@ -10,6 +10,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performTextReplacement
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelStore
@@ -20,6 +21,8 @@ import androidx.test.platform.app.InstrumentationRegistry
 import dev.gorny.buymyway.R
 import dev.gorny.buymyway.core.model.BuiltinCategories
 import dev.gorny.buymyway.core.model.Item
+import dev.gorny.buymyway.core.categorize.NameIndex
+import dev.gorny.buymyway.core.voice.Dictation
 import dev.gorny.buymyway.core.voice.VoiceError
 import dev.gorny.buymyway.core.voice.VoiceEvent
 import dev.gorny.buymyway.core.voice.VoiceSource
@@ -34,6 +37,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -112,8 +116,11 @@ class DictationFlowsTest {
 
     private val voice = SilentVoice()
 
+    /** What the screen's dictionaries know, as `AppContainer.knownNames` would hand it over. */
+    private var known: Dictation.KnownNames = Dictation.KnownNames.NONE
+
     private fun showList(listId: String): ListViewModel {
-        val vm = kept(ListViewModel(repo, listId, { _, _ -> emptyList() }, scope))
+        val vm = kept(ListViewModel(repo, listId, { _, _ -> emptyList() }, scope, knownNames = { known }))
         compose.setContent { BuyMyWayTheme { ListScreen(vm, onBack = {}, onOpenCategoryOrder = {}, onOpenShare = {}, voice = voice) } }
         waitFor { exists(hasTestTag("addField")) }
         return vm
@@ -192,6 +199,8 @@ class DictationFlowsTest {
         dictate(vm, "chleb")
         waitFor { exists(hasTestTag("dictated:chleb")) }
         compose.onNodeWithTag("dictatedField:0").performTextReplacement("2 l mleko")
+        // „Gotowe" as a person taps it: with the keyboard up there is no room for the buttons.
+        compose.onNodeWithTag("dictatedField:0").performImeAction()
         waitFor { exists(hasTestTag("dictated:mleko")) }
         // The proposal followed the new name (the test categoriser files „mleko" under „Nabiał").
         waitFor { exists(hasText("Nabiał i jaja")) }
@@ -333,4 +342,60 @@ class DictationFlowsTest {
         compose.waitForIdle()
         assertEquals(1, tapped)
     }
+
+    /**
+     * „Zapamiętaj" (PLAN.md Phase 8b, task 2): it is offered only on a line no dictionary here
+     * knows (STATE.md decision 91), one tap puts that name in „Moje produkty" with the
+     * department on its chip, and nothing else in the sheet writes anything anywhere.
+     */
+    @Test
+    fun zapamietajStoresOnlyTheNameNoDictionaryKnows() {
+        val listId = runBlocking { repo.createList("Sobota") }
+        known = NameIndex.of(listOf("mleko")).let { index ->
+            Dictation.KnownNames { words, from -> index.lengthAt(words, from) }
+        }
+        val vm = showList(listId)
+
+        dictate(vm, "mleko, chleb wiejski")
+        waitFor { exists(hasTestTag("dictated:chleb wiejski")) }
+
+        // The word the dictionary knows is offered nothing; the one it does not is.
+        assertEquals(false, exists(hasTestTag("remember:0")))
+        waitFor { exists(hasTestTag("remember:1")) }
+        assertEquals(emptyList<Pair<String, String>>(), products())
+
+        compose.onNodeWithTag("remember:1").performClick()
+        waitFor { products().isNotEmpty() }
+
+        // Stored with the department the chip showed, and the line says so.
+        assertEquals(listOf("chleb wiejski" to "warzywa"), products())
+        waitFor { exists(hasTestTag("remembered:1")) }
+        assertEquals(false, exists(hasTestTag("remember:1")))
+        // „Zapamiętaj" is not „Dodaj": the list is still empty.
+        assertEquals(emptyList<Item>(), items(listId))
+
+        compose.onNodeWithTag("addAll").performClick()
+        waitFor { items(listId).size == 2 }
+        // And adding the items adds nothing more to „Moje produkty" (task 2: never on its own).
+        assertEquals(listOf("chleb wiejski" to "warzywa"), products())
+    }
+
+    /** The department the user picks on the chip is the one „Zapamiętaj" stores. */
+    @Test
+    fun zapamietajTakesTheDepartmentFromTheChip() {
+        val listId = runBlocking { repo.createList("Sobota") }
+        val vm = showList(listId)
+
+        dictate(vm, "chleb wiejski")
+        waitFor { exists(hasTestTag("remember:0")) }
+        compose.onNodeWithTag("dictatedCategory:0").performClick()
+        compose.onNodeWithText("Pieczywo").performClick()
+        waitFor { exists(hasText("Pieczywo")) }
+
+        compose.onNodeWithTag("remember:0").performClick()
+        waitFor { products().isNotEmpty() }
+        assertEquals(listOf("chleb wiejski" to "pieczywo"), products())
+    }
+
+    private fun products() = runBlocking { repo.observeOwnProducts().first().map { it.name to it.categoryId } }
 }

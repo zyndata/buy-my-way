@@ -94,14 +94,19 @@ class AppContainer(context: Context) {
 
     /**
      * Where one dictated thing ends and the next begins, when nothing was said between them:
-     * the bundled dictionary, and the names this phone has already seen (decision 80). The
-     * second is what makes „chleb wiejski" a thing of its own once it has been bought once.
+     * the bundled dictionary, the names this phone has already seen (decision 80), and the
+     * words the user curated in „Moje produkty" (Phase 8b). The last is the only one of the
+     * three the user can edit, and it is what makes „chleb wiejski" a thing of its own.
      */
     suspend fun knownNames(): Dictation.KnownNames {
         val categorizer = categorizer()
-        val mine = NameIndex.ofFolded(database.nameHistory().keys(OWN_NAMES))
+        val seen = NameIndex.ofFolded(database.nameHistory().keys(OWN_NAMES))
+        val curated = NameIndex.ofFolded(lists.ownProductKeys())
         return Dictation.KnownNames { words, from ->
-            maxOf(categorizer.knownNameLength(words, from), mine.lengthAt(words, from))
+            maxOf(
+                categorizer.knownNameLength(words, from),
+                maxOf(seen.lengthAt(words, from), curated.lengthAt(words, from)),
+            )
         }
     }
 

@@ -76,11 +76,14 @@ class CategorizerTest {
         assertEquals("inne", tie.categorize("abcd"))
     }
 
+    /**
+     * The dictionary answers from the dictionary alone. The user's own corrections — „Moje
+     * produkty" and the category memory — are applied by `ListRepository.proposeCategory`
+     * (STATE.md decision 90), where `OwnProductsTest` covers them.
+     */
     @Test
-    fun theUsersCorrectionWins() {
-        val corrections = mapOf(TextKey.fold("Mleko owsiane") to "napoje")
-        assertEquals("napoje", categorizer.categorize("mleko  OWSIANE", corrections))
-        assertEquals("nabial", categorizer.categorize("mleko owsiane"))
+    fun theDictionaryAnswersFromItself() {
+        assertEquals("nabial", categorizer.categorize("mleko  OWSIANE"))
     }
 
     /**

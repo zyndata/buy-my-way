@@ -69,6 +69,32 @@
               }
             }
           },
+          "products": {
+            ".indexOn": [
+              "changedAt"
+            ],
+            "$key": {
+              ".validate": "$key.length <= 200 && newData.hasChildren(['name', 'categoryId', 'at', 'changedAt']) && newData.child('changedAt').val() === now && (!data.exists() || newData.child('at').val() >= data.child('at').val())",
+              "name": {
+                ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 200"
+              },
+              "categoryId": {
+                ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 64"
+              },
+              "at": {
+                ".validate": "newData.isNumber()"
+              },
+              "deleted": {
+                ".validate": "newData.isBoolean()"
+              },
+              "changedAt": {
+                ".validate": "newData.isNumber()"
+              },
+              "$other": {
+                ".validate": false
+              }
+            }
+          },
           "listSort": {
             "$listId": {
               ".validate": "$listId.length <= 64 && newData.hasChildren(['value', 'updatedAt']) && (!data.exists() || newData.child('updatedAt').val() >= data.child('updatedAt').val())",

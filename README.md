@@ -56,6 +56,11 @@ The interface is in **Polish**. The code, comments and documentation are in Engl
 > the shop it was printed under, „×" drops one, and you pick an existing list or a new one
 > named after the week. Importing the same list twice sums the quantities instead of adding
 > everything again, and anything that is not an Eat My Way list is read as one item per line.
+> Phase 8b is done: Ustawienia → „Moje produkty" is your own short list of words the built-in
+> dictionary has never heard of — „chleb wiejski" — each with the part of the shop it belongs
+> to. Dictation then hears it as one thing of its own and puts it in that aisle. Nothing lands
+> there by itself: you add it, or tap „Zapamiętaj" on a line while dictating. The list is
+> private to your account and follows it to your other phone.
 > Phase 9, notifications for a closed app, is next.
 
 ## Screenshots
@@ -82,7 +87,9 @@ The interface is in **Polish**. The code, comments and documentation are in Engl
 - **Say it instead of typing it.** The mic reads one sentence as many items, with their
   quantities and departments, and always asks you to look before anything is added. It uses
   the recognizer that is already on the phone, offline where the Polish pack is installed; the
-  app records nothing itself and keeps no audio.
+  app records nothing itself and keeps no audio. Words it does not know go in „Moje produkty",
+  your own list, one tap at a time — never learned behind your back, so no typo of yours ever
+  becomes a product.
 - **Speaks Eat My Way.** Share a week's shopping list out of Eat My Way and it lands here in the
   right places, quantities and all: the nine departments of the shop are the same. Import the
   same list again and the quantities are summed, not doubled up. Any other text you share or

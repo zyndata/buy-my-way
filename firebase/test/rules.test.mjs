@@ -185,6 +185,37 @@ describe('prefs', () => {
     );
   });
 
+  // „Moje produkty" (PLAN.md Phase 8b, task 1; STATE.md decisions 88 and 89).
+  test('an own product needs a server changedAt and a newer at, and may be a tombstone', async () => {
+    const entry = `${prefs}/products/chleb wiejski`;
+    await assertSucceeds(
+      db(ALICE).ref(entry).set({ name: 'chleb wiejski', categoryId: 'pieczywo', at: T0, changedAt: TIMESTAMP }),
+    );
+    // An older write loses, the server's clock is not optional, and no other field may ride along.
+    await assertFails(db(ALICE).ref(entry).set({ name: 'chleb wiejski', categoryId: 'inne', at: T0 - 1, changedAt: TIMESTAMP }));
+    await assertFails(db(ALICE).ref(entry).set({ name: 'chleb wiejski', categoryId: 'inne', at: T0 + 1, changedAt: T0 }));
+    await assertFails(db(ALICE).ref(entry).set({ name: '', categoryId: 'pieczywo', at: T0 + 1, changedAt: TIMESTAMP }));
+    await assertFails(
+      db(ALICE).ref(entry).set({ name: 'chleb wiejski', categoryId: 'pieczywo', at: T0 + 1, changedAt: TIMESTAMP, uid: BOB }),
+    );
+    // A delete travels as a tombstone, and the catch-up reads the lot by changedAt.
+    await assertSucceeds(
+      db(ALICE).ref(entry).set({ name: 'chleb wiejski', categoryId: 'pieczywo', at: T0 + 2, deleted: true, changedAt: TIMESTAMP }),
+    );
+    await assertSucceeds(db(ALICE).ref(`${prefs}/products`).orderByChild('changedAt').startAt(0).get());
+  });
+
+  test('nobody else reads or writes another user’s products', async () => {
+    const entry = `${prefs}/products/chleb wiejski`;
+    await seed(entry, { name: 'chleb wiejski', categoryId: 'pieczywo', at: T0, changedAt: T0 });
+    await assertFails(db(BOB).ref(entry).get());
+    await assertFails(db(BOB).ref(`${prefs}/products`).get());
+    await assertFails(db(BOB).ref(entry).set({ name: 'ser zolty', categoryId: 'nabial', at: T0 + 1, changedAt: TIMESTAMP }));
+    await assertFails(db(BOB).ref(entry).remove());
+    await assertFails(anonymous().ref(entry).get());
+    await assertSucceeds(db(ALICE).ref(entry).get());
+  });
+
   test('unknown prefs are rejected', async () => {
     await assertFails(db(ALICE).ref(`${prefs}/theme`).set('dark'));
   });

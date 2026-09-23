@@ -74,6 +74,12 @@ photo write is refused, and the build then gives up on that photo. Deleting a li
 too, because the delete now also removes `/photos/{listId}`, which the Phase 5 rules do not
 allow. The Phase 5 build works under the Phase 6 rules: it writes no photos.
 
+**Publish Phase 8b's rules before installing the Phase 8b build.** „Moje produkty" writes
+`/users/{uid}/prefs/products`, and the Phase 6 rules reject an unknown key under `prefs`. Under
+them every product would be refused and, because the preferences are pushed in one pass, the
+push would stop there. Nothing else is affected: an older build simply never reads or writes
+that key, and it holds no list data — only the user's own words and their departments.
+
 ## Invite links (Phase 5)
 
 A list is shared by `https://eatmyway.gorny.dev/bmw/i/<token>` (STATE.md decisions 35 and 63).

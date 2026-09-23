@@ -241,4 +241,19 @@
         <item quantity="many">Dodaj %d pozycji</item>
         <item quantity="other">Dodaj %d pozycji</item>
     </plurals>
+    <!-- Moje produkty (Phase 8b) -->
+    <string name="title_own_products">Moje produkty</string>
+    <string name="settings_own_products">Moje produkty</string>
+    <string name="settings_own_products_hint">Słowa, których dyktowanie ma się trzymać</string>
+    <string name="own_products_hint">Dodaj nazwy, których nie ma w słowniku, np. „chleb wiejski”. Dyktowanie będzie je rozpoznawać jako osobne rzeczy i wstawiać do wybranego działu. Lista jest prywatna i przenosi się na Twoje inne telefony po zalogowaniu.</string>
+    <string name="own_products_empty">Nic tu jeszcze nie ma. Dodaj produkt przyciskiem poniżej albo dotknij „Zapamiętaj” podczas dyktowania.</string>
+    <string name="action_add_product">Dodaj produkt</string>
+    <string name="add_product_title">Nowy produkt</string>
+    <string name="edit_product_title">Zmień produkt</string>
+    <string name="product_name_label">Nazwa</string>
+    <string name="product_category_label">Dział</string>
+    <string name="product_description">%1$s, dział: %2$s</string>
+    <string name="deleted_product">Usunięto „%1$s”</string>
+    <string name="action_remember_product">Zapamiętaj</string>
+    <string name="dictation_remembered">Zapamiętane</string>
 </resources>

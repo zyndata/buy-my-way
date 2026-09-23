@@ -80,6 +80,9 @@ class SyncEngineTest {
 
         suspend fun outbox() = db.outbox().count()
 
+        /** „Moje produkty" as this phone shows it (Phase 8b). */
+        suspend fun products() = repo.observeOwnProducts().first().map { it.name to it.categoryId }
+
         init {
             phones += this
         }
@@ -87,6 +90,51 @@ class SyncEngineTest {
 
     @After
     fun close() = phones.forEach { it.db.close() }
+
+    /**
+     * „Moje produkty" follows the account (PLAN.md Phase 8b, third acceptance criterion), and a
+     * delete crosses as a tombstone rather than coming back from the other phone (decision 88).
+     */
+    @Test
+    fun mojeProduktyFollowsTheAccountToTheOtherPhoneAndSoDoesADelete() = runBlocking {
+        val a = Phone(start = 1_000_000)
+        val b = Phone(start = 1_000_000)
+
+        a.repo.setOwnProduct("Chleb wiejski", "pieczywo")
+        a.sync()
+        b.sync()
+        assertEquals(listOf("Chleb wiejski" to "pieczywo"), b.products())
+
+        // B gives it another department; A takes the newer one.
+        b.now = 2_000_000
+        b.repo.setOwnProduct("Chleb wiejski", "sypkie")
+        b.sync()
+        a.sync()
+        assertEquals(listOf("Chleb wiejski" to "sypkie"), a.products())
+
+        // A deletes it. B learns of it, and B's next sync does not resurrect it on A.
+        a.now = 3_000_000
+        a.repo.deleteOwnProduct("chleb wiejski")
+        a.sync()
+        b.sync()
+        b.sync()
+        a.sync()
+        assertEquals(emptyList<Pair<String, String>>(), b.products())
+        assertEquals(emptyList<Pair<String, String>>(), a.products())
+    }
+
+    /** A phone that was never signed in keeps its own words, and gets nobody else's. */
+    @Test
+    fun aSignedOutPhoneKeepsItsOwnProductsAndSeesNoOneElses() = runBlocking {
+        val a = Phone(start = 1_000_000)
+        val offline = Phone(start = 1_000_000, signedIn = null)
+
+        a.repo.setOwnProduct("Chleb wiejski", "pieczywo")
+        a.sync()
+        offline.repo.setOwnProduct("Kefir malinowy", "nabial")
+
+        assertEquals(listOf("Kefir malinowy" to "nabial"), offline.products())
+    }
 
     @Test
     fun twoPhonesOnOneAccountConvergeAfterEditsOnBothWhileOneWasOffline() = runBlocking {
