@@ -322,6 +322,9 @@ The emulator here is a tablet, so it was put at a phone's size for the run (`wm 
 entries: 103 tests and `TwoPhoneProbe`, which skips itself without its argument (decision 69)
 and which AGP writes into the XML as a failure while the task still passes — the same entry CI
 has been green with since Phase 5.
+**CI: run 35868841823 red, then run 35880120930 green** (all three jobs: lint + unit tests +
+build, the rules emulator, and the instrumented emulator). What the red run caught, and why it
+was right, is below.
 **The first CI run (35868841823) was red where this machine was green, and it was right.**
 CI's emulator has no hardware profile, so it is **360 × 640 dp** — shorter than the 411 × 731 dp
 this machine's tablet was put at, and shorter than any phone the app has been run on. Two of the
