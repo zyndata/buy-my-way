@@ -229,7 +229,7 @@ owner's to remove.
 **Phase 8b („Moje produkty") was added to PLAN.md on 2026-09-23**, out of Phase 7's daily use
 (decisions 80–81). It is not started.
 
-**Phase 7 done (2026-09-23).** The add bar has a mic. It asks for `RECORD_AUDIO` at the first
+**Phase 7 done (2026-09-23), all three acceptance criteria met.** The add bar has a mic. It asks for `RECORD_AUDIO` at the first
 tap (with a sentence where Android says to explain, and a way to the app's settings after a
 refusal), then opens „Dyktowanie": „Słucham…" with the words heard so far while speaking, and
 the finished sentence as one editable line per item with the department it would go to.
@@ -273,10 +273,14 @@ chleb" was recognised **without any commas**, and the first build made two items
 instead of four. The dictionary now decides where one thing ends (decision 78), and the sheet's
 buttons no longer collide on a phone (decision 79). Both are covered by new tests, and the build
 went back on the phone to be said again.
-**Not verified:** dictation with the phone offline — the acceptance criterion „works offline
-when the Polish pack is installed" — which stays for the owner to check on the S10e; the network retry after a
-language error; a phone with no recognizer at all (the rule is tested, the device is not); the
-Linux machine (open question 2). **To do:** `docs/screenshots/list-checking.png` shows the add
+**Offline dictation works (the owner, on the S10e, 2026-09-23).** The phone has no SIM, so with
+Wi-Fi off it has no network at all, and dictation still turned speech into items. That closes
+the phase's second acceptance criterion, „works with the phone offline when the Polish pack is
+installed": the app asks with `EXTRA_PREFER_OFFLINE` on every attempt (decision 75), and the
+recognizer answered without one. Nothing spoken leaves the phone.
+**Not verified:** the network retry after a language error (no device here refuses Polish); a
+phone with no recognizer at all (the rule is tested, the device is not); the Linux machine
+(open question 2). **To do:** `docs/screenshots/list-checking.png` shows the add
 bar without the mic, so it is one phase out of date; decision 47 leaves screenshots to the
 owner on a real phone.
 
