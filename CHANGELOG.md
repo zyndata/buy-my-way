@@ -27,6 +27,7 @@ project adheres to [Semantic Versioning](https://semver.org).
 - Record the verified invite App Link
 - Phase 6 verified on two phones
 - Record what CI caught in phase 7
+- Phase 7 dictation verified offline on the S10e
 
 ### Features
 
@@ -44,6 +45,7 @@ project adheres to [Semantic Versioning](https://semver.org).
 
 - Plan, workflow and repository hygiene
 - **spike:** Phase 0 spike app and push sender skeleton
+- Update CHANGELOG
 - Update CHANGELOG
 - Update CHANGELOG
 - Update CHANGELOG
