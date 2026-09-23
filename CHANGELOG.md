@@ -11,6 +11,7 @@ project adheres to [Semantic Versioning](https://semver.org).
 ### Bug Fixes
 
 - Keep „Dodaj wszystkie" in sight on a phone-sized screen
+- Cut a dictated sentence where the dictionary says a name ends
 
 ### Documentation
 
@@ -41,6 +42,7 @@ project adheres to [Semantic Versioning](https://semver.org).
 
 - Plan, workflow and repository hygiene
 - **spike:** Phase 0 spike app and push sender skeleton
+- Update CHANGELOG
 - Update CHANGELOG
 - Update CHANGELOG
 - Update CHANGELOG
