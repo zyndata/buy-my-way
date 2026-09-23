@@ -111,37 +111,140 @@ deployments → edit → new version"; the URL does not change.
 The Phase 0 skeleton has been deployed since 2026-09-21 (project "Buy My Way push" under the
 owner's account, Cloud project `270774397521`).
 
-### What Phase 9 changed, and what to do about it
+### Bringing Phase 9 live — the whole procedure
 
-The script no longer pushes to one hard-coded device. It now checks that the caller is a
-member of the list, reads the other members' `/fcmTokens`, sends one data message per device,
-deletes a token FCM reports as unregistered, and rate-limits per list. Three things must be
-done in the Apps Script project **before the new app build can push anything**:
+The script no longer pushes to one hard-coded device. It checks that the caller is a member of
+the list, reads the other members' `/fcmTokens`, sends one data message per device, deletes a
+token FCM reports as unregistered, and rate-limits per list. **Until every step below is done,
+no push can physically happen** — and the app says nothing about it, because a phone whose
+registration is refused simply has no push target.
 
-1. **Paste both files again** (`push/Code.gs` and `push/appsscript.json`).
-2. **`appsscript.json` gained `https://www.googleapis.com/auth/firebase.database`**, without
-   which every database read answers 403 and no push ever goes out. A manifest change needs a
-   **new deployment version** (point 2 below) *and* a fresh authorisation (point 3): run
-   `doGet` in the editor and tick **every** box.
-3. **Add the script property `FIREBASE_DB_URL`** =
-   `https://buy-my-way-c3949-default-rtdb.europe-west1.firebasedatabase.app` (no trailing
-   slash). `FCM_TOKEN` is no longer read and can be deleted.
+Everything here is about one project. The ids are public by design (CLAUDE.md), and all of them
+come out of [`app/google-services.json`](../app/google-services.json):
 
-Then check it, from any machine:
+| | |
+|---|---|
+| Firebase project id | `buy-my-way-c3949` |
+| Project (Cloud) number | `270774397521` |
+| Realtime Database | `https://buy-my-way-c3949-default-rtdb.europe-west1.firebasedatabase.app` |
+| Android package | `dev.gorny.buymyway` |
+| Web API key | the `api_key[0].current_key` field of `google-services.json` |
 
+Console shortcuts, all for this project:
+
+- Rules → <https://console.firebase.google.com/project/buy-my-way-c3949/database/buy-my-way-c3949-default-rtdb/rules>
+- Data → <https://console.firebase.google.com/project/buy-my-way-c3949/database/buy-my-way-c3949-default-rtdb/data>
+- Authentication providers → <https://console.firebase.google.com/project/buy-my-way-c3949/authentication/providers>
+- Apps Script projects → <https://script.google.com/home> (the project is called **Buy My Way push**)
+- **Apps Script executions** → <https://script.google.com/home/executions> — every `doPost`, its
+  duration and its error. This is the first place to look when a push does not arrive.
+
+#### Step 1 — publish the database rules
+
+Open the [rules page](https://console.firebase.google.com/project/buy-my-way-c3949/database/buy-my-way-c3949-default-rtdb/rules),
+select everything, paste the whole of [`firebase/database.rules.json`](../firebase/database.rules.json),
+**Publish**. The only addition since Phase 8b is the `fcmTokens` block
+(`firebase/database.rules.json:135`): `.write` for that user alone, a node of exactly
+`{at: now}`, and **no `.read` at any depth** — the script reads it as the project's owner, which
+is why it needs no service-account key (STATE.md decision 98).
+
+Do this **before** installing the Phase 9 app, as with every phase since Phase 6. The older
+rules reject an unknown key, so a phone that writes `/fcmTokens` against them is refused.
+
+#### Step 2 — paste the two script files
+
+In the [Apps Script project](https://script.google.com/home):
+
+1. **`Code.gs`** ← the whole of [`push/Code.gs`](../push/Code.gs). It is a rewrite, not an edit.
+2. **`appsscript.json`** ← [`push/appsscript.json`](../push/appsscript.json). If the file is not
+   shown: ⚙ **Project Settings** → tick *„Show appsscript.json manifest file in editor"*.
+   The new line is `https://www.googleapis.com/auth/firebase.database`, without which every
+   database read answers **403** and no push ever goes out.
+
+#### Step 3 — the script property
+
+⚙ **Project Settings → Script properties → Add script property**:
+
+| Property | Value |
+|---|---|
+| `FIREBASE_DB_URL` | `https://buy-my-way-c3949-default-rtdb.europe-west1.firebasedatabase.app` |
+
+**No trailing slash** — the script appends `<path>.json` to it (`push/Code.gs:150`).
+`FIREBASE_API_KEY` and `FIREBASE_PROJECT_ID` are already there from Phase 0. `FCM_TOKEN` is no
+longer read and can be deleted.
+
+#### Step 4 — authorise again, ticking every box
+
+The manifest changed, so the old grant is not enough. In the editor, pick the function `doGet`
+and **Run** → *Review permissions* → choose the account → *Advanced* → *Go to Buy My Way push
+(unsafe)* → **tick every checkbox** → Allow. A partial grant is remembered and fails later with
+„you do not have permission to call UrlFetchApp.fetch" (STATE.md decision 23).
+
+#### Step 5 — deploy a *new version*
+
+**Deploy → Manage deployments → ✏️ (edit) → Version: `New version` → Deploy.**
+
+The dialog defaults to the current version, and saving it that way changes nothing: a deployment
+keeps the manifest it was created with. The URL does not change, so
+[`gradle.properties:10`](../gradle.properties) needs no edit.
+
+#### Step 6 — check the endpoint
+
+```bash
+URL=$(grep buymyway.pushUrl gradle.properties | cut -d= -f2-)
+curl -s  "$URL"                              # {"ok":true}
+curl -sL -d '{"idToken":"x"}' "$URL"         # {"ok":false,"error":"unauthenticated"}
 ```
-curl -s  <url>                              # {"ok":true}
-curl -sL -d '{"idToken":"x"}' <url>         # {"ok":false,"error":"unauthenticated"}
+
+Use `-d` and let curl follow the 302 (`-sL`), not `-X POST`: an Apps Script web app answers a
+POST with a redirect to `script.googleusercontent.com`. An **HTML page** in the answer means the
+authorisation is incomplete — go back to step 4.
+
+#### Step 7 — make the phones register
+
+A phone tries to register its FCM token **once per app start** (`SyncController`'s
+`afterSignIn`, which runs once per process for a signed-in account). A phone that was refused
+before the rules were published will not try again until it is restarted:
+
+```bash
+adb -s <serial> shell am force-stop dev.gorny.buymyway
+# then open the app and leave it in the foreground for a few seconds
 ```
 
-A **valid** token whose user is not on the list answers `{"ok":false,"error":"forbidden"}` —
-that is the phase's third acceptance criterion, and the way to get a real token by hand is
-`adb logcat` on a debug build, or the Firebase Auth REST `signInWithCustomToken`. Anything
-that answers with an HTML page means the authorisation is incomplete.
+**Then confirm on the [data page](https://console.firebase.google.com/project/buy-my-way-c3949/database/buy-my-way-c3949-default-rtdb/data):**
+`/fcmTokens` must hold one child per uid, each with one token under it. No token, no push —
+and nothing further is worth testing until this is right.
 
-**Publish the Phase 9 database rules before installing the Phase 9 app**, as with every phase
-since Phase 6: the older rules reject an unknown key, so a device that writes `/fcmTokens`
-against them is simply refused and never receives a push.
+#### Checking a push that did not arrive, in order
+
+1. **[Executions](https://script.google.com/home/executions)** — was `doPost` called at all?
+   - *not called* → the sending phone never asked. Either it is not the list's member, every
+     other member was present (which is deliberate: `PushSender` skips them), or the list is
+     private.
+   - *called, `forbidden`* → the caller is not under `/lists/{listId}/members`.
+   - *called, `{"sent":0}`* → nobody else has a token under `/fcmTokens`. Back to step 7.
+   - *403 / „insufficient authentication scopes"* → steps 2–5 again, above all step 4.
+2. **`/fcmTokens`** in the console — one child per uid?
+3. **The receiving phone** — Ustawienia → Powiadomienia on, and Android's own notification
+   permission granted (`adb shell dumpsys package dev.gorny.buymyway | grep POST_NOTIFICATIONS`).
+   Nothing is shown while the list is **open on screen**: that is the presence skip.
+
+#### The „non-member" check (Phase 9 acceptance criterion 3)
+
+A *valid* token belonging to somebody who is not on the list must answer
+`{"ok":false,"error":"forbidden"}`. Do **not** try to extract a real token from a phone: this app
+never logs an ID token and it should stay that way. Make a throwaway one instead:
+
+1. [Authentication → Sign-in method](https://console.firebase.google.com/project/buy-my-way-c3949/authentication/providers)
+   → temporarily enable **Email/Password**.
+2. ```bash
+   KEY=$(python -c "import json;print(json.load(open('app/google-services.json'))['client'][0]['api_key'][0]['current_key'])")
+   curl -s -H 'Content-Type: application/json' \
+     -d '{"email":"probe@example.test","password":"probe-123456","returnSecureToken":true}' \
+     "https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=$KEY"
+   ```
+3. POST that `idToken` to the push URL with any real `listId` → expect `forbidden`.
+4. **Disable Email/Password again** and delete the probe user.
 
 What Phase 0 learned the hard way (STATE.md decisions 23 and 24) still holds:
 
