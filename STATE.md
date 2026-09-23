@@ -470,6 +470,8 @@ sign-in, and sign-out leaving no periodic work) and 2 in `SyncEngineTest` (what 
 is counted by kind — two added, one bought, one edit and one rename — and a change that never
 reached RTDB is never pushed about, then announced exactly once when the network comes back).
 Lint clean.
+**CI: run 35901890011 green on the first try**, all three jobs (lint + unit tests + build,
+the rules emulator, the instrumented emulator).
 **The emulator, not the phone.** The owner's S10e was connected over `adb` but asleep and
 behind its lock screen, so every Compose test failed with „No compose hierarchies found in the
 app" — the activity cannot come to the front on a locked phone. The suite was run on the API 35
