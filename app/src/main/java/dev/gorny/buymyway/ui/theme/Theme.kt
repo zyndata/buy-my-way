@@ -10,6 +10,7 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import dev.gorny.buymyway.data.prefs.ThemeChoice
 
 private val Green = Color(0xFF2E7D32)
 private val GreenLight = Color(0xFF81C784)
@@ -17,7 +18,15 @@ private val GreenLight = Color(0xFF81C784)
 private val LightColors = lightColorScheme(primary = Green, secondary = Green)
 private val DarkColors = darkColorScheme(primary = GreenLight, secondary = GreenLight)
 
-/** Dark theme follows the system; dynamic colour on Android 12+, the green brand below that. */
+/** What „Motyw" in Ustawienia means for the colours: the system's answer, or the user's own. */
+@Composable
+fun isDarkTheme(choice: ThemeChoice): Boolean = when (choice) {
+    ThemeChoice.SYSTEM -> isSystemInDarkTheme()
+    ThemeChoice.LIGHT -> false
+    ThemeChoice.DARK -> true
+}
+
+/** Dark theme follows [isDarkTheme]; dynamic colour on Android 12+, the green brand below that. */
 @Composable
 fun BuyMyWayTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),

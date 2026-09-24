@@ -6,6 +6,8 @@ import androidx.lifecycle.viewModelScope
 import dev.gorny.buymyway.data.auth.AccountState
 import dev.gorny.buymyway.data.auth.SignInResult
 import dev.gorny.buymyway.data.prefs.NotificationPreferences
+import dev.gorny.buymyway.data.prefs.ThemeChoice
+import dev.gorny.buymyway.data.prefs.ThemePreferences
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -24,6 +26,8 @@ class SettingsViewModel(
     /** Phase 9; absent where the screen is tested without the push half. */
     private val notifications: NotificationPreferences? = null,
     private val deleteEverything: (suspend () -> Boolean)? = null,
+    /** „Motyw"; absent where the screen is tested without it. */
+    private val theme: ThemePreferences? = null,
 ) : ViewModel() {
 
     val account: StateFlow<AccountState> =
@@ -58,6 +62,17 @@ class SettingsViewModel(
 
     /** [onResult] is false when nothing could be reached, and then nothing was deleted. */
     fun deleteEverything(onResult: (Boolean) -> Unit) = run { onResult(deleteEverything?.invoke() == true) }
+
+    // --- „Motyw" ---------------------------------------------------------------------------
+
+    /** Which theme this phone draws in; the activity reads the same flow for the colours. */
+    val themeChoice: StateFlow<ThemeChoice> = (theme?.choice ?: flowOf(ThemeChoice.SYSTEM))
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), ThemeChoice.SYSTEM)
+
+    /** Not run through [run]: a DataStore write is instant and must not wait behind a sign-in. */
+    fun setTheme(choice: ThemeChoice) {
+        viewModelScope.launch { theme?.set(choice) }
+    }
 
     private fun run(block: suspend () -> Unit) {
         if (_busy.value) return

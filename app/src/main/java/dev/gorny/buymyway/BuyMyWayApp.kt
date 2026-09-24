@@ -29,6 +29,7 @@ import dev.gorny.buymyway.data.prefs.ListOrderPreferences
 import dev.gorny.buymyway.data.prefs.ListSortPreferences
 import dev.gorny.buymyway.data.prefs.NotificationPreferences
 import dev.gorny.buymyway.data.prefs.SyncMarks
+import dev.gorny.buymyway.data.prefs.ThemePreferences
 import dev.gorny.buymyway.data.prefs.settingsDataStore
 import dev.gorny.buymyway.data.push.AppsScriptPush
 import dev.gorny.buymyway.data.push.CatchUpWorker
@@ -84,6 +85,9 @@ class AppContainer(context: Context) {
     val listOrder: ListOrderPreferences by lazy { ListOrderPreferences(appContext.settingsDataStore) }
 
     val listSort: ListSortPreferences by lazy { ListSortPreferences(appContext.settingsDataStore) }
+
+    /** „Motyw" in Ustawienia: a device setting, read by [dev.gorny.buymyway.MainActivity]. */
+    val themePrefs: ThemePreferences by lazy { ThemePreferences(appContext.settingsDataStore) }
 
     /**
      * Work that must finish even when the screen that started it is gone: a delete committed

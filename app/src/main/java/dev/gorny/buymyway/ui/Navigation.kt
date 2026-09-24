@@ -27,6 +27,7 @@ import dev.gorny.buymyway.ui.lists.ListsScreen
 import dev.gorny.buymyway.ui.lists.ListsViewModel
 import dev.gorny.buymyway.ui.products.OwnProductsScreen
 import dev.gorny.buymyway.ui.products.OwnProductsViewModel
+import dev.gorny.buymyway.ui.settings.AboutScreen
 import dev.gorny.buymyway.ui.settings.SettingsScreen
 import dev.gorny.buymyway.ui.settings.SettingsViewModel
 import dev.gorny.buymyway.ui.share.InviteScreen
@@ -47,6 +48,7 @@ object Routes {
     const val SETTINGS = "settings"
     const val DEFAULT_ORDER = "settings/categories"
     const val OWN_PRODUCTS = "settings/products"
+    const val ABOUT = "settings/about"
     const val INVITE = "invite/{token}"
 
     fun list(listId: String) = "list/$listId"
@@ -126,12 +128,17 @@ fun BuyMyWayNavHost(
                         signOutAll = container::signOut,
                         notifications = container.notificationPrefs,
                         deleteEverything = container::deleteAllMyData,
+                        theme = container.themePrefs,
                     )
                 },
                 onBack = { nav.popBackStack(Routes.SETTINGS, inclusive = true) },
                 onOpenDefaultOrder = { nav.navigate(Routes.DEFAULT_ORDER) },
                 onOpenOwnProducts = { nav.navigate(Routes.OWN_PRODUCTS) },
+                onOpenAbout = { nav.navigate(Routes.ABOUT) },
             )
+        }
+        composable(Routes.ABOUT) {
+            AboutScreen(onBack = { nav.popBackStack(Routes.ABOUT, inclusive = true) })
         }
         composable(Routes.OWN_PRODUCTS) {
             OwnProductsScreen(

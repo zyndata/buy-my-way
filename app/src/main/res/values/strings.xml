@@ -98,10 +98,23 @@
     <string name="settings_default_order">Domyślna kolejność kategorii</string>
     <string name="settings_default_order_hint">Dla nowych list</string>
     <string name="settings_theme">Motyw</string>
-    <string name="settings_theme_value">Jasny lub ciemny, zgodnie z ustawieniami systemu</string>
-    <string name="settings_version">Wersja</string>
-    <string name="settings_icons">Ikony</string>
-    <string name="settings_icons_value">Material Symbols, licencja Apache 2.0</string>
+    <string name="theme_system">Zgodnie z systemem</string>
+    <string name="theme_light">Jasny</string>
+    <string name="theme_dark">Ciemny</string>
+    <string name="settings_about">O aplikacji</string>
+    <string name="settings_about_hint">Wersja, ikony i licencje</string>
+
+    <!-- O aplikacji -->
+    <string name="title_about">O aplikacji</string>
+    <string name="about_tagline">Wspólna lista zakupów. Interfejs po polsku, bez reklam i bez kont poza Twoim własnym Google.</string>
+    <string name="about_version">Wersja</string>
+    <string name="about_licence">Licencja</string>
+    <string name="about_licence_value">MIT</string>
+    <string name="about_icons">Ikony</string>
+    <string name="about_icons_value">Material Symbols, licencja Apache 2.0</string>
+    <string name="about_source">Kod źródłowy</string>
+    <string name="about_source_value" translatable="false">github.com/zyndata/buy-my-way</string>
+    <string name="about_source_failed">Nie udało się otworzyć przeglądarki.</string>
 
     <!-- Konto (Phase 4) -->
     <string name="settings_account">Konto</string>
