@@ -40,7 +40,7 @@ class ApkDownloads(context: Context) {
         // The name is ours, not the server's: a release asset called `../something` is then
         // simply a file called that in our own directory.
         val name = safeName(release)
-        File(appContext.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), name).delete()
+        destination(release).delete()
         val request = DownloadManager.Request(release.apkUrl.toUri())
             .setTitle(name)
             .setMimeType(APK_TYPE)
@@ -76,13 +76,24 @@ class ApkDownloads(context: Context) {
             cursor.getString(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_LOCAL_URI))
         } ?: return Progress.Failed
         val file = local.toUri().path?.let(::File) ?: return Progress.Failed
-        // The installer is another app, so it gets a content URI it may read for one call —
-        // never a file path, which Android has refused to pass between apps since API 24.
-        val shared = runCatching {
-            FileProvider.getUriForFile(appContext, "${appContext.packageName}.updates", file)
-        }.getOrNull() ?: return Progress.Failed
-        return Progress.Done(shared)
+        return shareable(file)?.let(Progress::Done) ?: Progress.Failed
     }
+
+    /**
+     * The content URI the package installer is handed for [file], or null when this app may not
+     * lend it out. The installer is another app, so it gets a content URI it may read for one
+     * call — never a file path, which Android has refused to pass between apps since API 24.
+     *
+     * Null is the whole of the „Nie udało się pobrać aktualizacji" path once the bytes are
+     * here, so it is what the test drives (STATE.md decision 119).
+     */
+    internal fun shareable(file: File): Uri? = runCatching {
+        FileProvider.getUriForFile(appContext, "${appContext.packageName}.updates", file)
+    }.getOrNull()
+
+    /** Where [enqueue] puts the APK, and therefore the only file [shareable] is ever asked for. */
+    internal fun destination(release: Updates.Release): File =
+        File(appContext.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), safeName(release))
 
     /** Whether Android will let this app install an APK at all. */
     fun canInstall(): Boolean = appContext.packageManager.canRequestPackageInstalls()
