@@ -14,6 +14,10 @@ project adheres to [Semantic Versioning](https://semver.org).
 - Cut a dictated sentence where the dictionary says a name ends
 - Clear a test's view models before its database closes
 - Read the import preview on a short phone
+- Say why a push was refused, on both ends
+- A selfTest() that actually asks for the scopes it needs
+- Restore push/appsscript.json, emptied by mistake
+- The database REST API needs userinfo.email as well
 
 ### Documentation
 
@@ -31,6 +35,11 @@ project adheres to [Semantic Versioning](https://semver.org).
 - Phase 7 dictation verified offline on the S10e
 - Phase 8 CI run ids
 - Phase 8b CI run id
+- Phase 9 CI run id
+- Phase 9 verified on the physical S10e too
+- The whole Phase 9 go-live procedure, with links
+- Phase 9 measured live, and the criterion amended
+- The changes made after phase 9, and one that could not be made
 
 ### Features
 
@@ -46,11 +55,18 @@ project adheres to [Semantic Versioning](https://semver.org).
 - Phase 8 — import from Eat My Way
 - Phase 8b — „Moje produkty"
 - Phase 9 — background, notifications & the battery verdict
+- The health check answers for the deployment, not the editor
+- A ticked row holds long enough to read what it says
+- „Wyczyść kupione" asks before it empties the section
+- A notification names what was bought, once the catch-up knows
+- Ustawienia gains „Motyw" and hands the version to „O aplikacji"
+- Phase 10 — a tag builds a signed release, and the app finds it
 
 ### Miscellaneous
 
 - Plan, workflow and repository hygiene
 - **spike:** Phase 0 spike app and push sender skeleton
+- Update CHANGELOG
 - Update CHANGELOG
 - Update CHANGELOG
 - Update CHANGELOG
