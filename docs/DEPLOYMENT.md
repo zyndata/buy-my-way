@@ -15,8 +15,7 @@ Google Apps Script    the push sender, deployed from push/ under the owner's acc
 eatmyway.gorny.dev    /bmw/i/<token> invite page + assetlinks.json, in the Eat My Way repo (Phase 5)
 ```
 
-> Phases 0, 5, 9, 10 and 11 fill in the exact steps. Until then this file records what each
-> piece is for and what must never be committed.
+> Phases 0, 5, 9 and 10 filled in the exact steps. Phase 11 (Google Play) was dropped.
 
 ## Firebase / Google Cloud (Phase 0)
 
@@ -317,14 +316,83 @@ A push is one fetch per recipient; a household will not get near either.
 
 ## Releasing (Phase 10)
 
-- Secrets in the GitHub repository: `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`,
-  `KEY_PASSWORD`. The keystore file itself is kept in the owner's password manager; losing it
-  means every installed copy has to be uninstalled before the next one installs.
-- `deploy.yml` runs only on `v[0-9]+.[0-9]+.[0-9]+` tags. A plain push to `main` does nothing.
-- The Release carries `buy-my-way-vX.Y.Z.apk` and a `.sha256`; the app's update check reads
-  `releases/latest`.
+Ship with the **`/release` skill** (`.claude/skills/release/SKILL.md`), which drives the whole
+of this and checks the CI gate before it merges anything. What follows is what the skill does
+and what has to exist for it to work.
+
+### The one-time setup
+
+**1. Make the release keystore.** Once, ever. Losing it ends the update path: a new key means a
+different signature, and every installed copy would have to be uninstalled before the next one
+could install.
+
+```
+keytool -genkeypair -v -keystore buy-my-way-release.jks -storetype PKCS12 \
+  -alias buymyway -keyalg RSA -keysize 4096 -validity 10000
+```
+
+Keep the file **and its two passwords in the owner's password manager**. It is never in the
+repository, never in a cloud drive folder that syncs to a machine, never in a chat.
+
+**2. Put it in GitHub Secrets** (Settings → Secrets and variables → Actions):
+
+| Secret | What |
+|---|---|
+| `KEYSTORE_BASE64` | `base64 -w0 buy-my-way-release.jks` (PowerShell: `[Convert]::ToBase64String([IO.File]::ReadAllBytes("buy-my-way-release.jks"))`) |
+| `KEYSTORE_PASSWORD` | the store password |
+| `KEY_ALIAS` | `buymyway` |
+| `KEY_PASSWORD` | the key password |
+
+`deploy.yml` fails loudly if `KEYSTORE_BASE64` is missing — a Release carrying an unsigned APK
+would be worse than no Release.
+
+**3. To build a release locally** (the only way to see R8 at work before a tag), put the same
+four values in `~/.gradle/gradle.properties` — **not** in the repository's `gradle.properties`:
+
+```
+buymyway.keystore=C:/path/to/buy-my-way-release.jks
+buymyway.keystorePassword=…
+buymyway.keyAlias=buymyway
+buymyway.keyPassword=…
+```
+
+Without them `./gradlew assembleRelease` still builds, but the APK is unsigned and installs
+nowhere (STATE.md decision 111).
+
+### The release itself
+
+- `deploy.yml` runs **only** on a `v[0-9]+.[0-9]+.[0-9]+` tag. A plain push to `main` does
+  nothing.
+- It repeats lint and the unit tests, then builds, signs and verifies the APK
+  (`apksigner verify`), then git-cliff writes `CHANGELOG.md` back to `main` and the GitHub
+  Release is created with `buy-my-way-vX.Y.Z.apk` and `buy-my-way-vX.Y.Z.apk.sha256`.
+- **The emulator suite is not here.** `ci.yml` runs it on `dev`, and it never runs on `main`,
+  so only a `dev` commit whose CI run is green may be merged and tagged. `/release` checks that
+  before it merges; do not skip it.
+- The `versionName` and `versionCode` come from `git describe`, so the workflow checks out with
+  `fetch-depth: 0`. A shallow clone would build a release that calls itself `0.0.0-dev`.
 - Tags are protected by a ruleset (no deletion, no force-update, no bypass actors), as in Eat
   My Way: a bad release is fixed forward with the next patch version, never by moving a tag.
+- **The database rules are not deployed by the workflow.** If a release changes
+  `firebase/database.rules.json`, publish them in the console *before* anyone installs the
+  build — see *Database rules* above, and Phases 6 and 8b for what it costs not to.
+
+### The in-app update check
+
+The app looks at `https://api.github.com/repos/zyndata/buy-my-way/releases/latest` **when Listy
+is shown and the last look was more than 24 hours ago** — in the foreground, with no worker and
+nothing that wakes the device (STATE.md decision 108). A newer `X.Y.Z` than the running
+`versionName` shows „Dostępna wersja X — Pobierz" on Listy; Ustawienia → „O aplikacji" →
+„Sprawdź aktualizacje" forces the check without waiting a day, which is how to test it.
+
+What it will not do: offer anything to a `0.0.0-dev` build, offer a draft or a pre-release, or
+download from any URL that is not under `https://github.com/zyndata/buy-my-way/releases/`.
+„Pobierz" hands the file to `DownloadManager` and then to the package installer; the first time,
+Android asks the user to allow this app to install unknown apps
+(`REQUEST_INSTALL_PACKAGES` — a Settings screen, never a runtime dialog).
+
+So a Release must carry an APK asset whose name ends in `.apk`, or no phone will be offered it.
+The `.sha256` beside it is for people, not for the app.
 
 ## Google Play
 

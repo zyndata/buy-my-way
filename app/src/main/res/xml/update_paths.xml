@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The release APK this app downloaded from its own GitHub Releases (PLAN.md Phase 10, task 3).
+     It lands in this app's external files directory, which no other app can read, and the
+     package installer is handed a content URI for it — never a path (STATE.md decision 110). -->
+<paths>
+    <external-files-path name="updates" path="Download/" />
+</paths>

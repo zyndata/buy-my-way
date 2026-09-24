@@ -1,5 +1,6 @@
 package dev.gorny.buymyway.ui
 
+import android.content.Intent
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -34,6 +35,7 @@ import dev.gorny.buymyway.ui.share.InviteScreen
 import dev.gorny.buymyway.ui.share.InviteViewModel
 import dev.gorny.buymyway.ui.share.ShareScreen
 import dev.gorny.buymyway.ui.share.ShareViewModel
+import dev.gorny.buymyway.ui.update.UpdateViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.getAndUpdate
 import kotlinx.coroutines.flow.map
@@ -72,6 +74,14 @@ fun BuyMyWayNavHost(
 ) {
     val container = (LocalContext.current.applicationContext as BuyMyWayApp).container
     val nav = rememberNavController()
+    val context = LocalContext.current
+    // One instance for the whole app (Phase 10): the banner on Listy and „Sprawdź aktualizacje"
+    // in „O aplikacji" are two views of the same check.
+    val updates: UpdateViewModel = viewModel { UpdateViewModel(container.updates, container.apkDownloads) }
+    // The installer and the Settings screen are other apps; only a screen starts an activity.
+    val startIntent: (Intent) -> Unit = { intent ->
+        runCatching { context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+    }
     val invite by invites.collectAsStateWithLifecycle()
     val shared by imports.collectAsStateWithLifecycle()
     val opening by opens.collectAsStateWithLifecycle()
@@ -99,6 +109,8 @@ fun BuyMyWayNavHost(
                 onOpenSettings = { nav.navigate(Routes.SETTINGS) },
                 onOpenShare = { nav.navigate(Routes.share(it)) },
                 onPasteImport = { imports.value = it },
+                updates = updates,
+                onUpdateIntent = startIntent,
             )
         }
         composable(Routes.LIST, arguments = listIdArgument) { entry ->
@@ -138,7 +150,7 @@ fun BuyMyWayNavHost(
             )
         }
         composable(Routes.ABOUT) {
-            AboutScreen(onBack = { nav.popBackStack(Routes.ABOUT, inclusive = true) })
+            AboutScreen(onBack = { nav.popBackStack(Routes.ABOUT, inclusive = true) }, updates = updates)
         }
         composable(Routes.OWN_PRODUCTS) {
             OwnProductsScreen(

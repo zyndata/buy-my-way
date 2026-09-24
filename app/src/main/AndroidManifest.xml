@@ -7,6 +7,10 @@
     <!-- Notifications (PLAN.md Phase 9). Asked for when the user turns them on in Ustawienia,
          never at start; nothing at all is posted while that switch is off. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Installing an update the app downloaded from its own GitHub Releases (PLAN.md Phase 10,
+         task 3). Never a runtime dialog: on every version this app supports the user allows it
+         on a Settings screen, or not at all (STATE.md decision 110). -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <!-- A phone without a microphone still installs the app: it simply has no mic button. -->
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
 
@@ -100,6 +104,16 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/photo_paths" />
         </provider>
+
+        <!-- The downloaded release APK, handed to the package installer (PLAN.md Phase 10,
+             task 3). Its own class and authority: two providers of the same class in one
+             package collide, and this way the camera's provider keeps covering exactly one
+             directory and this one exactly one other. -->
+        <provider
+            android:name=".data.update.UpdateFileProvider"
+            android:authorities="${applicationId}.updates"
+            android:exported="false"
+            android:grantUriPermissions="true" />
     </application>
 
 </manifest>

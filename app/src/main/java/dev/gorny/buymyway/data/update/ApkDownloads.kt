@@ -1,0 +1,107 @@
+package dev.gorny.buymyway.data.update
+
+import android.app.DownloadManager
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.os.Environment
+import android.provider.Settings
+import androidx.core.content.FileProvider
+import androidx.core.net.toUri
+import dev.gorny.buymyway.core.update.Updates
+import kotlinx.coroutines.delay
+import java.io.File
+
+/**
+ * Fetching a release APK and handing it to the package installer (PLAN.md Phase 10, task 3).
+ *
+ * `DownloadManager` does the transfer, so the app needs no storage permission and no download
+ * code of its own: the file lands in this app's own external files directory, which nothing
+ * else on the phone can read. What the app does need is `REQUEST_INSTALL_PACKAGES` and the
+ * user's permission to install unknown apps — a Settings screen, never a runtime dialog
+ * (STATE.md decision 110).
+ */
+class ApkDownloads(context: Context) {
+    private val appContext = context.applicationContext
+    private val manager = appContext.getSystemService(DownloadManager::class.java)
+
+    /** Where a download got to. [Done] carries the file the installer is to be pointed at. */
+    sealed interface Progress {
+        data object Running : Progress
+
+        data class Done(val apk: Uri) : Progress
+
+        data object Failed : Progress
+    }
+
+    /** Starts the transfer and returns its id, or null when this phone has no DownloadManager. */
+    fun enqueue(release: Updates.Release): Long? {
+        val manager = manager ?: return null
+        // The name is ours, not the server's: a release asset called `../something` is then
+        // simply a file called that in our own directory.
+        val name = safeName(release)
+        File(appContext.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), name).delete()
+        val request = DownloadManager.Request(release.apkUrl.toUri())
+            .setTitle(name)
+            .setMimeType(APK_TYPE)
+            .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+            .setDestinationInExternalFilesDir(appContext, Environment.DIRECTORY_DOWNLOADS, name)
+        return runCatching { manager.enqueue(request) }.getOrNull()
+    }
+
+    /**
+     * Watches [id] until it finishes. Polling, not a broadcast receiver, because this only
+     * runs while the user is watching the banner it belongs to — the screen goes, the
+     * coroutine goes, and `DownloadManager`'s own notification carries on without us.
+     */
+    suspend fun awaitFinish(id: Long): Progress {
+        val manager = manager ?: return Progress.Failed
+        while (true) {
+            val status = manager.query(DownloadManager.Query().setFilterById(id)).use { cursor ->
+                if (cursor == null || !cursor.moveToFirst()) return Progress.Failed
+                cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
+            }
+            when (status) {
+                DownloadManager.STATUS_SUCCESSFUL -> return finished(id)
+                DownloadManager.STATUS_FAILED -> return Progress.Failed
+                else -> delay(POLL_MS)
+            }
+        }
+    }
+
+    private fun finished(id: Long): Progress {
+        val manager = manager ?: return Progress.Failed
+        val local = manager.query(DownloadManager.Query().setFilterById(id)).use { cursor ->
+            if (cursor == null || !cursor.moveToFirst()) return Progress.Failed
+            cursor.getString(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_LOCAL_URI))
+        } ?: return Progress.Failed
+        val file = local.toUri().path?.let(::File) ?: return Progress.Failed
+        // The installer is another app, so it gets a content URI it may read for one call —
+        // never a file path, which Android has refused to pass between apps since API 24.
+        val shared = runCatching {
+            FileProvider.getUriForFile(appContext, "${appContext.packageName}.updates", file)
+        }.getOrNull() ?: return Progress.Failed
+        return Progress.Done(shared)
+    }
+
+    /** Whether Android will let this app install an APK at all. */
+    fun canInstall(): Boolean = appContext.packageManager.canRequestPackageInstalls()
+
+    /** The Settings screen where the user allows it, when [canInstall] says they have not. */
+    fun unknownSourcesSettings(): Intent =
+        Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, "package:${appContext.packageName}".toUri())
+
+    /** Hands [apk] to the package installer; the user does the rest. */
+    fun installIntent(apk: Uri): Intent = Intent(Intent.ACTION_VIEW).apply {
+        setDataAndType(apk, APK_TYPE)
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+
+    private companion object {
+        const val APK_TYPE = "application/vnd.android.package-archive"
+        const val POLL_MS = 400L
+
+        /** `buy-my-way-v1.2.3.apk`, built here rather than taken from the document. */
+        fun safeName(release: Updates.Release) = "buy-my-way-v${release.version}.apk"
+    }
+}

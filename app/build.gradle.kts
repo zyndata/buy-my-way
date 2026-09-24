@@ -31,6 +31,17 @@ val appVersionCode = if (tagged != null) {
     (git("rev-list", "--count", "HEAD")?.toIntOrNull() ?: 1).coerceIn(1, 99)
 }
 
+/**
+ * A release-signing value, from `~/.gradle/gradle.properties` locally or from the environment
+ * in CI, where GitHub Secrets fill it (PLAN.md Phase 10, task 1). Never from the repository.
+ */
+fun secret(property: String, environment: String): String? =
+    providers.gradleProperty(property).orNull ?: providers.environmentVariable(environment).orNull
+
+// Absent on any machine that is not cutting a release — a fork, a fresh clone, CI's debug
+// jobs. Then `assembleRelease` simply produces an unsigned APK (STATE.md decision 111).
+val releaseKeystore = secret("buymyway.keystore", "BUYMYWAY_KEYSTORE")?.let(::file)?.takeIf { it.exists() }
+
 android {
     namespace = "dev.gorny.buymyway"
     compileSdk = 37
@@ -53,11 +64,29 @@ android {
         )
     }
 
+    signingConfigs {
+        if (releaseKeystore != null) {
+            create("release") {
+                storeFile = releaseKeystore
+                storePassword = secret("buymyway.keystorePassword", "BUYMYWAY_KEYSTORE_PASSWORD")
+                keyAlias = secret("buymyway.keyAlias", "BUYMYWAY_KEY_ALIAS")
+                keyPassword = secret("buymyway.keyPassword", "BUYMYWAY_KEY_PASSWORD")
+                // v1 as well as v2/v3: the app installs on API 26, where v2 alone is enough,
+                // but a sideloaded APK is also inspected by tooling that still reads v1.
+                enableV1Signing = true
+                enableV2Signing = true
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            // Null without a keystore: an unsigned APK, which will not install, rather than a
+            // build that fails on a file nobody outside this household has (decision 111).
+            signingConfig = signingConfigs.findByName("release")
         }
     }
 

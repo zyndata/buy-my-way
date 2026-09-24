@@ -64,7 +64,8 @@ builds as `0.0.0-dev`, which is why CI checks out the full history.
 | `./gradlew lint` | Android Lint; warnings are errors on our own code |
 | `./gradlew testDebugUnitTest` | JVM unit tests (pure Kotlin: merge, parsers, categoriser) |
 | `./gradlew connectedDebugAndroidTest` | Instrumented tests (Room DAOs, the repository, migrations, the Compose screen flows) on every device `adb` sees: a connected phone, the emulator, or both. It uninstalls the app afterwards, so the debug build's lists are gone; `installDebug` again to keep using it |
-| `./gradlew assembleRelease` | Signed release APK — needs the signing properties below (Phase 10) |
+| `./gradlew assembleRelease` | Release APK: R8-minified, and signed when the properties below are set (Phase 10) |
+| `./gradlew installRelease` | The same APK on the connected device — the only way to see R8 at work |
 | `npm run changelog` | Regenerate `CHANGELOG.md` from commits (git-cliff) |
 | `npm --prefix firebase test` | Realtime Database rules tests against the Firebase emulator (`firebase/test/rules.test.mjs`). Run `npm --prefix firebase ci` once first |
 
@@ -107,13 +108,31 @@ Database rules.
 Never in the repository. In `~/.gradle/gradle.properties`:
 
 ```
-BUYMYWAY_KEYSTORE=/absolute/path/to/release.keystore
-BUYMYWAY_KEYSTORE_PASSWORD=…
-BUYMYWAY_KEY_ALIAS=…
-BUYMYWAY_KEY_PASSWORD=…
+buymyway.keystore=/absolute/path/to/release.keystore
+buymyway.keystorePassword=…
+buymyway.keyAlias=…
+buymyway.keyPassword=…
 ```
 
-CI reads the same four values from GitHub Secrets (the keystore as base64).
+CI reads the same four values from the environment (`BUYMYWAY_KEYSTORE`,
+`BUYMYWAY_KEYSTORE_PASSWORD`, `BUYMYWAY_KEY_ALIAS`, `BUYMYWAY_KEY_PASSWORD`), filled from
+GitHub Secrets, with the keystore itself passed as base64. Either name works in either place:
+a Gradle property wins, the environment variable is the fallback.
+
+Without them `assembleRelease` still builds — the APK is simply **unsigned**, and an unsigned
+APK installs nowhere (STATE.md decision 111). That keeps a fork and a fresh clone able to build
+the release variant.
+
+The release build is the only one with **R8** on (`app/proguard-rules.pro`). A wrong keep rule
+compiles perfectly and crashes on a phone, so a release build is worth actually running:
+
+```
+./gradlew installRelease          # needs the four values above
+```
+
+It will not install over a debug build — different signature. Uninstall first
+(`adb uninstall dev.gorny.buymyway`), which takes that build's lists with it.
+See [DEPLOYMENT.md](DEPLOYMENT.md) for making the keystore and for what a tag does.
 
 ## Cross-platform rules
 

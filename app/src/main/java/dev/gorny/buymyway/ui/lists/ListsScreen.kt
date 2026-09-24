@@ -72,6 +72,8 @@ import dev.gorny.buymyway.ui.common.reorderableItem
 import dev.gorny.buymyway.ui.list.watchingText
 import dev.gorny.buymyway.ui.share.LeaveDialog
 import dev.gorny.buymyway.ui.share.ShareViewModel
+import dev.gorny.buymyway.ui.update.UpdateBanner
+import dev.gorny.buymyway.ui.update.UpdateViewModel
 import kotlinx.coroutines.launch
 
 /** Listy, the home screen (PLAN.md *Screens*). */
@@ -84,6 +86,9 @@ fun ListsScreen(
     onOpenShare: (String) -> Unit,
     /** „Wklej ze schowka" (PLAN.md Phase 8, task 2); absent where the screen is tested alone. */
     onPasteImport: (String) -> Unit = {},
+    /** „Dostępna wersja X" (PLAN.md Phase 10, task 3); absent where the screen is tested alone. */
+    updates: UpdateViewModel? = null,
+    onUpdateIntent: (android.content.Intent) -> Unit = {},
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
     val lost by vm.lostLists.collectAsStateWithLifecycle(emptyList())
@@ -94,6 +99,10 @@ fun ListsScreen(
     var creating by rememberSaveable { mutableStateOf(false) }
     var renaming by rememberSaveable { mutableStateOf<String?>(null) }
     var leaving by rememberSaveable { mutableStateOf<String?>(null) }
+
+    // The one place the app looks for a new version of itself (STATE.md decision 108): the home
+    // screen, in the foreground, and only when GitHub was last asked more than a day ago.
+    LaunchedEffect(updates) { updates?.onScreenShown() }
 
     // A shared list taken away from this user leaves with a sentence (PLAN.md Phase 5, task 7).
     LaunchedEffect(lost) {
@@ -146,6 +155,7 @@ fun ListsScreen(
                 (account as? AccountState.SessionLost)?.let { lost ->
                     SessionLostBanner(lost.email, onSignIn = onOpenSettings)
                 }
+                if (updates != null) UpdateBanner(updates, onUpdateIntent)
                 val lists = state.lists
                 when {
                     lists == null -> Unit

@@ -20,6 +20,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
@@ -29,8 +30,10 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.gorny.buymyway.BuildConfig
 import dev.gorny.buymyway.R
+import dev.gorny.buymyway.ui.update.UpdateViewModel
 import kotlinx.coroutines.launch
 
 /**
@@ -39,12 +42,36 @@ import kotlinx.coroutines.launch
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AboutScreen(onBack: () -> Unit) {
+fun AboutScreen(
+    onBack: () -> Unit,
+    /** „Sprawdź aktualizacje" (PLAN.md Phase 10, task 3); absent where the screen is tested alone. */
+    updates: UpdateViewModel? = null,
+) {
     val context = LocalContext.current
     val snackbar = remember { SnackbarHostState() }
     val messages = rememberCoroutineScope()
     val source = stringResource(R.string.about_source_value)
     val failed = stringResource(R.string.about_source_failed)
+    val checking = updates?.checking?.collectAsStateWithLifecycle()?.value ?: false
+    val checked = updates?.checked?.collectAsStateWithLifecycle()?.value
+    val upToDate = stringResource(R.string.about_up_to_date)
+    val found = stringResource(R.string.about_check_found)
+    val checkFailed = stringResource(R.string.about_check_failed)
+
+    // What the check answered, said once.
+    LaunchedEffect(checked) {
+        val answer = when (checked) {
+            UpdateViewModel.Checked.UP_TO_DATE -> upToDate
+            UpdateViewModel.Checked.FOUND -> found
+            UpdateViewModel.Checked.FAILED -> checkFailed
+            null -> return@LaunchedEffect
+        }
+        // Shown first, cleared after: clearing it changes `checked`, which restarts this very
+        // effect and would cancel the `showSnackbar` before anything reached the screen.
+        snackbar.showSnackbar(answer)
+        // Non-null: `checked` came from it (the compiler knows, so a safe call is a warning).
+        updates.answerShown()
+    }
 
     Scaffold(
         topBar = {
@@ -90,6 +117,19 @@ fun AboutScreen(onBack: () -> Unit) {
                 headlineContent = { Text(stringResource(R.string.about_icons)) },
                 supportingContent = { Text(stringResource(R.string.about_icons_value)) },
             )
+            if (updates != null) {
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.about_check_updates)) },
+                    supportingContent = if (checking) {
+                        { Text(stringResource(R.string.about_checking)) }
+                    } else {
+                        null
+                    },
+                    modifier = Modifier
+                        .clickable(enabled = !checking, onClick = updates::checkNow)
+                        .testTag("check-updates"),
+                )
+            }
             ListItem(
                 headlineContent = { Text(stringResource(R.string.about_source)) },
                 supportingContent = { Text(source) },

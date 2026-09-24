@@ -32,6 +32,14 @@ owner's Firebase project:
 Tokens are held by the Firebase SDK and in memory. The app never writes a token to its
 database, to preferences, to logs, to an Intent or to a URL.
 
+The app can also **install a new version of itself**. It asks GitHub once a day, while the user
+is looking at the home screen, for this repository's `releases/latest`; it offers only a
+`X.Y.Z` newer than the running one, and it downloads only from a URL under
+`https://github.com/zyndata/buy-my-way/releases/`. The file goes to the app's own external
+files directory and is handed to Android's package installer, which asks the user before
+anything is installed — and which refuses any APK not signed with the same key. Nothing about
+the user or their lists travels with the request.
+
 The push sender is a Google Apps Script running under the owner's account. It accepts a request
 only with a valid Firebase ID token whose user is a member of the named list, and it sends
 nothing but a list id and a change kind through FCM — item names never travel through push.
@@ -51,4 +59,7 @@ Security-relevant problems are most likely to look like:
   not hold it**;
 - the **push endpoint accepting a request** without a valid token, from a non-member, or often
   enough to be used as a way to drain another user's battery;
-- a **photo reachable without the rules' membership check**.
+- a **photo reachable without the rules' membership check**;
+- a way to make the **update check install something else** — a release document that points
+  the download somewhere other than this repository's Releases, or a downloaded file reachable
+  by another app before the installer sees it.

@@ -10,11 +10,12 @@ brought in from [Eat My Way](https://github.com/zyndata/eat-my-way) with one sha
 
 The interface is in **Polish**. The code, comments and documentation are in English.
 
-> **Status: early development, and feature-complete. It works as a shopping list you can share:
+> **Status: feature-complete, with the release machinery in place and 1.0 not yet tagged. It
+> works as a shopping list you can share:
 > invite someone by link or e-mail, and each of you sees the other's changes on the open list in
 > about half a second, photos included; you can dictate what to buy instead of typing it, share a
 > week's list out of Eat My Way straight into it, and a phone with the app closed is told about
-> a change on a shared list. What is left is the 1.0 release itself.**
+> a change on a shared list. What is left is a week of daily use, and then the 1.0 tag.**
 > [PLAN.md](PLAN.md) holds the specification and the phases (Phase 11, Google Play, was
 > dropped); [STATE.md](STATE.md) records what has been decided and what is still
 > open.
@@ -73,7 +74,12 @@ The interface is in **Polish**. The code, comments and documentation are in Engl
 > and the app still starts no service and polls nothing.
 > Since then, by hand: Ustawienia has „Motyw" (system, light or dark) and „O aplikacji" with
 > the version and the licences, and „Wyczyść kupione" asks before it empties the section.
-> Phase 10, the 1.0 release, is next.
+> Phase 10 is done: the app is released from a tag. Pushing `vX.Y.Z` builds a signed,
+> R8-minified APK and publishes it as a GitHub Release with its SHA-256, and the app tells you
+> about it: when you open Listy, at most once a day, it asks GitHub whether there is a newer
+> version and shows „Dostępna wersja X — Pobierz" if there is. Nothing about this runs in the
+> background. **`v1.0.0` itself is not tagged yet** — that waits for a week of daily use with
+> no open bug (PLAN.md Phase 10, task 6).
 
 ## Screenshots
 
@@ -82,6 +88,18 @@ The interface is in **Polish**. The code, comments and documentation are in Engl
   <img src="docs/screenshots/list-checking.png" width="240" alt="The list by department, with the share icon in the top bar and „… ogląda” (the name hidden) under the list's name">
   <img src="docs/screenshots/list-bought.png" width="240" alt="The bottom of the list: „Kupione (4)” expanded, with „Wyczyść kupione”">
 </p>
+
+## Installing
+
+Not on Google Play, and not planned to be. Each release is a **GitHub Release** carrying
+`buy-my-way-vX.Y.Z.apk` and its SHA-256: download the APK on the phone, allow Android to
+install it, and that is the whole of it. The app is signed with one key for its whole life, so
+every later version installs straight over the one before it and keeps your lists.
+
+From then on the app tells you itself: when you open Listy — at most once a day, in the
+foreground, never in the background — it asks GitHub whether there is a newer release and shows
+„Dostępna wersja X — Pobierz" if there is. Ustawienia → „O aplikacji" → „Sprawdź aktualizacje"
+asks straight away. Nothing about your account or your lists goes with that request.
 
 ## What makes it different
 

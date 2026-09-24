@@ -30,7 +30,11 @@ import dev.gorny.buymyway.data.prefs.ListSortPreferences
 import dev.gorny.buymyway.data.prefs.NotificationPreferences
 import dev.gorny.buymyway.data.prefs.SyncMarks
 import dev.gorny.buymyway.data.prefs.ThemePreferences
+import dev.gorny.buymyway.data.prefs.UpdatePreferences
 import dev.gorny.buymyway.data.prefs.settingsDataStore
+import dev.gorny.buymyway.data.update.ApkDownloads
+import dev.gorny.buymyway.data.update.AppUpdates
+import dev.gorny.buymyway.data.update.GitHubReleases
 import dev.gorny.buymyway.data.push.AppsScriptPush
 import dev.gorny.buymyway.data.push.CatchUpWorker
 import dev.gorny.buymyway.data.push.Notifications
@@ -298,6 +302,22 @@ class AppContainer(context: Context) {
             onScreen = listOnScreen == listId,
         )
     }
+
+    // --- Updating the app itself (Phase 10) ------------------------------------------------
+
+    /**
+     * „Dostępna wersja X — Pobierz" (decision 108). Asked for only when Listy is shown, and
+     * then only if a day has passed: no worker, nothing that wakes the device.
+     */
+    val updates: AppUpdates by lazy {
+        AppUpdates(
+            source = GitHubReleases(),
+            prefs = UpdatePreferences(appContext.settingsDataStore),
+            installedVersion = BuildConfig.VERSION_NAME,
+        )
+    }
+
+    val apkDownloads: ApkDownloads by lazy { ApkDownloads(appContext) }
 
     /** Items' photos (Phase 6, decisions 70–72). */
     val photos: Photos by lazy {

@@ -116,6 +116,19 @@
     <string name="about_source_value" translatable="false">github.com/zyndata/buy-my-way</string>
     <string name="about_source_failed">Nie udało się otworzyć przeglądarki.</string>
 
+    <!-- Aktualizacje (Phase 10) -->
+    <string name="about_check_updates">Sprawdź aktualizacje</string>
+    <string name="about_checking">Sprawdzanie…</string>
+    <string name="about_up_to_date">Masz najnowszą wersję.</string>
+    <string name="about_check_found">Nowa wersja czeka na ekranie „Listy”.</string>
+    <string name="about_check_failed">Nie udało się sprawdzić. Spróbuj później.</string>
+    <string name="update_available">Dostępna wersja %1$s</string>
+    <string name="action_download">Pobierz</string>
+    <string name="action_hide">Ukryj</string>
+    <string name="update_downloading">Pobieranie…</string>
+    <string name="update_failed">Nie udało się pobrać aktualizacji. Spróbuj ponownie.</string>
+    <string name="update_allow_install">Android musi najpierw pozwolić tej aplikacji instalować pliki APK. Włącz to w ustawieniach, które się otworzyły, i dotknij „Pobierz” jeszcze raz.</string>
+
     <!-- Konto (Phase 4) -->
     <string name="settings_account">Konto</string>
     <string name="action_sign_in">Zaloguj się przez Google</string>

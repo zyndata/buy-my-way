@@ -18,7 +18,7 @@ Any deviation from [PLAN.md](PLAN.md) must be recorded here before proceeding.
 | 8     | Import from Eat My Way                 | done    | 2026-09-23 |
 | 8b    | „Moje produkty"                        | done    | 2026-09-23 |
 | 9     | Background, notifications & battery    | done    | 2026-09-23 |
-| 10    | Release engineering & 1.0              | pending |           |
+| 10    | Release engineering & 1.0              | done    | 2026-09-24 |
 | 11    | Google Play closed testing             | dropped | 2026-09-21 |
 
 Statuses: `pending` → `in-progress` → `done` (or `blocked` with a note, or `dropped` by a
@@ -30,7 +30,8 @@ Phase 2 its local data layer, from Phase 3 its screens for private lists, from P
 Google sign-in with the lists kept in Firebase Realtime Database, from Phase 5 sharing
 with other people and live changes, from Phase 6 photos on items, from Phase 7 dictation, and
 from Phase 8 the import of a shopping list shared out of Eat My Way, from Phase 8b the
-user's own product words, and from Phase 9 notifications for a closed app.
+user's own product words, from Phase 9 notifications for a closed app, and from Phase 10 the
+release workflow, the signing, the R8 rules and the app's own update check.
 
 **Phase 0 done (2026-09-21).** Under `drive.file`, a shared file is invisible to the other
 member's copy of the app. So shared lists and photos move to Firebase Realtime Database and
@@ -552,6 +553,87 @@ of these was diagnosable in seconds once something printed what was actually tru
 carry `FLAG_EXCLUDE_STOPPED_PACKAGES`), so „closed" in these checks means `am kill`; and
 `dumpsys notification | grep <package>` always matches, because the dump lists every package's
 channels — a live record is `pkg=<package>`. Both are in docs/DEPLOYMENT.md now.
+
+**Phase 10 done (2026-09-24), the machinery only: `v1.0.0` is deliberately not tagged
+(decision 113).** A tag now builds a release. `deploy.yml` runs on `v[0-9]+.[0-9]+.[0-9]+`,
+repeats lint and the unit tests, restores the keystore from `KEYSTORE_BASE64`, builds
+`assembleRelease` signed from four secrets, **verifies the signature with `apksigner` before
+publishing anything**, and then git-cliff writes `CHANGELOG.md` back to `main` and the GitHub
+Release is created with `buy-my-way-vX.Y.Z.apk` and its `.sha256`. Signing reads Gradle
+properties or the same-named environment variables, and a build without them is unsigned rather
+than broken (decision 111). R8 is on for `release` with `app/proguard-rules.pro` (decision 112).
+The app checks `releases/latest` **when Listy is shown and the last look was over a day ago** —
+no worker, nothing that wakes the device (decision 108) — and shows „Dostępna wersja X —
+Pobierz"; „Ukryj" hides that version and not the next; „Sprawdź aktualizacje" in „O aplikacji"
+asks at once. „Pobierz" downloads through `DownloadManager` into the app's own external files
+directory and hands the file to the package installer through a `FileProvider` of its own.
+`.claude/skills/release/SKILL.md` drives a release or a local install, and checks the `dev` CI
+gate before it merges. Decisions 108–113.
+**What wakes the device, in full, after this phase: nothing new.** The three workers of Phase 9
+(`OutboxWorker`, `PhotoWorker`, the one periodic 3-hourly `CatchUpWorker`) are still the whole
+of it. **No new dependency** — the GitHub call is `HttpURLConnection`, so OkHttp never arrived
+and the app ships 1.0 with nothing PLAN.md's stack list did not name (decision 109).
+`REQUEST_INSTALL_PACKAGES` is the app's third permission and the only one that is never a
+dialog (decision 110).
+Verified here: **lint clean. 204 JVM tests** (19 new: 10 in `UpdatesTest` for what a release
+document means — the version grammar, numeric comparison so 1.10.0 beats 1.9.0, a draft, a
+pre-release, a release with no APK, and an APK URL anywhere but this repository's Releases,
+plus ten shapes of junk that must not throw; 9 in `AppUpdatesTest` for the once-a-day rule, a
+failed check not counting as a check, a dismissed version, and a clock that jumped backwards).
+**81 rules tests** on the Firebase emulator, unchanged — Phase 10 touches no rules.
+**161 instrumented entries** (160 tests and the `TwoPhoneProbe` skip AGP writes as a failure,
+decision 69; 9 new), on the API 35 emulator at CI's size (`wm size 1080x1920`, `wm density 480`):
+the banner appearing for a newer release on the real Listy; nothing offered when this is already
+the newest, when the phone has no network, or to a `0.0.0-dev` build; „Ukryj" remembering that
+version and it not coming back; „Sprawdź aktualizacje" answering „Masz najnowszą wersję.";
+`REQUEST_INSTALL_PACKAGES` declared, **not** a dangerous permission, gated by an app op and
+reading as *denied* until the user allows it; and the update `FileProvider` being in the merged
+manifest, not exported, granting URI permissions and **refusing a file outside its one
+directory**.
+**R8 was tested, not reasoned about (decision 112's claim, made good).** A throwaway keystore in
+a scratch directory — never in the repository — built a **signed, minified 3.4 MB release APK**,
+which was installed on the emulator and driven by hand: it started with no crash, showed Polish
+throughout, made a list, and read „2 kg ziemniaki, mleko, chleb" into three items in the right
+departments („Warzywa i owoce" with „2 kg", „Nabiał i jaja", „Pieczywo"). That last one is the
+whole point: the dictionary is `products-pl.json` decoded by kotlinx.serialization and the ops
+are serialized into the outbox, which is exactly what a missing keep rule would have broken, and
+it would have compiled perfectly either way. Logcat holds no `ClassNotFound`, no
+`SerializationException` and no crash — and one line of evidence for the update check running in
+a minified build: `BuyMyWayUpdate: releases/latest answered HTTP 404`, which is the honest answer
+today, because there is no release yet.
+**Acceptance criterion 1, first half, verified on the physical S10e:** installing the release APK
+over the debug build is refused —
+`INSTALL_FAILED_UPDATE_INCOMPATIBLE: signatures do not match previously installed version`.
+**Found on the way:** „Sprawdź aktualizacje" said nothing at all, and the instrumented test
+caught it. The screen cleared the answer *before* showing it, and clearing it changed the state
+the `LaunchedEffect` was keyed on, so the effect restarted and cancelled its own `showSnackbar`.
+It now shows first and clears after. A second, smaller one: `REQUEST_INSTALL_PACKAGES` reads as
+**denied** from `checkSelfPermission` on a fresh install — it is an app-op permission, granted
+only on the Settings screen — so the first version of that test asserted the opposite of the
+truth and was right to fail.
+**Not verified, and this is most of what a release actually is:**
+- **A real tag.** `deploy.yml` has never run: nothing has been tagged, and the four secrets are
+  not in the repository yet (`docs/DEPLOYMENT.md` says how to make the keystore and add them).
+  So the workflow is reviewed, not executed — which is exactly the shape decision 107 and the
+  Phase 9 lesson warn about, and the first `/release` is where it is found out. The pieces that
+  *could* be checked here were: the release variant builds, signs, verifies under `apksigner`,
+  and runs.
+- **Acceptance criterion 1, second half** („installing over the previous release succeeds"):
+  there is no previous release to install over. It needs two tags.
+- **Acceptance criterion 2, the update banner on a real older build**: it was driven on the
+  emulator against a handed-over document, and the live HTTP call was seen answering 404. The
+  banner offering a *real* release, and „Pobierz" actually downloading and installing one, needs
+  a Release to exist.
+- **The `.sha256` a person compares** — generated by the workflow, never yet by the workflow.
+- The Linux machine (open question 2).
+**The privacy page was checked against the app (task 5, open question 6), and it is mostly
+right.** `eat-my-way/public/privacy.html` already has a full Buy My Way section, and it already
+describes this phase correctly: „Sprawdzanie aktualizacji — raz dziennie aplikacja sprawdza w API
+GitHuba, czy jest nowa wersja. GitHub widzi przy tym adres IP telefonu." Two things on it are now
+out of date, and **both are changes in the Eat My Way repository, not here**: it says „Opcja
+usunięcia danych w samej aplikacji jest planowana", when Phase 9 shipped „Usuń moje dane"
+(open question 8); and its list of stored settings does not mention „Moje produkty", which Phase
+8b does mirror to `/users/{uid}/prefs/products`.
 
 ## Decisions
 
@@ -1649,6 +1731,62 @@ was dropped. Verified on this machine: lint, 188 JVM tests (3 new ones for `Tall
 what was bought, which is the half of decision 106 that no build output could have shown.
 **Not verified yet:** the theme choice against the system bars.
 
+### 2026-09-24 — Phase 10 (release engineering & 1.0)
+
+108. **The update check runs in the foreground, at most once a day, and adds no background
+     work.** PLAN.md Phase 10, task 3 says „GitHub `releases/latest` once a day". The obvious
+     reading is a periodic worker; this project's battery rule (CLAUDE.md) makes that the wrong
+     one. A banner nobody can see is worth nothing, so the check runs when **Listy is shown**
+     and the last check is more than 24 hours old — one HTTPS GET of a few kilobytes, on a
+     screen the user is already looking at. Nothing is scheduled, nothing wakes the device, and
+     the app keeps exactly the three workers Phase 9 left it with (decision 96). A phone that
+     never opens the app never checks, which is correct: it is also a phone that would never
+     see the banner. „Sprawdź aktualizacje" in „O aplikacji" forces a check whenever the user
+     wants one, which is also how the feature is verified by hand without waiting a day.
+109. **Still no OkHttp: the GitHub check is `HttpURLConnection` too, so the app ends 1.0 with
+     no dependency PLAN.md's stack list did not name and two it did not need.** PLAN.md names
+     OkHttp „for the two plain HTTPS calls the app makes outside Firebase"; decision 92 did the
+     first one (the push endpoint) in forty lines without it and left the second to this phase.
+     The second is a `GET` of one public JSON document with no authentication, no cookies, no
+     retry policy and no connection reuse to speak of — once a day. The download is
+     `DownloadManager`'s, not ours. So OkHttp would arrive for nothing, and with it a
+     transitive Okio, in an app that holds a session able to read every list its user belongs
+     to (CLAUDE.md, „minimal dependencies"). Coil went the same way in decision 70.
+110. **`REQUEST_INSTALL_PACKAGES` is the app's third permission, and it is the only one that is
+     never a dialog.** Installing an APK the app downloaded needs it in the manifest, and on
+     every version this app supports (minSdk 26) it also needs the user to allow *this app* to
+     install unknown apps — a Settings screen (`ACTION_MANAGE_UNKNOWN_APP_SOURCES`), reached by
+     a sentence and a button, never a runtime prompt. `POST_NOTIFICATIONS` and `RECORD_AUDIO`
+     therefore remain the only two permissions the app ever *asks a person for*, which is what
+     Phase 9's `NotificationsTest` asserts; the test now says that in those words and checks the
+     third is declared and is not a runtime permission. The permission buys the one thing the
+     GitHub distribution has to do that Play does for free, and it is used on exactly one path:
+     an APK this app downloaded from this repository's own Releases.
+111. **A build with no keystore is unsigned, not broken.** The four release-signing values are
+     read from Gradle properties (`~/.gradle/gradle.properties` locally) or, in CI, from the
+     same-named environment variables fed by GitHub Secrets; when the keystore is missing,
+     `signingConfig` is simply left unset and `assembleRelease` produces an unsigned APK. That
+     keeps a fork, a fresh clone and every CI job that does not release able to build the
+     release variant, and it keeps the failure honest: an unsigned APK will not install, rather
+     than a build that dies with a message about a file nobody outside this household has.
+     `deploy.yml` fails loudly instead if the secret is absent, because a Release with an
+     unsigned APK would be worse than no Release.
+112. **R8 is on for `release` and the keep rules are the four the app actually needs.** Room,
+     Firebase and the AndroidX libraries ship their own consumer rules; what R8 cannot see for
+     itself is kotlinx.serialization's generated serializers (looked up by name), the model
+     classes they serialize, `MainActivity`'s deep links and the `PushService`/`FileProvider`
+     entries the framework instantiates from the manifest. `proguard-rules.pro` keeps exactly
+     those, with a comment on each saying who breaks without it. „Tested" means the minified,
+     signed APK was installed on a device and driven through the paths that use reflection —
+     a dictionary read from assets, a list synced, a photo, a push tally — because a keep rule
+     that is wrong compiles perfectly and crashes at runtime, which is decision 107's lesson
+     again.
+113. **Phase 10 builds the release machinery; it does not tag 1.0.** PLAN.md task 6 is „tag
+     `v1.0.0` after a week of daily use by the household with no open bug", and that week has
+     not happened. The phase ends with `deploy.yml`, the signing, the update check, the
+     `/release` skill and the docs on `dev`, verified as far as this machine can verify them;
+     the owner runs `/release` when the week is up. A phase does not release (CLAUDE.md).
+
 ## Open questions
 
 1. ~~Where do shared lists live, now that `drive.file` cannot cross users?~~ Answered by
@@ -1690,17 +1828,23 @@ what was bought, which is the half of decision 106 that no build output could ha
    screen uses Eat My Way's support group, home page `https://eatmyway.gorny.dev` and privacy
    link `https://eatmyway.gorny.dev/privacy.html` (`gorny.dev` authorised). No separate
    domain. Play is out (decision 25), so nothing enforces the page, but Google shows it at
-   sign-in. **To do in the Eat My Way repository:** a Buy My Way section on that page (what
-   goes to Firebase, who can read it, push, voice, deletion). Requested 2026-09-21.
+   sign-in. ~~**To do in the Eat My Way repository:** a Buy My Way section on that page.~~
+   Written, and checked against the app in Phase 10: it covers sign-in, what goes to RTDB, who
+   can read it, push, dictation, the import and — already — the daily GitHub update check.
+   **Two corrections still to make in the Eat My Way repository** (found 2026-09-24): the page
+   says in-app data deletion „jest planowana" when Phase 9 shipped „Usuń moje dane" (open
+   question 8), and its list of stored settings does not name „Moje produkty", which Phase 8b
+   mirrors to `/users/{uid}/prefs/products`.
 7. **Does *Testing* mode expire the grants after 7 days?** Answered by avoiding it: the
    consent screen goes *In production* (decision 25). Once it is published, the Apps Script
    check stays useful after any console change:
    `curl -sL -d '{"idToken":"x"}' <script url>` must answer
    `{"ok":false,"error":"unauthenticated"}`, not an authorisation error page.
 8. ~~**"Usuń moje dane" in the app?**~~ Built in Phase 9 (decision 97), exactly as this
-   question described it. Still to do **in the Eat My Way repository**: the privacy page says
-   deletion is by e-mail, and it can now say „w aplikacji: Ustawienia → Usuń moje dane"
-   instead. That goes with the Buy My Way section open question 6 asks for.
+   question described it. Still to do **in the Eat My Way repository**, and confirmed still
+   undone on 2026-09-24: the privacy page says deletion is by e-mail and that an in-app option
+   „jest planowana", when it exists. It can now say „w aplikacji: Ustawienia → Usuń moje dane".
+   That goes with the other correction under open question 6.
 9. **Limit sign-in to the household?** The RTDB rules (Phase 4) could accept writes only
    from uids listed under an `/allowed` node that only the owner can edit in the console.
    That would stop a stranger's Google account from using the quota even through our own
@@ -1718,7 +1862,9 @@ what was bought, which is the half of decision 106 that no build output could ha
     shows Listy's top bar without the „⋮" that „Wklej ze schowka" lives in. Decision 47 leaves
     screenshots to the owner on a real phone (`adb exec-out screencap`), so they are theirs to
     re-take; `list-bought.png` is unchanged. Screenshots of „Dyktowanie" and of the import
-    preview would be worth adding at the same time.
+    preview would be worth adding at the same time. Phase 10 adds nothing to this list: its one
+    new piece of screen is the update banner, which cannot honestly be photographed until a
+    release exists to be offered.
 12. **A structured export from Eat My Way — an open question for *that* project, not this one**
     (PLAN.md Phase 8, task 4; raised 2026-09-23). Phase 8 reads the plain text Eat My Way
     already shares, and **no change to Eat My Way is required or requested**. What the text
