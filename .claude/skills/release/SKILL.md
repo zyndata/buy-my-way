@@ -119,17 +119,19 @@ The two things only a device can answer (PLAN.md Phase 10 acceptance criteria):
 
 ## When a release goes wrong
 
-Published tags are protected by a repository ruleset (no deletion, no force-update, **no bypass
-actors** — being the repository owner does not exempt you). A failed release is fixed
-**forward**, with a new patch version, never by re-pointing the tag that broke:
+A failed release is fixed **forward**, with a new patch version, never by re-pointing the tag
+that broke:
 
 ```
-git tag -f v1.0.0 && git push -f origin v1.0.0   # rejected — do not work around it
+git tag -f v1.0.0 && git push -f origin v1.0.0   # do not
 ```
 
-This is deliberate. `CHANGELOG.md`, the GitHub Release and the version inside every installed
-APK are all generated *from* the tag (`git describe`), and a moved tag leaves them quietly
-disagreeing about what a version contains. So:
+**Nothing currently stops you** — `zyndata/buy-my-way` has no rulesets yet (STATE.md open
+question 3), unlike Eat My Way. That makes the discipline yours to keep rather than the
+repository's to enforce. `CHANGELOG.md`, the GitHub Release and the version inside every
+installed APK are all generated *from* the tag (`git describe`), so a moved tag leaves three
+things quietly disagreeing about what a version contains — and the one inside an APK is
+already on somebody's phone. So:
 
 1. Commit the fix on `dev`, wait for its `ci.yml` run to be green, merge to `main`.
 2. Tag the **next patch** version (`v1.0.1`, never a reused `v1.0.0`) and push that.
