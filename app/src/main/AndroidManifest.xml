@@ -113,7 +113,17 @@
             android:name=".data.update.UpdateFileProvider"
             android:authorities="${applicationId}.updates"
             android:exported="false"
-            android:grantUriPermissions="true" />
+            android:grantUriPermissions="true">
+            <!-- The paths have to be here as well as in the provider's constructor:
+                 `FileProvider(R.xml.update_paths)` is read when the provider is attached, but
+                 the *static* `getUriForFile` resolves the authority through the package
+                 manager and reads this meta-data. Without it that call throws „Missing
+                 android.support.FILE_PROVIDER_PATHS meta-data" and the download that just
+                 succeeded is reported to the user as a failure (STATE.md decision 119). -->
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/update_paths" />
+        </provider>
     </application>
 
 </manifest>

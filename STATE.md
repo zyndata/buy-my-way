@@ -1888,6 +1888,48 @@ what was bought, which is the half of decision 106 that no build output could ha
      The README is 87 lines, down from 140. Phase status lives here, in STATE.md.
 
 
+### 2026-09-24 — v0.9.1's update download, found on a phone
+
+119. **`FileProvider(R.xml.update_paths)` is not enough: the static `getUriForFile` reads the
+     manifest, and only the manifest.** v0.9.1 downloaded its own successor perfectly and then
+     told the user „Nie udało się pobrać aktualizacji. Spróbuj ponownie". Found on the S10e on
+     2026-09-24, with v0.9.0 installed and v0.9.1 released.
+
+     What the phone actually said, from a throwaway instrumented test: `DownloadManager`
+     finished with `STATUS_SUCCESSFUL`, `local_uri` was
+     `file:///storage/emulated/0/Android/data/dev.gorny.buymyway/files/Download/…`, the file
+     existed and was the right length — and
+     `FileProvider.getUriForFile(context, "…​.updates", file)` threw
+     **`IllegalArgumentException: Missing android.support.FILE_PROVIDER_PATHS meta-data`**.
+     `ApkDownloads.finished` swallows that with `runCatching { … }.getOrNull()` and returns
+     `Progress.Failed`, which the banner renders as a download failure. So the message named
+     the wrong step: the bytes were always here.
+
+     The cause is a real asymmetry in androidx's `FileProvider`. The constructor's resource id
+     is used by `attachInfo`, i.e. by the provider *instance* when it serves a URI; the static
+     `getUriForFile` resolves the authority through the package manager and reads the
+     `android.support.FILE_PROVIDER_PATHS` meta-data, and has no way to reach the constructor.
+     The camera's provider (Phase 6) always had that meta-data, so photos never noticed. The
+     updates provider had only the constructor. **The fix is one `<meta-data>` element**; the
+     constructor stays, because it is what the instance uses.
+
+     **Why nothing caught it.** There was no instrumented test over `data/update` at all —
+     Phase 10 could not test the banner end to end, because no release existed that was newer
+     than the build under test (open question 11), and the hand-over was quietly lumped in with
+     it. It did not need a release, or a network: `ApkDownloadsTest` now writes a file into the
+     download directory and asserts that `shareable` returns a content URI the resolver can
+     read, that a file outside that one directory returns null, and that the destination is
+     named after the version and never after the document. Verified on the S10e: **red before
+     the manifest change („the provider would not lend out …/buy-my-way-v9.9.9.apk"), green
+     after.**
+
+     `ApkDownloads` also gained `destination(release)`, so the path it tells `DownloadManager`
+     to write to and the path the test reads are one expression, not two that could drift.
+
+     **Fixed forward as v0.9.2**, per the `/release` skill: v0.9.1 keeps its tag and its broken
+     download, and anyone on it has to fetch v0.9.2 by hand once.
+
+
 ## Open questions
 
 1. ~~Where do shared lists live, now that `drive.file` cannot cross users?~~ Answered by
