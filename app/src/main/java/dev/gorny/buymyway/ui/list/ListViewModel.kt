@@ -637,10 +637,10 @@ class ListViewModel(
     }
 
     companion object {
-        const val LINGER_MS = 800L
+        const val LINGER_MS = 1_500L
 
         /** How long someone else's tick holds before it slides (PLAN.md *Screens*). */
-        const val REMOTE_LINGER_MS = 1_500L
+        const val REMOTE_LINGER_MS = 2_500L
         private const val STOP_TIMEOUT_MS = 5_000L
         private const val SETTLE_MS = 1_000L
         private const val SUGGESTIONS = 6
