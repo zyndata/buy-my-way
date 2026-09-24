@@ -611,10 +611,37 @@ It now shows first and clears after. A second, smaller one: `REQUEST_INSTALL_PAC
 **denied** from `checkSelfPermission` on a fresh install — it is an app-op permission, granted
 only on the Settings screen — so the first version of that test asserted the opposite of the
 truth and was right to fail.
+**The release key exists and works (2026-09-24, after the phase was committed).** Made by the
+owner, `buy-my-way-release` (PKCS12, alias **`release`**, `O=Horizon Studio - Lukasz Gorny`),
+kept in a sibling directory of the checkout, never in it — the file has no extension, so the
+`.gitignore` patterns would not have caught it, which is the point: the key is out of the tree
+rather than guarded inside it. The four GitHub Secrets are set on `zyndata/buy-my-way`. Android
+Studio's *Generate Signed APK* built with it successfully, and `apksigner verify --print-certs`
+on that APK confirms keystore, password and alias agree.
+**`KEY_ALIAS` was wrong for twelve minutes and a screenshot caught it.** It was uploaded as
+`buymyway`, the alias of the throwaway key used to test R8, because nobody had read the real
+one. The keystore's alias is `release`. A secret cannot be read back, only replaced, so GitHub
+could not have told us; `deploy.yml` would have failed at `assembleRelease` **with the tag
+already pushed and unmovable**, which is the expensive way to learn it. The lesson is decision
+107's again, and now `docs/DEPLOYMENT.md` says in so many words that `KEY_ALIAS` must match and
+where to read it.
+**Two things the release key still gates, neither of them a secret** (both fingerprints are
+public by design, and both are changes in *other* places, not in this repository):
+1. **Google sign-in will fail on a release build** until the release key's **SHA-1** is
+   registered as an Android OAuth client in the Firebase project, beside the two debug keys.
+   `BB:E3:65:E6:A5:06:44:FD:54:54:67:67:28:07:45:4E:96:42:4A:AF`. Then download the refreshed
+   `google-services.json` and commit it. Everything that works signed out still works without
+   this, so it would look like „Nie udało się zalogować" and nothing else.
+2. **Invite links will open the browser instead of the app** on a release build until the
+   release key's **SHA-256** is added to `assetlinks.json` in the **Eat My Way repository**
+   (which `docs/DEPLOYMENT.md` has said since Phase 5):
+   `0D:EF:EC:73:85:7A:11:DA:09:22:FF:32:27:AC:F5:25:DE:B7:35:F7:9F:8F:06:1C:1E:7A:9F:14:72:1B:C7:DB`.
+   The `buymyway://i/<token>` fallback on the invite page still works, so this degrades rather
+   than breaks.
+
 **Not verified, and this is most of what a release actually is:**
-- **A real tag.** `deploy.yml` has never run: nothing has been tagged, and the four secrets are
-  not in the repository yet (`docs/DEPLOYMENT.md` says how to make the keystore and add them).
-  So the workflow is reviewed, not executed — which is exactly the shape decision 107 and the
+- **A real tag.** `deploy.yml` has never run: nothing has been tagged. The four secrets are set
+  now, but the workflow is still reviewed, not executed — which is exactly the shape decision 107 and the
   Phase 9 lesson warn about, and the first `/release` is where it is found out. The pieces that
   *could* be checked here were: the release variant builds, signs, verifies under `apksigner`,
   and runs.

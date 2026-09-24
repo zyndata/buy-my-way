@@ -110,7 +110,7 @@ Never in the repository. In `~/.gradle/gradle.properties`:
 ```
 buymyway.keystore=/absolute/path/to/buy-my-way-release
 buymyway.keystorePassword=…
-buymyway.keyAlias=buymyway
+buymyway.keyAlias=release
 buymyway.keyPassword=…
 ```
 

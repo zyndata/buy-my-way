@@ -34,6 +34,11 @@ One project, `buy-my-way-c3949` (the plain id was taken), on the **Spark** (free
 - **OAuth clients**: one Web client (its id is the `serverClientId` the app passes to Sign in
   with Google) and one Android client per signing SHA-1 — each developer machine's debug key,
   the release key. There is no Play App Signing key: no Google Play (STATE.md decision 25).
+  **The release key's SHA-1 is `BB:E3:65:E6:A5:06:44:FD:54:54:67:67:28:07:45:4E:96:42:4A:AF`
+  and must be registered before the first release**, or „Zaloguj się przez Google" fails on
+  every released build while everything that works signed out carries on working — which is a
+  confusing way to find out. Add the fingerprint in the console, download the refreshed
+  `google-services.json` and commit it. A fingerprint is not a secret.
 - **Drive API**: off. It was enabled only for the Phase 0 spike (2026-09-21).
 
 Public ids (`google-services.json`, the Web client id, the Apps Script URL) are committed.
@@ -91,7 +96,11 @@ handles.
 
 `assetlinks.json` lists the SHA-256 of every key that signs a build that should open the links
 directly: today the Windows machine's debug key. Add the Linux machine's debug key when it is
-registered (STATE.md open question 2), and the release key in Phase 10. Read a fingerprint with
+registered (STATE.md open question 2), and **the release key**, whose SHA-256 is
+`0D:EF:EC:73:85:7A:11:DA:09:22:FF:32:27:AC:F5:25:DE:B7:35:F7:9F:8F:06:1C:1E:7A:9F:14:72:1B:C7:DB`
+— until it is there, an invite link on a released build opens the browser rather than the app,
+and the page's `buymyway://i/<token>` button is what carries it through. Read a release APK's
+own fingerprints with `apksigner verify --print-certs <apk>`, which needs no password. Read a fingerprint with
 `keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android`.
 Check the verification on a phone with
 `adb shell pm get-app-links dev.gorny.buymyway` (it should say `verified` for the host).
@@ -328,12 +337,17 @@ could install.
 
 ```
 keytool -genkeypair -v -keystore buy-my-way-release -storetype PKCS12 \
-  -alias buymyway -keyalg RSA -keysize 4096 -validity 10000
+  -alias release -keyalg RSA -keysize 4096 -validity 10000
 ```
 
 PKCS12 keeps **one** password for the store and the key, so `KEYSTORE_PASSWORD` and
-`KEY_PASSWORD` below are the same value. The alias is `buymyway`; `keytool -list -keystore
-buy-my-way-release` prints it if there is ever any doubt.
+`KEY_PASSWORD` below are the same value.
+
+**The alias of this project's key is `release`.** It is not guessable and it is not optional:
+`KEY_ALIAS` must match it exactly, or `assembleRelease` fails in CI with the tag already
+pushed. `keytool -list -keystore buy-my-way-release` prints it — the first word of the
+`…, PrivateKeyEntry` line — and Android Studio's *Generate Signed App Bundle or APK* dialog
+shows it in the **Key alias** field.
 
 **Where it lives: outside this checkout.** The file is `buy-my-way-release`, kept in a sibling
 directory of the repository — not in it. `.gitignore` does cover `keystore/`, `*.jks` and
@@ -353,7 +367,7 @@ Never in a cloud drive folder that syncs to a machine, never in a chat.
 |---|---|
 | `KEYSTORE_BASE64` | `base64 -w0 buy-my-way-release` (PowerShell: `[Convert]::ToBase64String([IO.File]::ReadAllBytes("buy-my-way-release"))`) |
 | `KEYSTORE_PASSWORD` | the store password |
-| `KEY_ALIAS` | `buymyway` |
+| `KEY_ALIAS` | `release` |
 | `KEY_PASSWORD` | the same value as `KEYSTORE_PASSWORD` (PKCS12) |
 
 They are **repository** secrets on `zyndata/buy-my-way`, which is what `deploy.yml` reads
@@ -362,7 +376,7 @@ Actions cannot use it here. From a clone:
 
 ```
 base64 -w0 /path/to/buy-my-way-release | gh secret set KEYSTORE_BASE64 --repo zyndata/buy-my-way
-gh secret set KEY_ALIAS --repo zyndata/buy-my-way --body buymyway
+gh secret set KEY_ALIAS --repo zyndata/buy-my-way --body release
 gh secret set KEYSTORE_PASSWORD --repo zyndata/buy-my-way   # prompts; echoes nothing
 gh secret set KEY_PASSWORD      --repo zyndata/buy-my-way   # prompts; echoes nothing
 ```
@@ -378,9 +392,9 @@ would be worse than no Release.
 four values in `~/.gradle/gradle.properties` — **not** in the repository's `gradle.properties`:
 
 ```
-buymyway.keystore=C:/path/to/buy-my-way-release.jks
+buymyway.keystore=C:/path/to/buy-my-way-release
 buymyway.keystorePassword=…
-buymyway.keyAlias=buymyway
+buymyway.keyAlias=release
 buymyway.keyPassword=…
 ```
 
