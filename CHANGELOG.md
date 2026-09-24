@@ -6,7 +6,7 @@ This file is generated from Conventional Commit messages by
 The format follows [Keep a Changelog](https://keepachangelog.com) and the
 project adheres to [Semantic Versioning](https://semver.org).
 
-## [Unreleased]
+## [0.9.1] - 2026-09-24
 
 ### Documentation
 
@@ -16,6 +16,10 @@ project adheres to [Semantic Versioning](https://semver.org).
 ### Features
 
 - **icon:** Take Eat My Way's teal for the launcher background
+
+### Miscellaneous
+
+- Update CHANGELOG
 
 ### Performance
 
