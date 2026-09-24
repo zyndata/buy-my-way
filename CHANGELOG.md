@@ -6,6 +6,21 @@ This file is generated from Conventional Commit messages by
 The format follows [Keep a Changelog](https://keepachangelog.com) and the
 project adheres to [Semantic Versioning](https://semver.org).
 
+## [Unreleased]
+
+### Documentation
+
+- V0.9.0, and the ruleset this repository does not have
+- Screenshots from a seeded phone, and a README without the phase log
+
+### Features
+
+- **icon:** Take Eat My Way's teal for the launcher background
+
+### Performance
+
+- **build:** Keep only the Polish resources, 390 kB off the APK
+
 ## [0.9.0] - 2026-09-24
 
 ### Bug Fixes
