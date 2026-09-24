@@ -6,7 +6,7 @@ This file is generated from Conventional Commit messages by
 The format follows [Keep a Changelog](https://keepachangelog.com) and the
 project adheres to [Semantic Versioning](https://semver.org).
 
-## [Unreleased]
+## [0.9.0] - 2026-09-24
 
 ### Bug Fixes
 
@@ -40,6 +40,8 @@ project adheres to [Semantic Versioning](https://semver.org).
 - The whole Phase 9 go-live procedure, with links
 - Phase 9 measured live, and the criterion amended
 - The changes made after phase 9, and one that could not be made
+- The release key's alias and the two fingerprints it gates
+- Both release-key fingerprints are registered and live
 
 ### Features
 
@@ -86,6 +88,9 @@ project adheres to [Semantic Versioning](https://semver.org).
 - Update CHANGELOG
 - Update CHANGELOG
 - Update CHANGELOG
+- Update CHANGELOG
+- Keep the release key outside the checkout, and ignore the APK
+- Register the release key's SHA-1 for Google sign-in
 
 ### Tests
 
