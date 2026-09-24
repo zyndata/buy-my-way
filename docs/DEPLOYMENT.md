@@ -95,15 +95,27 @@ a link opens the browser; its page's button opens `buymyway://i/<token>`, which 
 handles.
 
 `assetlinks.json` lists the SHA-256 of every key that signs a build that should open the links
-directly: today the Windows machine's debug key. Add the Linux machine's debug key when it is
-registered (STATE.md open question 2), and **the release key**, whose SHA-256 is
-`0D:EF:EC:73:85:7A:11:DA:09:22:FF:32:27:AC:F5:25:DE:B7:35:F7:9F:8F:06:1C:1E:7A:9F:14:72:1B:C7:DB`
-— until it is there, an invite link on a released build opens the browser rather than the app,
-and the page's `buymyway://i/<token>` button is what carries it through. Read a release APK's
-own fingerprints with `apksigner verify --print-certs <apk>`, which needs no password. Read a fingerprint with
-`keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android`.
-Check the verification on a phone with
-`adb shell pm get-app-links dev.gorny.buymyway` (it should say `verified` for the host).
+directly. It carries two, both live since Eat My Way v1.17.3 (2026-09-24):
+
+| Key | SHA-256 |
+|---|---|
+| Windows debug | `34:33:6E:34:…:68:19:DC` |
+| **Release** | `0D:EF:EC:73:85:7A:11:DA:09:22:FF:32:27:AC:F5:25:DE:B7:35:F7:9F:8F:06:1C:1E:7A:9F:14:72:1B:C7:DB` |
+
+Add the Linux machine's debug key when it is registered (STATE.md open question 2). A key that
+is missing here does not break anything outright: the link opens the browser, and that page's
+`buymyway://i/<token>` button carries it through.
+
+Reading a fingerprint — neither needs the release password:
+
+```
+apksigner verify --print-certs buy-my-way-vX.Y.Z.apk                 # any built APK
+keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android
+```
+
+Check it on a phone with `adb shell pm get-app-links dev.gorny.buymyway` (`verified` for the
+host). That only ever proves the key that signed *the build on that phone*, so the release
+fingerprint is confirmed by a release-signed APK, not a debug one.
 
 ## The push sender (Phase 9)
 
@@ -413,8 +425,11 @@ nowhere (STATE.md decision 111).
   before it merges; do not skip it.
 - The `versionName` and `versionCode` come from `git describe`, so the workflow checks out with
   `fetch-depth: 0`. A shallow clone would build a release that calls itself `0.0.0-dev`.
-- Tags are protected by a ruleset (no deletion, no force-update, no bypass actors), as in Eat
-  My Way: a bad release is fixed forward with the next patch version, never by moving a tag.
+- A bad release is fixed forward with the next patch version, never by moving a tag: the
+  CHANGELOG, the Release and the `versionName` inside every installed APK all come *from* the
+  tag, and that last one is already on somebody's phone. **No ruleset enforces this yet**
+  (STATE.md open question 3) — unlike Eat My Way, this repository has none, so the discipline
+  is the owner's to keep. Protecting `main` and `v*` is worth doing before 1.0.
 - **The database rules are not deployed by the workflow.** If a release changes
   `firebase/database.rules.json`, publish them in the console *before* anyone installs the
   build — see *Database rules* above, and Phases 6 and 8b for what it costs not to.
