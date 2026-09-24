@@ -9,7 +9,8 @@ import kotlinx.serialization.json.Json
  *
  * A message carries a list id, three numbers and the name of whoever made the changes. No item
  * name, note or photo ever travels through FCM: the receiving phone reads what changed from
- * RTDB itself, under the rules, as it does at any other catch-up.
+ * RTDB itself, under the rules, as it does at any other catch-up. The names in [Tally.bought]
+ * come from that read and never from the message (decision 106).
  *
  * Everything here is pure, so the JVM tests own the counting, the wording's shape and the
  * tally a phone keeps between two pushes.
@@ -80,17 +81,34 @@ object PushSignal {
         val counts: Counts = Counts(),
         val actor: String? = null,
         val manyActors: Boolean = false,
+        /**
+         * What was bought since this tally started, by name, oldest first. Empty until the
+         * catch-up has read the list, because a push never carries a name (decision 106). A
+         * tally stored before this field existed simply decodes with none.
+         */
+        val bought: List<String> = emptyList(),
     ) {
         /** Adds one message to the tally. */
-        fun plus(more: Counts, by: String?): Tally = Tally(
+        fun plus(more: Counts, by: String?): Tally = copy(
             counts = counts + more,
             actor = by ?: actor,
             manyActors = manyActors || (actor != null && by != null && by != actor),
         )
 
+        /**
+         * Adds what the catch-up has just read. A name already in the tally stays where it was,
+         * and only the most recent [MAX_BOUGHT] are kept: the expanded notification shows fewer
+         * than that anyway, and the tally goes into DataStore.
+         */
+        fun plusBought(names: List<String>): Tally =
+            copy(bought = (bought + names).distinct().takeLast(MAX_BOUGHT))
+
         /** The name to show, or null when nobody or several people are behind the numbers. */
         val singleActor: String? get() = if (manyActors) null else actor
     }
+
+    /** How many bought names one list's tally keeps. */
+    const val MAX_BOUGHT = 20
 
     private val json = Json { ignoreUnknownKeys = true }
 

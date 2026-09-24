@@ -78,6 +78,24 @@ class NotificationPreferences(private val dataStore: DataStore<Preferences>) {
         return result
     }
 
+    /**
+     * The catch-up has read what a push could only count (decision 106): the names of what was
+     * bought join [listId]'s tally. Null when there is no tally — the notification was dismissed,
+     * or the list has since been opened — and then nothing is written, so names never outlive
+     * the numbers they belong to.
+     */
+    suspend fun addBoughtNames(listId: String, names: List<String>): PushSignal.Tally? {
+        val key = tallyKey(listId)
+        var result: PushSignal.Tally? = null
+        dataStore.edit { prefs ->
+            val stored = prefs[key] ?: return@edit
+            val grown = PushSignal.decodeTally(stored).plusBought(names)
+            prefs[key] = PushSignal.encodeTally(grown)
+            result = grown
+        }
+        return result
+    }
+
     /** The list was opened, or its notification dismissed: the next push starts from zero. */
     suspend fun clearTally(listId: String) {
         dataStore.edit { it.remove(tallyKey(listId)) }

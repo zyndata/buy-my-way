@@ -280,6 +280,9 @@
         <item quantity="other">%d zmian</item>
     </plurals>
     <string name="notify_by">%1$s: %2$s</string>
+    <!-- The expanded notification, filled in by the catch-up once it knows the names. -->
+    <string name="notify_bought_line">✓ %1$s</string>
+    <string name="notify_bought_more">i jeszcze %1$d</string>
     <string name="notify_shared_body">%1$s udostępnia Ci tę listę</string>
     <string name="notify_somebody">Ktoś</string>
 

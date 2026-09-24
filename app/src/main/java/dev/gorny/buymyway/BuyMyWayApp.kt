@@ -255,16 +255,44 @@ class AppContainer(context: Context) {
     suspend fun catchUpInBackground(listId: String?): Boolean {
         val uid = account.syncUid() ?: return true // signed out, or waiting to sign in again
         return try {
+            // What already counted as bought before this read, so the pull can be told apart
+            // from what the phone knew all along (decision 106).
+            val boughtBefore = listId?.let { checkedIds(it) }
             connection.hold {
                 pushTokens.ensureRegistered(uid)
                 if (listId != null) sync.pull(uid, listId) else sync.catchUp(uid)
             }
+            if (listId != null && boughtBefore != null) nameWhatWasBought(listId, boughtBefore, uid)
             true
         } catch (_: RemoteFailure) {
             false
         } catch (_: SyncEngine.SessionLost) {
             true
         }
+    }
+
+    /** The items of [listId] that count as bought, as Room has them at this moment. */
+    private suspend fun checkedIds(listId: String): Set<String> = database.items()
+        .getAllForList(listId)
+        .filter { it.checked && it.deletedAt == null }
+        .mapTo(mutableSetOf()) { it.id }
+
+    /**
+     * The push could only say „✓ 3"; the pull has since brought the names. Whatever somebody
+     * else turned into „kupione" goes on the notification this list already has (decision 106).
+     * This user's own ticks are left out: they are what this phone did.
+     */
+    private suspend fun nameWhatWasBought(listId: String, before: Set<String>, uid: String) {
+        val names = database.items().getAllForList(listId)
+            .filter { it.checked && it.deletedAt == null && it.id !in before && it.checkedBy != uid }
+            .sortedBy { it.checkedAt ?: 0L }
+            .map { it.name }
+        notifications.addBought(
+            listId = listId,
+            listName = database.lists().get(listId)?.name,
+            names = names,
+            onScreen = listOnScreen == listId,
+        )
     }
 
     /** Items' photos (Phase 6, decisions 70–72). */

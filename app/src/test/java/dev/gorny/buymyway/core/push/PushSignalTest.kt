@@ -98,6 +98,39 @@ class PushSignalTest {
         assertEquals(PushSignal.Tally(), PushSignal.decodeTally(""))
     }
 
+    // --- The names the catch-up fills in (decision 106) -------------------------------------
+
+    @Test
+    fun `bought names gather in the order they were read, without repeats`() {
+        val tally = PushSignal.Tally()
+            .plus(PushSignal.Counts(checked = 2), "Ania")
+            .plusBought(listOf("mleko", "chleb"))
+            .plus(PushSignal.Counts(checked = 1), "Ania")
+            // The second catch-up reads the whole list again: „mleko" must not double up.
+            .plusBought(listOf("mleko", "masło"))
+        assertEquals(listOf("mleko", "chleb", "masło"), tally.bought)
+        assertEquals(PushSignal.Counts(checked = 3), tally.counts)
+    }
+
+    @Test
+    fun `a tally keeps only the most recent names, and the counts are untouched by them`() {
+        val many = (1..PushSignal.MAX_BOUGHT + 5).map { "rzecz $it" }
+        val tally = PushSignal.Tally().plus(PushSignal.Counts(checked = many.size), "Ania").plusBought(many)
+        assertEquals(PushSignal.MAX_BOUGHT, tally.bought.size)
+        assertEquals("rzecz ${PushSignal.MAX_BOUGHT + 5}", tally.bought.last())
+        assertEquals(many.size, tally.counts.checked)
+    }
+
+    @Test
+    fun `names survive being written down, and a tally stored before them reads as none`() {
+        val tally = PushSignal.Tally().plus(PushSignal.Counts(checked = 1), "Ania").plusBought(listOf("mleko"))
+        assertEquals(tally, PushSignal.decodeTally(PushSignal.encodeTally(tally)))
+        // What Phase 9 wrote, which has no `bought` field at all.
+        val old = PushSignal.decodeTally("""{"counts":{"added":0,"checked":1,"changed":0},"actor":"Ania"}""")
+        assertEquals(emptyList<String>(), old.bought)
+        assertEquals(1, old.counts.checked)
+    }
+
     @Test
     fun `a payload is read as numbers, and nonsense counts as nothing`() {
         val payload = mapOf(

@@ -25,6 +25,10 @@ import dev.gorny.buymyway.data.prefs.NotificationPreferences
  * Two channels, one notification per list, and its text is built from the tally this phone
  * keeps — so a second message reads „+5, ✓ 3" rather than starting again at „+2, ✓ 1". Tapping
  * it opens that list; dismissing it forgets the tally.
+ *
+ * Collapsed, it says how many. Pulled open, it names what was bought — but only once the
+ * catch-up has read the list and called [addBought], because no item name travels through FCM
+ * (decision 106).
  */
 class Notifications(
     private val context: Context,
@@ -97,16 +101,57 @@ class Notifications(
         return actor?.let { context.getString(R.string.notify_by, it, parts) } ?: parts
     }
 
-    private fun post(listId: String, listName: String?, channel: String, body: String): Boolean {
-        val notification = NotificationCompat.Builder(context, channel)
+    /**
+     * The catch-up has read the list a push could only count (decision 106): the notification
+     * that is already in the shade is posted again, now naming what was bought. Nothing is shown
+     * where nothing was showing — no tally means no notification of this list is up.
+     */
+    suspend fun addBought(listId: String, listName: String?, names: List<String>, onScreen: Boolean): Boolean {
+        if (names.isEmpty() || onScreen) return false
+        val switches = prefs.current()
+        // Names ride with „✓ 3", so the switch that hides the tick count hides them too.
+        if (!switches.enabled || !switches.checked || !permitted()) return false
+        val tally = prefs.addBoughtNames(listId, names) ?: return false
+        val shown = switches.filter(tally.counts)
+        if (shown.isEmpty) return false
+        return post(listId, listName, CHANNEL_CHANGES, body(shown, tally.singleActor), tally.bought)
+    }
+
+    /**
+     * [bought] names what the expanded notification lists under its counts; the collapsed one
+     * reads the same [body] either way. [bought] also means this is the catch-up filling in a
+     * notification the user has already been alerted to, so the phone stays quiet.
+     */
+    private fun post(
+        listId: String,
+        listName: String?,
+        channel: String,
+        body: String,
+        bought: List<String> = emptyList(),
+    ): Boolean {
+        val title = listName ?: context.getString(R.string.notify_a_list)
+        val builder = NotificationCompat.Builder(context, channel)
             .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle(listName ?: context.getString(R.string.notify_a_list))
+            .setContentTitle(title)
             .setContentText(body)
             .setAutoCancel(true)
             .setCategory(NotificationCompat.CATEGORY_SOCIAL)
             .setContentIntent(openList(listId))
             .setDeleteIntent(dismissed(listId))
-            .build()
+            .setOnlyAlertOnce(bought.isNotEmpty())
+        if (bought.isNotEmpty()) {
+            val style = NotificationCompat.InboxStyle()
+                .setBigContentTitle(title)
+                .setSummaryText(body)
+            bought.take(BOUGHT_LINES).forEach {
+                style.addLine(context.getString(R.string.notify_bought_line, it))
+            }
+            if (bought.size > BOUGHT_LINES) {
+                style.addLine(context.getString(R.string.notify_bought_more, bought.size - BOUGHT_LINES))
+            }
+            builder.setStyle(style)
+        }
+        val notification = builder.build()
         return try {
             NotificationManagerCompat.from(context).notify(idOf(listId), notification)
             true
@@ -158,5 +203,8 @@ class Notifications(
         fun idOf(listId: String): Int = listId.hashCode()
 
         private const val FLAGS = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+
+        /** How many names an expanded notification lists before „i jeszcze 4". */
+        private const val BOUGHT_LINES = 6
     }
 }
