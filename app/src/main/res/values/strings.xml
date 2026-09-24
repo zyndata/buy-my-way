@@ -32,6 +32,7 @@
     <string name="action_check_all">Zaznacz wszystko</string>
     <string name="action_uncheck_all">Odznacz wszystko</string>
     <string name="action_clear_bought">Wyczyść kupione</string>
+    <string name="action_clear">Wyczyść</string>
     <string name="action_add_category">Dodaj kategorię</string>
 
     <!-- Listy -->
@@ -55,6 +56,13 @@
     <string name="state_collapsed">zwinięte</string>
     <string name="add_hint">Dodaj, np. 2 kg ziemniaki</string>
     <string name="category_chip_description">Kategoria: %1$s. Dotknij, aby zmienić</string>
+    <string name="clear_bought_title">Wyczyścić kupione?</string>
+    <plurals name="clear_bought_body">
+        <item quantity="one">%d kupiona rzecz zniknie z listy — u wszystkich, którzy ją z Tobą dzielą. Gdy dodasz ją ponownie, wróci z ilością i notatką.</item>
+        <item quantity="few">%d kupione rzeczy znikną z listy — u wszystkich, którzy ją z Tobą dzielą. Gdy dodasz je ponownie, wrócą z ilością i notatką.</item>
+        <item quantity="many">%d kupionych rzeczy zniknie z listy — u wszystkich, którzy ją z Tobą dzielą. Gdy dodasz je ponownie, wrócą z ilością i notatką.</item>
+        <item quantity="other">%d kupionej rzeczy zniknie z listy — u wszystkich, którzy ją z Tobą dzielą. Gdy dodasz je ponownie, wrócą z ilością i notatką.</item>
+    </plurals>
     <string name="revived">„%1$s” wraca z kupionych</string>
     <string name="deleted_item">Usunięto „%1$s”</string>
 

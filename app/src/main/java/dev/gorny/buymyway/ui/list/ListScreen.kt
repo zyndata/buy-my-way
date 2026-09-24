@@ -67,6 +67,7 @@ import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.customActions
@@ -121,6 +122,7 @@ fun ListScreen(
     var renaming by rememberSaveable { mutableStateOf(false) }
     var editing by rememberSaveable { mutableStateOf<String?>(null) }
     var boughtOpen by rememberSaveable { mutableStateOf(false) }
+    var confirmClear by rememberSaveable { mutableStateOf(false) }
     val pendingPhotos by vm.pendingPhotos.collectAsStateWithLifecycle()
     val photoBusy by vm.photoBusy.collectAsStateWithLifecycle()
     val dictation by vm.dictation.collectAsStateWithLifecycle()
@@ -256,6 +258,7 @@ fun ListScreen(
                 vm = vm,
                 boughtOpen = boughtOpen,
                 onToggleBought = { boughtOpen = !boughtOpen },
+                onClearBought = { confirmClear = true },
                 onEdit = { editing = it.id },
                 photoOf = { vm.photoOf(it, pendingPhotos) },
                 onOpenPhoto = { viewing = it.id },
@@ -264,6 +267,29 @@ fun ListScreen(
                     .padding(padding),
             )
         }
+    }
+
+    // „Wyczyść kupione" cannot be undone, and on a shared list it empties everybody's „Kupione",
+    // so it asks first.
+    if (confirmClear && detail != null && detail.bought.isNotEmpty()) {
+        val count = detail.bought.size
+        AlertDialog(
+            onDismissRequest = { confirmClear = false },
+            title = { Text(stringResource(R.string.clear_bought_title)) },
+            text = { Text(pluralStringResource(R.plurals.clear_bought_body, count, count)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        confirmClear = false
+                        vm.clearChecked()
+                    },
+                    modifier = Modifier.testTag("confirmClearBought"),
+                ) { Text(stringResource(R.string.action_clear)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmClear = false }) { Text(stringResource(R.string.action_cancel)) }
+            },
+        )
     }
 
     if (renaming && detail != null) {
@@ -467,6 +493,7 @@ private fun ListContent(
     vm: ListViewModel,
     boughtOpen: Boolean,
     onToggleBought: () -> Unit,
+    onClearBought: () -> Unit,
     onEdit: (Item) -> Unit,
     photoOf: (Item) -> PhotoRef?,
     onOpenPhoto: (Item) -> Unit,
@@ -514,7 +541,7 @@ private fun ListContent(
                     count = detail.bought.size,
                     open = boughtOpen,
                     onToggle = onToggleBought,
-                    onClear = vm::clearChecked,
+                    onClear = onClearBought,
                     modifier = Modifier.animateItem(),
                 )
             }
