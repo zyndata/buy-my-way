@@ -3,6 +3,9 @@
 build/
 **/build/
 .kotlin/
+# Where AGP drops the finished release artifact, the APK and its R8 mapping.txt. 60 MB of
+# build output that is rebuilt from a tag, and an APK is never committed.
+app/release/
 
 # Android Studio / IntelliJ — the SDK path is per machine and absolute
 local.properties
@@ -12,9 +15,13 @@ captures/
 .externalNativeBuild/
 .cxx/
 
-# Signing — never in the repository (see docs/DEPLOYMENT.md)
+# Signing — never in the repository (see docs/DEPLOYMENT.md). The release key itself lives
+# OUTSIDE this checkout, in a sibling folder, precisely so that no ignore rule has to be
+# right: the file has no extension, so the patterns below would not have caught it anyway.
+# An ignore rule is a convention (`git add -f` overrides it), not a lock.
 *.keystore
 *.jks
+keystore/
 release.properties
 keystore.properties
 

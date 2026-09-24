@@ -327,21 +327,49 @@ different signature, and every installed copy would have to be uninstalled befor
 could install.
 
 ```
-keytool -genkeypair -v -keystore buy-my-way-release.jks -storetype PKCS12 \
+keytool -genkeypair -v -keystore buy-my-way-release -storetype PKCS12 \
   -alias buymyway -keyalg RSA -keysize 4096 -validity 10000
 ```
 
-Keep the file **and its two passwords in the owner's password manager**. It is never in the
-repository, never in a cloud drive folder that syncs to a machine, never in a chat.
+PKCS12 keeps **one** password for the store and the key, so `KEYSTORE_PASSWORD` and
+`KEY_PASSWORD` below are the same value. The alias is `buymyway`; `keytool -list -keystore
+buy-my-way-release` prints it if there is ever any doubt.
+
+**Where it lives: outside this checkout.** The file is `buy-my-way-release`, kept in a sibling
+directory of the repository — not in it. `.gitignore` does cover `keystore/`, `*.jks` and
+`*.keystore`, but that is a safety net and not the reason it is safe: the file has no
+extension, so those patterns would not have caught it, and an ignore rule is a convention that
+`git add -f` overrides and that a clone made before the rule never had. Keeping the key out of
+the working tree removes the accident instead of guarding against it. This is a public
+repository (CLAUDE.md).
+
+The file **and its password belong in the owner's password manager**. Not in a text file beside
+the keystore — that undoes the whole point, because then one mistake exposes both at once.
+Never in a cloud drive folder that syncs to a machine, never in a chat.
 
 **2. Put it in GitHub Secrets** (Settings → Secrets and variables → Actions):
 
 | Secret | What |
 |---|---|
-| `KEYSTORE_BASE64` | `base64 -w0 buy-my-way-release.jks` (PowerShell: `[Convert]::ToBase64String([IO.File]::ReadAllBytes("buy-my-way-release.jks"))`) |
+| `KEYSTORE_BASE64` | `base64 -w0 buy-my-way-release` (PowerShell: `[Convert]::ToBase64String([IO.File]::ReadAllBytes("buy-my-way-release"))`) |
 | `KEYSTORE_PASSWORD` | the store password |
 | `KEY_ALIAS` | `buymyway` |
-| `KEY_PASSWORD` | the key password |
+| `KEY_PASSWORD` | the same value as `KEYSTORE_PASSWORD` (PKCS12) |
+
+They are **repository** secrets on `zyndata/buy-my-way`, which is what `deploy.yml` reads
+through `secrets.*`. A user-level (`gh secret set --user`) secret is a Codespaces one and
+Actions cannot use it here. From a clone:
+
+```
+base64 -w0 /path/to/buy-my-way-release | gh secret set KEYSTORE_BASE64 --repo zyndata/buy-my-way
+gh secret set KEY_ALIAS --repo zyndata/buy-my-way --body buymyway
+gh secret set KEYSTORE_PASSWORD --repo zyndata/buy-my-way   # prompts; echoes nothing
+gh secret set KEY_PASSWORD      --repo zyndata/buy-my-way   # prompts; echoes nothing
+```
+
+Piping the file keeps the key out of the shell history and off the screen. `gh secret list
+--repo zyndata/buy-my-way` shows the four names (never the values — a secret cannot be read
+back, only replaced, so a lost password means a new key and the end of the update path).
 
 `deploy.yml` fails loudly if `KEYSTORE_BASE64` is missing — a Release carrying an unsigned APK
 would be worse than no Release.

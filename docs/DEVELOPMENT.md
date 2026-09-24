@@ -108,11 +108,15 @@ Database rules.
 Never in the repository. In `~/.gradle/gradle.properties`:
 
 ```
-buymyway.keystore=/absolute/path/to/release.keystore
+buymyway.keystore=/absolute/path/to/buy-my-way-release
 buymyway.keystorePassword=…
-buymyway.keyAlias=…
+buymyway.keyAlias=buymyway
 buymyway.keyPassword=…
 ```
+
+The key is kept **outside this checkout** and the password in a password manager, for the
+reasons in [DEPLOYMENT.md](DEPLOYMENT.md). `~/.gradle/gradle.properties` is per machine and is
+never in the repository, which is why the four values go there and not in `gradle.properties`.
 
 CI reads the same four values from the environment (`BUYMYWAY_KEYSTORE`,
 `BUYMYWAY_KEYSTORE_PASSWORD`, `BUYMYWAY_KEY_ALIAS`, `BUYMYWAY_KEY_PASSWORD`), filled from
