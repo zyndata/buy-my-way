@@ -1584,6 +1584,70 @@ Newest last. Every deviation from PLAN.md lands here **before** it is acted on.
      and the list behind it is stale until the user signs in again. That is the correct order of
      events, and it is why the notification carries no item name: it never asserts anything the
      phone has not read for itself.
+103. **A ticked row holds 1.5 s, and somebody else's 2.5 s — a deviation from PLAN.md's „~800
+     ms" and „1.5 s" (owner, 2026-09-24).** Used on real shopping, 800 ms was too short to read
+     what had just been struck through before it slid away, which is the whole point of the
+     lingering tick. The two numbers keep their old ratio, so someone else's tick still holds
+     visibly longer than one's own. `ListViewModel.LINGER_MS` and `REMOTE_LINGER_MS`; PLAN.md's
+     *Screens* section is superseded on this point.
+104. **„Motyw" is a choice — „Zgodnie z systemem", „Jasny", „Ciemny" — not only the system's
+     (owner, 2026-09-24).** PLAN.md says „dark theme follows the system", which stays the
+     default and what an untouched install does. A device setting, not an account one, for the
+     same reason the notification switches are (decision 94): one `theme.choice` string in the
+     same DataStore, no RTDB node, nothing synced. `MainActivity` reads the flow and gives the
+     answer to both `BuyMyWayTheme` and `enableEdgeToEdge` — the second matters, because
+     forcing the light theme on a phone in dark mode would otherwise leave white status-bar
+     icons on a white bar. Sign-out clears DataStore, so it returns to „Zgodnie z systemem"
+     along with every other device preference.
+105. **The version and the licences move from Ustawienia to „O aplikacji" (owner,
+     2026-09-24).** PLAN.md's *Screens* lists „version and licence" among Ustawienia's rows;
+     they now sit on `settings/about` behind one row, in Polish like the rest of the UI, and
+     carry the licence (MIT), the icons' licence and a tappable link to the public repository.
+     Ustawienia keeps only what is actually a setting.
+106. **A notification names what was bought, but only after the catch-up — never from the
+     push.** Decision 95 stands unchanged and so does PLAN.md's *Security* line: the FCM payload
+     is still a list id, three numbers and a display name, and no item name travels through it.
+     What is new is that `CatchUpWorker`, which already reads the list under the rules, now
+     notes which items it turned from „do kupienia" into „kupione" — a set of checked ids taken
+     before the pull, diffed against the one after, minus this user's own ticks — and hands
+     those names to `Notifications.addBought`. They join the same per-list tally as the numbers
+     (`Tally.bought`, at most 20, no repeats), so the notification reads „✓ 3" collapsed exactly
+     as before and lists the names when it is pulled open. Three properties make this safe to
+     post a second time: it is written only where a tally already exists, so names never outlive
+     the numbers they belong to and a dismissed notification is not resurrected; it is hidden by
+     the same „Kupione produkty" switch that hides „✓ 3"; and the re-post sets
+     `setOnlyAlertOnce`, so the phone does not buzz twice for one change. The names are visible
+     about a second after the notification itself, which is the price of not putting them in the
+     payload.
+
+107. **The app cannot change the animation that closes it, and the attempt was dropped
+     (measured on two phones, 2026-09-24).** The owner asked for the closing window to fade as
+     well as shrink. Both documented ways of asking — `overrideActivityTransition` with
+     `OVERRIDE_TRANSITION_CLOSE` on Android 14+, and `overridePendingTransition` in `finish()`
+     below it — are **ignored** when the last activity of the task finishes, because that
+     transition belongs to the launcher and the system, not to the app. Measured rather than
+     assumed: a probe build whose close animation ran for 3000 ms and shrank the window to 20 %
+     left no trace on screen 1.2 s after „wstecz" on either the S23 (API 36) or the S10e
+     (API 31) — both showed the bare home screen. So what looks like a scale on Android 16 is
+     predictive back, and what looks like a fade on Android 12 is that version's own default;
+     neither came from this app. The only way to deliver it would be to draw the animation in
+     Compose and call `finish()` afterwards, which means taking over the close entirely and
+     giving up the predictive-back preview. The owner chose to keep the native behaviour, and
+     the commit was dropped from the branch rather than reverted, so nothing about it reaches
+     the 1.0 notes. **Lesson, the same shape as decision 101's:** the first version of this was
+     written, reviewed and committed without ever running on a phone, and it read as working
+     code. A window animation is not verifiable from the build output.
+
+**After Phase 9, before Phase 10 (2026-09-24).** Six things the owner asked for after using the
+app: four of the decisions above, plus one that contradicts nothing in PLAN.md — **„Wyczyść
+kupione" now asks first**, because it cannot be undone and on a shared list it empties
+everybody's „Kupione", which no other destructive action in the app did without a dialog. The
+sixth, a fade on the closing window, turned out not to be the app's to give (decision 107) and
+was dropped. Verified on this machine: lint, 188 JVM tests (3 new ones for `Tally.bought`) and
+`assembleDebug` green.
+**Verified on a phone by the owner (2026-09-24):** the expanded notification shows the names of
+what was bought, which is the half of decision 106 that no build output could have shown.
+**Not verified yet:** the theme choice against the system bars.
 
 ## Open questions
 

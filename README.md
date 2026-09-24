@@ -64,11 +64,15 @@ The interface is in **Polish**. The code, comments and documentation are in Engl
 > private to your account and follows it to your other phone.
 > Phase 9 is done: turn „Powiadomienia" on in Ustawienia and a phone with the app closed is
 > told when somebody changes a list you share — one notification per list, „Ania: +3, ✓ 2",
-> and tapping it opens that list already up to date. Nothing buzzes while you have the list
+> and tapping it opens that list already up to date. Pull the notification open and it names
+> what was bought — those names are read from your own database a moment later, once the app
+> has caught up, and never travel in the message. Nothing buzzes while you have the list
 > open, or for a list nobody else is on. There are switches for added items, bought items and
 > newly shared lists, and Ustawienia also has „Usuń moje dane", which removes from the server
 > everything belonging to your account. Nothing about *what* changed travels in the message,
 > and the app still starts no service and polls nothing.
+> Since then, by hand: Ustawienia has „Motyw" (system, light or dark) and „O aplikacji" with
+> the version and the licences, and „Wyczyść kupione" asks before it empties the section.
 > Phase 10, the 1.0 release, is next.
 
 ## Screenshots
