@@ -627,17 +627,24 @@ already pushed and unmovable**, which is the expensive way to learn it. The less
 where to read it.
 **Two things the release key still gates, neither of them a secret** (both fingerprints are
 public by design, and both are changes in *other* places, not in this repository):
-1. **Google sign-in will fail on a release build** until the release key's **SHA-1** is
-   registered as an Android OAuth client in the Firebase project, beside the two debug keys.
-   `BB:E3:65:E6:A5:06:44:FD:54:54:67:67:28:07:45:4E:96:42:4A:AF`. Then download the refreshed
-   `google-services.json` and commit it. Everything that works signed out still works without
-   this, so it would look like „Nie udało się zalogować" and nothing else.
-2. **Invite links will open the browser instead of the app** on a release build until the
-   release key's **SHA-256** is added to `assetlinks.json` in the **Eat My Way repository**
-   (which `docs/DEPLOYMENT.md` has said since Phase 5):
-   `0D:EF:EC:73:85:7A:11:DA:09:22:FF:32:27:AC:F5:25:DE:B7:35:F7:9F:8F:06:1C:1E:7A:9F:14:72:1B:C7:DB`.
-   The `buymyway://i/<token>` fallback on the invite page still works, so this degrades rather
-   than breaks.
+1. ~~**Google sign-in will fail on a release build** until the release key's **SHA-1** is
+   registered as an Android OAuth client in the Firebase project.~~ **Done 2026-09-24.** The
+   owner added `BB:E3:65:E6:A5:06:44:FD:54:54:67:67:28:07:45:4E:96:42:4A:AF` in the console,
+   Firebase created the second Android OAuth client, and the refreshed `google-services.json`
+   is committed (`ff4964a`) — one added `oauth_client` entry, nothing else changed, and the
+   build still resolves `default_web_client_id`. Without it every released build would have
+   failed „Zaloguj się przez Google" while everything that works signed out carried on
+   working.
+2. ~~**Invite links will open the browser instead of the app** on a release build until the
+   release key's **SHA-256** is added to `assetlinks.json` in the **Eat My Way repository**.~~
+   **Done 2026-09-24**, and live: the owner added
+   `0D:EF:EC:73:85:7A:11:DA:09:22:FF:32:27:AC:F5:25:DE:B7:35:F7:9F:8F:06:1C:1E:7A:9F:14:72:1B:C7:DB`
+   beside the Windows debug key's and released Eat My Way **v1.17.3**.
+   `https://eatmyway.gorny.dev/.well-known/assetlinks.json` answers `200` with
+   `Content-Type: application/json` and both fingerprints. What this cannot yet prove is the
+   release half: a phone can only verify the App Link against the key that signed the build it
+   has, so the release fingerprint is confirmed the first time a release-signed APK is on a
+   phone — after the first tag.
 
 **Not verified, and this is most of what a release actually is:**
 - **A real tag.** `deploy.yml` has never run: nothing has been tagged. The four secrets are set
