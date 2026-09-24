@@ -23,6 +23,14 @@
           }
         },
         {
+          "client_id": "270774397521-hdsso5tl391earp15uf8tm49lpisj4dn.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "dev.gorny.buymyway",
+            "certificate_hash": "bbe365e6a50644fd545467672807454e96424aaf"
+          }
+        },
+        {
           "client_id": "270774397521-4l890vstjdbmsvvhkjjho056io7ue221.apps.googleusercontent.com",
           "client_type": 3
         }
