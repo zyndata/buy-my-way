@@ -1844,6 +1844,50 @@ what was bought, which is the half of decision 106 that no build output could ha
      `/release` skill and the docs on `dev`, verified as far as this machine can verify them;
      the owner runs `/release` when the week is up. A phase does not release (CLAUDE.md).
 
+### 2026-09-24 — After Phase 10 (the icon, the README and the APK's size)
+
+114. **The launcher icon's background is Eat My Way's `#529888`, not its own `#2E7D32`
+     (owner, 2026-09-24).** The two apps are one household's pair and are meant to look like
+     it; the teal is the colour of Eat My Way's own icon and of its `theme-color`. Only the
+     background changed — the cart stays white, and the in-app palette is still dynamic colour
+     on Android 12+ with the green brand below that (decision 12's theme is untouched).
+
+115. **`localeFilters += "pl"` — the APK stops carrying eighty languages it never shows
+     (owner, 2026-09-24).** The UI is Polish and its strings are the *default* resources, so
+     nothing of ours is filtered; what goes is AndroidX's and Play services' translations.
+     `resources.arsc` fell from 457 kB to 88 kB and the release APK from **3.44 MB to 3.05 MB**,
+     with no code change. This is the answer to „3.5 MB seems a lot": R8 and resource shrinking
+     were already on (decision 112) — the weight was never un-minified code.
+
+116. **What is left of the APK is code, and most of it is not ours.** Measured on the R8
+     mapping of the same build: 7 415 classes survive, of which `com.google.android.*` is
+     1 746 (Play services and, under it, 553 classes of reCAPTCHA and Play Integrity that
+     firebase-auth drags in for phone sign-in, which this app does not have), Compose is about
+     2 480, Firebase 429 and `dev.gorny.buymyway` 732. `classes.dex` is 2.5 MB of the 3.05.
+     **Not done:** excluding `com.google.android.recaptcha:recaptcha` and
+     `com.google.android.play:integrity` from `firebase-auth`. It is worth roughly 400 kB, and
+     it was tried on 2026-09-24: R8 fails on the missing references, so it also needs
+     `-dontwarn` rules, and then Google sign-in — the app's only sign-in — has to be proved on
+     a real phone before it can be believed. Open question 13.
+
+117. **The README's screenshots are taken from a seeded local database, not from a real
+     account (owner, 2026-09-24).** The app was installed on the S10e as a debug build, the
+     Room database was pulled with `run-as`, filled on the PC with three made-up lists and a
+     made-up member („Ania Nowak"), and pushed back. So the screenshots carry no real name,
+     e-mail, uid or list id, and nothing had to be blurred — which the old `lists.png` did.
+     The cost: the presence line („… ogląda") is live state out of RTDB and cannot be seeded,
+     so no screenshot shows it. A list with `ownerUid = null` and `shared = 1` reads as
+     `Role.OWNER` (`ListRepository.roleOf`), which is what puts the add bar and the mic on the
+     screen while signed out.
+
+118. **The README drops the phase-by-phase status and gains a „Releases" section
+     (owner, 2026-09-24).** Sixty lines of „Phase N is done" was a changelog nobody reads, and
+     CHANGELOG.md is the changelog. What a reader of a sideloaded app actually needs is in its
+     place: what the two files in a release are, where the releases are, that the app checks
+     for its own updates, and that `v1.0.0` is not tagged yet. „Installing" is four sentences.
+     The README is 87 lines, down from 140. Phase status lives here, in STATE.md.
+
+
 ## Open questions
 
 1. ~~Where do shared lists live, now that `drive.file` cannot cross users?~~ Answered by
@@ -1912,16 +1956,13 @@ what was bought, which is the half of decision 106 that no build output could ha
     is the sha256 of the writer's own email (decision 57). Phase 5, which reads the index for
     e-mail invites, decides whether that matters. One option: key by the email itself (dots
     encoded) and compare with `auth.token.email`.
-11. **Two of the README's screenshots are a phase behind, and Ustawienia has never had one.**
-    Phase 9 gave Ustawienia a „Powiadomienia" section and „Usuń moje dane", and a screenshot of
-    a notification („Ania: +3, ✓ 2") would show the phase better than any sentence. `docs/screenshots/list-checking.png`
-    shows the add bar without the mic that Phase 7 put there, and after Phase 8 `lists.png`
-    shows Listy's top bar without the „⋮" that „Wklej ze schowka" lives in. Decision 47 leaves
-    screenshots to the owner on a real phone (`adb exec-out screencap`), so they are theirs to
-    re-take; `list-bought.png` is unchanged. Screenshots of „Dyktowanie" and of the import
-    preview would be worth adding at the same time. Phase 10 adds nothing to this list: its one
-    new piece of screen is the update banner, which cannot honestly be photographed until a
-    release exists to be offered.
+11. ~~**Two of the README's screenshots are a phase behind, and Ustawienia has never had one.**~~
+    Re-taken on 2026-09-24 (decision 117), on the S10e, from a seeded database: `lists.png`,
+    `list-checking.png` (now with the mic) and `list-bought.png` are current, and `import.png`
+    and `settings.png` are new. **Still missing:** „Dyktowanie", because its preview needs a
+    real sentence spoken into the phone and cannot be driven over `adb`; and a notification,
+    which needs two accounts. The update banner still cannot be photographed honestly until a
+    release newer than the installed build exists.
 12. **A structured export from Eat My Way — an open question for *that* project, not this one**
     (PLAN.md Phase 8, task 4; raised 2026-09-23). Phase 8 reads the plain text Eat My Way
     already shares, and **no change to Eat My Way is required or requested**. What the text
@@ -1947,3 +1988,11 @@ what was bought, which is the half of decision 106 that no build output could ha
       person can read in a messenger.
     Nothing here is planned. It is written down so that the next person to touch Eat My Way's
     `formatShoppingList` knows what this side would gain.
+
+13. **Can `firebase-auth` be stripped of reCAPTCHA and Play Integrity?** They are ~400 kB of
+    the APK (decision 116) and exist for phone-number sign-in, which this app does not offer —
+    it signs in with a Google ID token through Credential Manager. Excluding them needs
+    `-dontwarn` rules for R8, and after that the question is purely empirical: does
+    `signInWithCredential` still work on a real phone, and does it still work the *first* time
+    on a fresh install? Nothing else in the app would notice. Worth one experiment on the S10e
+    with a debug build; not worth guessing at.
