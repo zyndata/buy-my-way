@@ -1926,6 +1926,13 @@ what was bought, which is the half of decision 106 that no build output could ha
      `ApkDownloads` also gained `destination(release)`, so the path it tells `DownloadManager`
      to write to and the path the test reads are one expression, not two that could drift.
 
+     **The whole of „Pobierz" was then run once on the S10e by hand**, with a throwaway probe
+     that is deliberately not committed (it would put GitHub on CI's critical path, which this
+     project's instrumented tests do not do): `enqueue` on the real
+     `buy-my-way-v0.9.2.apk`, `awaitFinish` → `Progress.Done`, and all **3 093 146 bytes** read
+     back through the content URI, with a well-formed install intent. That is the button's work
+     end to end, minus the installer dialog the user taps through.
+
      **Fixed forward as v0.9.2**, per the `/release` skill: v0.9.1 keeps its tag and its broken
      download, and anyone on it has to fetch v0.9.2 by hand once.
 
