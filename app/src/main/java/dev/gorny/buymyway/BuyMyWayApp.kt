@@ -117,11 +117,17 @@ class AppContainer(context: Context) {
      * the bundled dictionary, the names this phone has already seen (decision 80), and the
      * words the user curated in „Moje produkty" (Phase 8b). The last is the only one of the
      * three the user can edit, and it is what makes „chleb wiejski" a thing of its own.
+     *
+     * Only the first two are trusted whole: a seen name whose every word already names
+     * something is one dictation glued together, and [NameIndex.ofSeen] drops it (decision 120).
      */
     suspend fun knownNames(): Dictation.KnownNames {
         val categorizer = categorizer()
-        val seen = NameIndex.ofFolded(database.nameHistory().keys(OWN_NAMES))
         val curated = NameIndex.ofFolded(lists.ownProductKeys())
+        val seen = NameIndex.ofSeen(database.nameHistory().keys(OWN_NAMES)) { word ->
+            val alone = listOf(word)
+            categorizer.knownNameLength(alone, 0) > 0 || curated.lengthAt(alone, 0) > 0
+        }
         return Dictation.KnownNames { words, from ->
             maxOf(
                 categorizer.knownNameLength(words, from),

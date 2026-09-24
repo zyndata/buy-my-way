@@ -1937,6 +1937,38 @@ what was bought, which is the half of decision 106 that no build output could ha
      download, and anyone on it has to fetch v0.9.2 by hand once.
 
 
+### 2026-09-24 — Dictation glued two unknown names, and then learned the glue
+
+120. **A name dictation glued together must not become a name.** Reported from a phone: two
+     words the bundled dictionary has never heard of — „alantan polopiryna" — were dictated and
+     landed as one item, which is expected (nothing says where the cut is). Both were then added
+     by hand as two items, and the same sentence dictated again *still* came back as one item.
+
+     The cause is not a stale dictionary: `BuyMyWayApp.knownNames()` reads `name_history` and
+     „Moje produkty" from Room on every utterance, and there is one `AppDatabase` in the process,
+     so the two hand-added names were there. It is the glue feeding itself. Adding the merged
+     item called `ListRepository.remember`, so `name_history` gained the *key* „alantan
+     polopiryna"; `NameIndex.lengthAt` answers with the **longest** name that matches, and a
+     two-word match beats two one-word ones. Shown with the real `products-pl.json` in a
+     throwaway unit test: with both single names known the utterance splits, and with the glued
+     name beside them it does not.
+
+     **The fix is `NameIndex.ofSeen`**, used for `name_history` only: a seen name of several
+     words is dropped when every one of its words already names something on its own (in the
+     bundled dictionary, in „Moje produkty", or as another seen name). „alantan polopiryna" goes;
+     „chleb wiejski" stays, because „wiejski" names nothing — so decision 80 keeps doing its job.
+     The bundled dictionary and „Moje produkty" are untouched, which is why the sixteen curated
+     two-word names whose words are each known („sok jabłkowy", „kawa mielona", „owoce morza", …)
+     are still one thing each. `DictationTest.aGluedNameGivesWayToTheTwoNamesItIsMadeOf` is the
+     regression test.
+
+     **Not fixed, and deliberately:** the glued name stays in `name_history`, so it is still
+     offered by the add bar's autocomplete and still carries a category memory. Only the cut
+     ignores it. The user's report also said that a restart split the words correctly — nothing
+     in the code explains that (nothing clears or re-reads `name_history` at start, and a
+     restart does not remove the glued key), so it is put down to the recognizer, which hands
+     over a different sentence from one attempt to the next.
+
 ## Open questions
 
 1. ~~Where do shared lists live, now that `drive.file` cannot cross users?~~ Answered by
