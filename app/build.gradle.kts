@@ -95,6 +95,12 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    // The UI is Polish only, so the ~80 locales AndroidX and Play services ship are dead
+    // weight in resources.arsc; the default (Polish) resources are kept whatever this says.
+    androidResources {
+        localeFilters += "pl"
+    }
+
     buildFeatures {
         compose = true
         // BuildConfig.VERSION_NAME for Ustawienia.
