@@ -169,6 +169,38 @@ class DictationTest {
         )
     }
 
+    /**
+     * What dictation glued together does not become a name (STATE.md decision 120). Two words
+     * the dictionary has never heard of are one line; that line is added, and `name_history`
+     * remembers it. Adding the two by hand must then be enough to tell them apart — before
+     * this, the glued name was the longest match and kept winning.
+     */
+    @Test
+    fun aGluedNameGivesWayToTheTwoNamesItIsMadeOf() {
+        val dictionary = { word: String -> categorizer.knownNameLength(listOf(word), 0) > 0 }
+        val utterance = "alantan polopiryna"
+
+        // The first dictation: neither word is known, so it is one line.
+        assertEquals(listOf(item("alantan polopiryna")), Dictation.parse(utterance, known))
+
+        // That line was added, and then both were added by hand: this is what Room now holds.
+        val seen = NameIndex.ofSeen(listOf("alantan polopiryna", "alantan", "polopiryna"), dictionary)
+        val both = Dictation.KnownNames { words, from ->
+            maxOf(categorizer.knownNameLength(words, from), seen.lengthAt(words, from))
+        }
+        assertEquals(listOf(item("alantan"), item("polopiryna")), Dictation.parse(utterance, both))
+
+        // A seen name whose second word names nothing is still one thing of its own.
+        val mine = NameIndex.ofSeen(listOf("chleb wiejski", "dropsy owsiane"), dictionary)
+        val withMine = Dictation.KnownNames { words, from ->
+            maxOf(categorizer.knownNameLength(words, from), mine.lengthAt(words, from))
+        }
+        assertEquals(
+            listOf(item("chleb wiejski"), item("dropsy owsiane")),
+            Dictation.parse("chleb wiejski dropsy owsiane", withMine),
+        )
+    }
+
     /** A name stored with a typo still meets the word as it is said: the stem is what matches. */
     @Test
     fun aTypoInTheHistoryDoesNotBreakTheCut() {

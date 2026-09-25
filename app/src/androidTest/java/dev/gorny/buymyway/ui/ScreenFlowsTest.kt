@@ -10,6 +10,9 @@ import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsFocused
+import androidx.compose.ui.test.assertIsNotFocused
+import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createComposeRule
@@ -152,8 +155,8 @@ class ScreenFlowsTest {
         compose.onNodeWithTag("items").performScrollToNode(hasTestTag("item:mleko"))
 
         // A tap strikes it through at once, in place…
-        compose.onNodeWithTag("item:mleko").performClick()
-        waitFor(1_000) { exists(hasTestTag("item:mleko") and SemanticsMatcher.expectValue(SemanticsProperties.ToggleableState, ToggleableState.On)) }
+        compose.onNodeWithTag("tick:mleko").performClick()
+        waitFor(1_000) { exists(hasTestTag("tick:mleko") and SemanticsMatcher.expectValue(SemanticsProperties.ToggleableState, ToggleableState.On)) }
         waitFor(2_000) { exists(hasText(text(R.string.bought_header, 1))) }
         // …and within a second it has moved to „Kupione", which starts collapsed.
         waitFor(2_000) { !exists(hasTestTag("item:mleko")) }
@@ -162,12 +165,65 @@ class ScreenFlowsTest {
         compose.onNodeWithTag("items").performScrollToNode(hasText(text(R.string.bought_header, 1)))
         compose.onNodeWithText(text(R.string.bought_header, 1)).performClick()
         compose.onNodeWithTag("items").performScrollToNode(hasTestTag("item:mleko"))
-        waitFor { exists(hasTestTag("item:mleko") and SemanticsMatcher.expectValue(SemanticsProperties.ToggleableState, ToggleableState.On)) }
-        compose.onNodeWithTag("item:mleko").performClick()
+        waitFor { exists(hasTestTag("tick:mleko") and SemanticsMatcher.expectValue(SemanticsProperties.ToggleableState, ToggleableState.On)) }
+        compose.onNodeWithTag("tick:mleko").performClick()
 
-        waitFor { exists(hasTestTag("item:mleko") and SemanticsMatcher.expectValue(SemanticsProperties.ToggleableState, ToggleableState.Off)) }
+        waitFor { exists(hasTestTag("tick:mleko") and SemanticsMatcher.expectValue(SemanticsProperties.ToggleableState, ToggleableState.Off)) }
         assertEquals(false, exists(hasText(text(R.string.bought_header, 1))))
         assertEquals(false, runBlocking { db.items().getAllForList(listId).single { it.name == "mleko" }.checked })
+    }
+
+    @Test
+    fun aTapOnTheNameChangesTheQuantityAndDoesNotTick() {
+        val listId = runBlocking { repo.createList("Sobota") }
+        val itemId = runBlocking { repo.addItem(listId, "ziemniaki", quantity = 2.0, unit = "kg").itemId }
+        showList(listId)
+        val quantity = { runBlocking { repo.loadState(listId).items.getValue(itemId).quantity } }
+        assertEquals(2.0, quantity())
+
+        compose.onNodeWithTag("name:ziemniaki").performClick()
+        waitFor { exists(hasTestTag("quantityMenu")) }
+        assertEquals(false, runBlocking { repo.loadState(listId).items.getValue(itemId).checked })
+
+        // Three taps faster than Room answers still count three steps of half a kilo, saved at once.
+        repeat(3) { compose.onNodeWithTag("quantityUp").performClick() }
+        compose.onNodeWithTag("quantityValue").assertTextEquals("3,5 kg")
+        waitFor { quantity() == 3.5 }
+        compose.onNodeWithTag("quantityDown").performClick()
+        waitFor { quantity() == 3.0 }
+        assertEquals("kg", runBlocking { repo.loadState(listId).items.getValue(itemId).unit })
+
+        // „−" down to nothing clears the quantity and keeps the item.
+        repeat(6) { compose.onNodeWithTag("quantityDown").performClick() }
+        compose.onNodeWithTag("quantityValue").assertTextEquals(text(R.string.quantity_none))
+        waitFor { quantity() == null }
+        assertEquals(null, runBlocking { repo.loadState(listId).items.getValue(itemId).deletedAt })
+    }
+
+    /**
+     * STATE.md decision 122: a focused add bar brought its keyboard back up for a moment when the
+     * edit sheet's window closed, a second slide after the sheet's. What opens over the list
+     * takes the focus away first.
+     */
+    @Test
+    fun theEditSheetAndTheQuantityMenuTakeTheFocusFromTheAddBar() {
+        val listId = runBlocking { repo.createList("Sobota") }
+        runBlocking { repo.addItem(listId, "ziemniaki", quantity = 2.0) }
+        showList(listId)
+
+        compose.onNodeWithTag("addField").performClick()
+        compose.onNodeWithTag("addField").assertIsFocused()
+        compose.onNodeWithTag("name:ziemniaki").performSemanticsAction(SemanticsActions.OnLongClick)
+        waitFor { exists(hasTestTag("editSheet")) }
+        compose.onNodeWithTag("addField").assertIsNotFocused()
+        compose.onNodeWithText(text(R.string.action_save)).performClick()
+        waitFor { !exists(hasTestTag("editSheet")) }
+
+        compose.onNodeWithTag("addField").performClick()
+        compose.onNodeWithTag("addField").assertIsFocused()
+        compose.onNodeWithTag("name:ziemniaki").performClick()
+        waitFor { exists(hasTestTag("quantityMenu")) }
+        compose.onNodeWithTag("addField").assertIsNotFocused()
     }
 
     @Test
@@ -245,7 +301,7 @@ class ScreenFlowsTest {
         showList(listId)
         waitFor { exists(hasTestTag("item:ziemniaki")) }
 
-        compose.onNodeWithTag("item:ziemniaki").performSemanticsAction(SemanticsActions.OnLongClick)
+        compose.onNodeWithTag("name:ziemniaki").performSemanticsAction(SemanticsActions.OnLongClick)
         compose.onNodeWithText(text(R.string.action_delete)).performClick()
         waitFor { !exists(hasTestTag("item:ziemniaki")) }
         compose.onNodeWithText(text(R.string.action_undo)).performClick()
@@ -308,7 +364,7 @@ class ScreenFlowsTest {
         // Choosing „Ręcznie" places everything in the order it was shown by department.
         waitFor { runBlocking { repo.loadState(listId).items.values.all { it.manualKey != null } } }
         assertEquals(listOf("ziemniaki", "banany", "mleko"), shownItems())
-        val actions = compose.onNodeWithTag("item:mleko").fetchSemanticsNode().config[SemanticsActions.CustomActions]
+        val actions = compose.onNodeWithTag("name:mleko").fetchSemanticsNode().config[SemanticsActions.CustomActions]
         compose.runOnIdle { actions.single { it.label == text(R.string.action_move_up) }.action() }
         waitFor { shownItems() == listOf("ziemniaki", "mleko", "banany") }
         assertEquals(SortView.MANUAL, live.view.value)
@@ -323,7 +379,7 @@ class ScreenFlowsTest {
         showList(listId)
         compose.onNodeWithText(text(R.string.bought_header, 1)).performClick()
         waitFor { exists(hasTestTag("item:mleko")) }
-        compose.onNodeWithTag("item:mleko").performSemanticsAction(SemanticsActions.OnLongClick)
+        compose.onNodeWithTag("name:mleko").performSemanticsAction(SemanticsActions.OnLongClick)
         waitFor { exists(hasTestTag("itemDates")) }
         compose.onNodeWithText(text(R.string.item_edited, ""), substring = true).assertIsDisplayed()
         compose.onNodeWithText(text(R.string.item_bought, ""), substring = true).assertIsDisplayed()
@@ -341,7 +397,7 @@ class ScreenFlowsTest {
         compose.setContent { BuyMyWayTheme { ListScreen(vm, onBack = {}, onOpenCategoryOrder = {}, onOpenShare = {}) } }
         waitFor { exists(hasTestTag("readOnly")) }
         assertEquals(false, exists(hasTestTag("addField")))
-        compose.onNodeWithTag("item:mleko").performClick()
+        compose.onNodeWithTag("tick:mleko").performClick()
         compose.waitForIdle()
         assertEquals(false, runBlocking { repo.loadState(listId).items.values.single().checked })
     }
@@ -382,7 +438,7 @@ class ScreenFlowsTest {
         waitFor { !exists(hasTestTag("photoViewer")) }
 
         // The edit sheet shows it too, and removes it.
-        compose.onNodeWithTag("item:mleko").performSemanticsAction(SemanticsActions.OnLongClick)
+        compose.onNodeWithTag("name:mleko").performSemanticsAction(SemanticsActions.OnLongClick)
         waitFor { exists(hasTestTag("photoSlot")) }
         compose.onNodeWithText(text(R.string.action_take_photo)).assertIsDisplayed()
         compose.onNodeWithText(text(R.string.action_pick_photo)).assertIsDisplayed()

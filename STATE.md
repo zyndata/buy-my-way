@@ -1926,9 +1926,96 @@ what was bought, which is the half of decision 106 that no build output could ha
      `ApkDownloads` also gained `destination(release)`, so the path it tells `DownloadManager`
      to write to and the path the test reads are one expression, not two that could drift.
 
+     **The whole of „Pobierz" was then run once on the S10e by hand**, with a throwaway probe
+     that is deliberately not committed (it would put GitHub on CI's critical path, which this
+     project's instrumented tests do not do): `enqueue` on the real
+     `buy-my-way-v0.9.2.apk`, `awaitFinish` → `Progress.Done`, and all **3 093 146 bytes** read
+     back through the content URI, with a well-formed install intent. That is the button's work
+     end to end, minus the installer dialog the user taps through.
+
      **Fixed forward as v0.9.2**, per the `/release` skill: v0.9.1 keeps its tag and its broken
      download, and anyone on it has to fetch v0.9.2 by hand once.
 
+
+### 2026-09-24 — Dictation glued two unknown names, and then learned the glue
+
+120. **A name dictation glued together must not become a name.** Reported from a phone: two
+     words the bundled dictionary has never heard of — „alantan polopiryna" — were dictated and
+     landed as one item, which is expected (nothing says where the cut is). Both were then added
+     by hand as two items, and the same sentence dictated again *still* came back as one item.
+
+     The cause is not a stale dictionary: `BuyMyWayApp.knownNames()` reads `name_history` and
+     „Moje produkty" from Room on every utterance, and there is one `AppDatabase` in the process,
+     so the two hand-added names were there. It is the glue feeding itself. Adding the merged
+     item called `ListRepository.remember`, so `name_history` gained the *key* „alantan
+     polopiryna"; `NameIndex.lengthAt` answers with the **longest** name that matches, and a
+     two-word match beats two one-word ones. Shown with the real `products-pl.json` in a
+     throwaway unit test: with both single names known the utterance splits, and with the glued
+     name beside them it does not.
+
+     **The fix is `NameIndex.ofSeen`**, used for `name_history` only: a seen name of several
+     words is dropped when every one of its words already names something on its own (in the
+     bundled dictionary, in „Moje produkty", or as another seen name). „alantan polopiryna" goes;
+     „chleb wiejski" stays, because „wiejski" names nothing — so decision 80 keeps doing its job.
+     The bundled dictionary and „Moje produkty" are untouched, which is why the sixteen curated
+     two-word names whose words are each known („sok jabłkowy", „kawa mielona", „owoce morza", …)
+     are still one thing each. `DictationTest.aGluedNameGivesWayToTheTwoNamesItIsMadeOf` is the
+     regression test.
+
+     **Not fixed, and deliberately:** the glued name stays in `name_history`, so it is still
+     offered by the add bar's autocomplete and still carries a category memory. Only the cut
+     ignores it. The user's report also said that a restart split the words correctly — nothing
+     in the code explains that (nothing clears or re-reads `name_history` at start, and a
+     restart does not remove the glued key), so it is put down to the recognizer, which hands
+     over a different sentence from one attempt to the next.
+
+
+### 2026-09-25 — The circle ticks, the name changes the quantity
+
+121. **An item's row is two targets now, a deviation from PLAN.md Phase 3 (task 7: „a tap
+     ticks it").** Reported by the user: turning „2" into „5" took a long press, deleting the 2,
+     typing 5 and „Zapisz". Now:
+     - **The circle ticks** (and, in „Kupione", brings the item back). Its target is the whole
+       56 dp column the circle and its gap always took, the row's full height, so the row looks
+       exactly as before and the target is no smaller than the part of the row a thumb already
+       aimed at. Same haptics as before.
+     - **A tap on the name opens a small „−  2 szt.  +" menu** anchored to the row. Every tap is
+       saved at once (`ListRepository.setQuantity`, which reads the item as it is now and changes
+       only `quantity`, so it cannot put back a name someone else just edited); a tap outside or
+       „Wstecz" closes it. The menu counts from what it last set, not from the row, so three
+       taps faster than Room answers are still three steps.
+     - **On a ticked item the name brings it back**, as the circle does: changing the quantity
+       of something already bought is not worth a menu.
+     - **A long press on the name edits**, as before. A viewer gets none of the three.
+     - **The step follows the unit** (`QuantityStep`): 1 for pieces and anything unknown, 0,5 for
+       kg and l, 100 for g and ml, 10 for dag. „+" on no quantity gives one step but never less
+       than 1; „−" on the last step clears the quantity and never deletes the item; the ceiling
+       is the edit sheet's 10 000.
+     - TalkBack: the circle is a checkbox named after the item; the name is a button „Zmień
+       ilość" with „Edytuj" as its long-press action and the move actions. Tests address the
+       two as `tick:<name>` and `name:<name>`; `item:<name>` is the whole row.
+     - Two people pressing „+" at once is last-write-wins on the item's node, not a sum (the
+       merge keeps one node per item), which is acceptable for a quantity.
+
+     Cost of the change: anyone used to tapping the name to tick gets the menu instead, once.
+     There is no in-app hint; the release note says it.
+
+122. **The edit sheet „closed twice": the second slide was the add bar's keyboard.** Reported
+     together with 121. Recorded with `screenrecord` on the S23 Ultra (release v0.9.2, not
+     touched: the debug build cannot be installed over it): the sheet slides down once, and
+     ~0,5 s later the keyboard of the add field rises and falls again. The emulator never showed
+     it, because there the keyboard does not come back. Material 3's `ModalBottomSheet` was read
+     first (1.4.0 sources): it calls `onDismissRequest` once and its window has no animation, so
+     the sheet itself was never at fault.
+
+     The cause: after an item is added, the add field keeps its focus (so the next one can
+     follow) while the keyboard is put away. The sheet is a window of its own; when it closes,
+     the list's window takes focus back and the still-focused field brings its keyboard up. **The
+     fix is to let go of that focus before anything opens over the list**: the edit sheet, the
+     quantity menu (a focusable popup, so the same thing), the photo viewer and „Dyktowanie".
+     `ScreenFlowsTest.theEditSheetAndTheQuantityMenuTakeTheFocusFromTheAddBar` is the regression
+     test; without the `clearFocus` it fails with „Focused = 'false'" expected. **Not yet seen on
+     the S23 itself**: that needs the next release installed there.
 
 ## Open questions
 

@@ -54,8 +54,28 @@ class NameIndex(names: List<List<String>>) {
             NameIndex(names.map { Categorizer.meaningful(TextKey.words(it)) })
 
         /** An index of names already folded to their [TextKey.fold] form, as Room stores them. */
-        fun ofFolded(keys: Collection<String>): NameIndex =
-            NameIndex(keys.map { key -> Categorizer.meaningful(key.split(' ').filter { it.isNotEmpty() }) })
+        fun ofFolded(keys: Collection<String>): NameIndex = NameIndex(keys.map(::foldedWords))
+
+        /**
+         * The names this phone has merely *seen* go by (`name_history`), as cut points — with
+         * the ones dictation itself glued together left out (STATE.md decision 120).
+         *
+         * A name of several words is dropped when every one of its words already names
+         * something on its own, here or through [knowsWord] (the bundled dictionary and „Moje
+         * produkty"). „alantan polopiryna" is such a name: dictation, knowing neither word,
+         * wrote one line, that line was added, and remembering it as a name would make the
+         * longest match — the glued one — win over the two real names for ever. „chleb
+         * wiejski" is not: „wiejski" names nothing, so the pair stays.
+         */
+        fun ofSeen(keys: Collection<String>, knowsWord: (String) -> Boolean): NameIndex {
+            val names = keys.map(::foldedWords)
+            val singles = NameIndex(names.filter { it.size == 1 })
+            fun knows(word: String) = singles.lengthAt(listOf(word), 0) > 0 || knowsWord(word)
+            return NameIndex(names.filterNot { name -> name.size > 1 && name.all(::knows) })
+        }
+
+        private fun foldedWords(key: String): List<String> =
+            Categorizer.meaningful(key.split(' ').filter { it.isNotEmpty() })
 
         /** Whether a word says *how much* rather than *what*, and so names nothing. */
         private fun saysHowMuch(word: String): Boolean =
