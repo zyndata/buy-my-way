@@ -16,7 +16,6 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -47,6 +46,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.gorny.buymyway.R
 import dev.gorny.buymyway.core.text.QuantityFormat
 import dev.gorny.buymyway.data.ImportSummary
+import dev.gorny.buymyway.ui.common.FocusSafeDropdownMenu
 
 /**
  * The import preview (PLAN.md Phase 8, task 3): what the shared text turned out to hold, where
@@ -187,7 +187,7 @@ private fun TargetPicker(vm: ImportViewModel, state: ImportUiState) {
             OutlinedButton(onClick = { open = true }, modifier = Modifier.testTag("importTarget")) {
                 Text(label)
             }
-            DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            FocusSafeDropdownMenu(expanded = open, onDismissRequest = { open = false }) {
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.import_new_list)) },
                     onClick = {

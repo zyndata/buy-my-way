@@ -20,7 +20,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
@@ -75,6 +74,7 @@ import dev.gorny.buymyway.ui.share.ShareViewModel
 import dev.gorny.buymyway.ui.update.UpdateBanner
 import dev.gorny.buymyway.ui.update.UpdateViewModel
 import kotlinx.coroutines.launch
+import dev.gorny.buymyway.ui.common.FocusSafeDropdownMenu
 
 /** Listy, the home screen (PLAN.md *Screens*). */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -387,7 +387,7 @@ private fun ListCard(
                 IconButton(onClick = { menu = true }) {
                     Icon(painterResource(R.drawable.ic_more_vert), contentDescription = stringResource(R.string.action_more))
                 }
-                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                FocusSafeDropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                     DropdownMenuItem(
                         text = { Text(stringResource(R.string.action_share)) },
                         onClick = {
@@ -407,19 +407,14 @@ private fun ListCard(
                     onDelete?.let { delete ->
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.action_delete)) },
-                            onClick = {
-                                menu = false
-                                delete()
-                            },
+                            // The row goes with the list: see FocusSafeMenuScope.choose.
+                            onClick = { choose(delete) },
                         )
                     }
                     onLeave?.let { leave ->
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.action_leave_list)) },
-                            onClick = {
-                                menu = false
-                                leave()
-                            },
+                            onClick = { choose(leave) },
                         )
                     }
                 }
@@ -440,7 +435,7 @@ private fun ListsMenu(onPaste: (String) -> Unit, onNothingToPaste: () -> Unit) {
     IconButton(onClick = { open = true }, modifier = Modifier.testTag("listsMenu")) {
         Icon(painterResource(R.drawable.ic_more_vert), contentDescription = stringResource(R.string.action_more))
     }
-    DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+    FocusSafeDropdownMenu(expanded = open, onDismissRequest = { open = false }) {
         DropdownMenuItem(
             text = { Text(stringResource(R.string.action_paste_import)) },
             onClick = {

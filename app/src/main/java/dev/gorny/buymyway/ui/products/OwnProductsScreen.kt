@@ -11,7 +11,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
@@ -49,6 +48,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.gorny.buymyway.R
 import dev.gorny.buymyway.core.model.BuiltinCategories
 import dev.gorny.buymyway.data.OwnProduct
+import dev.gorny.buymyway.ui.common.FocusSafeDropdownMenu
 
 /**
  * Ustawienia → „Moje produkty" (PLAN.md Phase 8b, task 3): add, rename, change the department,
@@ -165,7 +165,7 @@ private fun ProductRow(product: OwnProduct, onEdit: () -> Unit, onDelete: () -> 
                 IconButton(onClick = { menu = true }, modifier = Modifier.testTag("menu:${product.name}")) {
                     Icon(painterResource(R.drawable.ic_more_vert), contentDescription = stringResource(R.string.action_more))
                 }
-                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                FocusSafeDropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                     DropdownMenuItem(
                         text = { Text(stringResource(R.string.action_rename)) },
                         onClick = {
@@ -175,10 +175,7 @@ private fun ProductRow(product: OwnProduct, onEdit: () -> Unit, onDelete: () -> 
                     )
                     DropdownMenuItem(
                         text = { Text(stringResource(R.string.action_delete)) },
-                        onClick = {
-                            menu = false
-                            onDelete()
-                        },
+                        onClick = { choose(onDelete) },
                     )
                 }
             }
@@ -235,7 +232,7 @@ private fun ProductDialog(
                                 BuiltinCategories.ALL.first { it.first == categoryId }.second,
                         )
                     }
-                    DropdownMenu(expanded = picking, onDismissRequest = { picking = false }) {
+                    FocusSafeDropdownMenu(expanded = picking, onDismissRequest = { picking = false }) {
                         BuiltinCategories.ALL.forEach { (id, name) ->
                             DropdownMenuItem(
                                 text = { Text(name) },

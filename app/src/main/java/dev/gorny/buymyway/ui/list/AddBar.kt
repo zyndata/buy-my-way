@@ -13,7 +13,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AssistChip
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
@@ -44,6 +43,7 @@ import androidx.compose.ui.unit.dp
 import dev.gorny.buymyway.R
 import dev.gorny.buymyway.core.model.CategoryInfo
 import dev.gorny.buymyway.core.parse.ItemParser
+import dev.gorny.buymyway.ui.common.FocusSafeDropdownMenu
 
 /**
  * The add bar (PLAN.md Phase 3, task 3): one field that takes „2 kg ziemniaki, mleko",
@@ -101,7 +101,7 @@ fun AddBar(
                                     .testTag("categoryChip")
                                     .semantics { contentDescription = chipDescription },
                             )
-                            DropdownMenu(expanded = picking, onDismissRequest = { picking = false }) {
+                            FocusSafeDropdownMenu(expanded = picking, onDismissRequest = { picking = false }) {
                                 categories.forEach { option ->
                                     DropdownMenuItem(
                                         text = { Text(option.name) },

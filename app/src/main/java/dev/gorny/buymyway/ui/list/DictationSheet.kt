@@ -21,7 +21,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
@@ -59,6 +58,10 @@ import dev.gorny.buymyway.core.text.QuantityFormat
 import dev.gorny.buymyway.core.voice.VoiceError
 import dev.gorny.buymyway.core.voice.VoiceEvent
 import dev.gorny.buymyway.core.voice.VoiceSource
+import dev.gorny.buymyway.ui.common.Bind
+import dev.gorny.buymyway.ui.common.rememberWindowFocusHandle
+import dev.gorny.buymyway.ui.common.thenClose
+import dev.gorny.buymyway.ui.common.FocusSafeDropdownMenu
 
 /**
  * The review sheet (PLAN.md Phase 7, task 3). Dictation never writes to the list: what was
@@ -98,7 +101,11 @@ fun DictationSheet(
     LaunchedEffect(Unit) { listen() }
     DisposableEffect(Unit) { onDispose { voice.release() } }
 
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheet) {
+    // Every way out gives the window's focus back first (STATE.md decision 122).
+    val focus = rememberWindowFocusHandle()
+    val close = focus.thenClose()
+    ModalBottomSheet(onDismissRequest = { close(onDismiss) }, sheetState = sheet) {
+        focus.Bind()
         Column(
             verticalArrangement = Arrangement.spacedBy(12.dp),
             modifier = Modifier
@@ -148,10 +155,10 @@ fun DictationSheet(
                 horizontalArrangement = Arrangement.End,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
+                TextButton(onClick = { close(onDismiss) }) { Text(stringResource(R.string.action_cancel)) }
                 Spacer(Modifier.width(8.dp))
                 Button(
-                    onClick = onAddAll,
+                    onClick = { close(onAddAll) },
                     enabled = state.items.any { it.name.isNotBlank() },
                     modifier = Modifier.testTag("addAll"),
                 ) {
@@ -263,7 +270,7 @@ private fun DictatedRow(
                             .testTag("dictatedCategory:${item.key}")
                             .semantics { contentDescription = description },
                     )
-                    DropdownMenu(expanded = picking, onDismissRequest = { picking = false }) {
+                    FocusSafeDropdownMenu(expanded = picking, onDismissRequest = { picking = false }) {
                         categories.forEach { option ->
                             DropdownMenuItem(
                                 text = { Text(option.name) },

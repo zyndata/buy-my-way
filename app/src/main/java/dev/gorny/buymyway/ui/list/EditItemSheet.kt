@@ -47,6 +47,9 @@ import dev.gorny.buymyway.core.model.ItemContent
 import dev.gorny.buymyway.core.text.DateText
 import dev.gorny.buymyway.core.text.QuantityFormat
 import dev.gorny.buymyway.data.photo.PhotoRef
+import dev.gorny.buymyway.ui.common.Bind
+import dev.gorny.buymyway.ui.common.rememberWindowFocusHandle
+import dev.gorny.buymyway.ui.common.thenClose
 import androidx.compose.ui.graphics.ImageBitmap
 
 /**
@@ -78,7 +81,11 @@ fun EditItemSheet(
     val parsedQuantity = QuantityFormat.parse(quantity)
     val valid = name.isNotBlank() && parsedQuantity.isSuccess
 
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheet) {
+    // Every way out gives the window's focus back first (STATE.md decision 122).
+    val focus = rememberWindowFocusHandle()
+    val close = focus.thenClose()
+    ModalBottomSheet(onDismissRequest = { close(onDismiss) }, sheetState = sheet) {
+        focus.Bind()
         Column(
             verticalArrangement = Arrangement.spacedBy(12.dp),
             modifier = Modifier
@@ -154,7 +161,7 @@ fun EditItemSheet(
             if (photo != null) PhotoSlot(item.name, photo)
             ItemDates(item, nameOf)
             Row(verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = onDelete) {
+                TextButton(onClick = { close(onDelete) }) {
                     Icon(painterResource(R.drawable.ic_delete), contentDescription = null)
                     Spacer(Modifier.width(8.dp))
                     Text(stringResource(R.string.action_delete))
@@ -163,15 +170,14 @@ fun EditItemSheet(
                 Button(
                     enabled = valid,
                     onClick = {
-                        onSave(
-                            item.content.copy(
-                                name = name.trim(),
-                                quantity = parsedQuantity.getOrNull(),
-                                unit = unit.trim().ifEmpty { null },
-                                categoryId = categoryId,
-                                note = note.trim().ifEmpty { null },
-                            ),
+                        val content = item.content.copy(
+                            name = name.trim(),
+                            quantity = parsedQuantity.getOrNull(),
+                            unit = unit.trim().ifEmpty { null },
+                            categoryId = categoryId,
+                            note = note.trim().ifEmpty { null },
                         )
+                        close { onSave(content) }
                     },
                 ) {
                     Text(stringResource(R.string.action_save))

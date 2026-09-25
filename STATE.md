@@ -2014,8 +2014,71 @@ what was bought, which is the half of decision 106 that no build output could ha
      fix is to let go of that focus before anything opens over the list**: the edit sheet, the
      quantity menu (a focusable popup, so the same thing), the photo viewer and „Dyktowanie".
      `ScreenFlowsTest.theEditSheetAndTheQuantityMenuTakeTheFocusFromTheAddBar` is the regression
-     test; without the `clearFocus` it fails with „Focused = 'false'" expected. **Not yet seen on
-     the S23 itself**: that needs the next release installed there.
+     test; without the `clearFocus` it fails with „Focused = 'false'" expected.
+
+     **That was not enough — shipped in v0.10.0 and still seen on the S23** (a screen recording
+     from the user, 2026-09-25, read frame by frame): the quantity menu closes, the add field is
+     *not* focused, and the keyboard still appears — at once, fully drawn — and slides away. **The
+     S10e (Android 12) never does it; the S23 (Android 16, One UI) does.** Found on the S23 with a
+     debug build (the release was uninstalled for it, with the user's consent) and `ImeTracker` in
+     logcat, which names the origin and the reason of every show:
+
+     - After **every** close of a sheet or the menu — even on a fresh start, with the keyboard never
+       used — the system itself asks for the keyboard: `onRequestShow at ORIGIN_SERVER reason
+       IME_REQUESTED_CHANGED_LISTENER`, with the keyboard's control handed to
+       `RemoteInsetsControlTarget` (the system's own target, not ours). Whether it gets drawn
+       before the hide that follows is a race, which is why it shows only sometimes.
+     - Cause: the focused window (the sheet's dialog, the menu's popup) is removed while it still
+       holds the keyboard; for a moment no window of ours is the keyboard's target and the
+       system's takes over. ~50 ms later the list's window takes the focus, starts its input,
+       and the system hides the keyboard again (`HIDE_WINDOW_GAINED_FOCUS_WITHOUT_EDITOR`).
+     - What did **not** help, each tried and measured on the S23: `WindowInsetsControllerCompat.hide
+       (ime())` and `InputMethodManager.hideSoftInputFromWindow` (both cancelled at
+       `PHASE_CLIENT_ALREADY_HIDDEN` — from the app's side the keyboard *is* hidden);
+       `windowSoftInputMode="stateAlwaysHidden"` on the activity and on the sheet's window (the
+       show is not a restore of our state); making the sheet unfocusable as soon as it starts to
+       slide (it stopped the slide half-way).
+     - **The fix (`ui/common/WindowFocus.kt`):** a window over the list hands its focus back
+       before it goes. The popup is marked `FLAG_NOT_FOCUSABLE` in its dismiss request and goes a
+       frame later; the sheets (edit, „Dyktowanie") are also made invisible and untouchable at the
+       end of their slide, and are removed only once the list's window has the focus (at most
+       300 ms, in practice a frame or three). Measured on the S23: **0 server-side shows in 17
+       closes** — back, swipe down, tap outside, „Zapisz", after using and hiding the keyboard —
+       against 1 in every close before. A recording shows one slide and nothing after it.
+     - The add bar still lets go of its focus when something opens over the list (the first
+       part of this decision), since a focused field would bring its keyboard back by right.
+     - **Every menu, too** (reported next for „Sortowanie"): measured on the S23, the dialog
+       itself was clean (0 in 8 closes) and the flash came from the „⋮" menu before it, a popup
+       like the quantity menu. So every `DropdownMenu` in the app is now
+       `FocusSafeDropdownMenu`, which hands the focus back both on a dismiss request and when a
+       choice closes it (the popup stays for its fade-out, long enough for the hand-over).
+       Measured: 0 in 15 closes of „⋮" (back, tap outside, „Odznacz wszystko", „Sortowanie" and a
+       choice) and of the quantity menu, against 1 per close before.
+     - **And a choice that takes the menu's own row away** (reported next: deleting a list).
+       „Usuń" removes the list's row, the menu inside it goes at once without its fade-out, and
+       the gap is back. `FocusSafeMenuScope.choose { … }` closes the menu and runs the choice
+       only once the window underneath has the focus. Used where the row goes: Usuń and Opuść
+       listę on Listy, removing a member, deleting a category, deleting one of „Moje produkty".
+       Measured on the S23 by deleting throwaway lists: 1 per delete without it (2 of 2), 0 with
+       it (4 of 4).
+     - Not measured: the photo viewer and the other `AlertDialog`s (Zmień nazwę, Wyczyść
+       kupione). „Sortowanie", an `AlertDialog`, did not do it.
+
+123. **The quick menu changes the unit and takes a typed number** (asked by the user after 121):
+     a list imported from Eat My Way says „200 g cebuli" where the shop sells pieces.
+     - **A row of units under „− ilość +"**: szt., g, kg, ml, l, and the item's own unit first if
+       it is none of those („ząbki", „opak."). „sztuki", „szt." and no unit at all are one choice
+       (`QuantityStep.key`).
+     - **While the menu is open it remembers each unit's number**: marchew 100 g → szt. gives
+       1 szt. (a unit with nothing remembered starts at 1, grams and millilitres at 100) → g gives
+       100 g again. Every change is saved at once, so the list always shows the last choice;
+       closing the menu forgets the rest. `ListRepository.setQuantity` now writes the unit too.
+     - **A tap on the number types one** (numeric keyboard, the old number selected). „OK" or a
+       unit chip keeps it, and „OK" on an emptied field clears the quantity; closing the menu
+       („Wstecz", which on the S23 takes the keyboard and the menu at once, or a tap outside)
+       keeps a valid number and ignores an emptied field, so that a stray „Wstecz" cannot wipe
+       one out — seen on the S23 while testing.
+     - **Grams step by 10** (was 100); decagrams by 10, millilitres still by 100.
 
 ## Open questions
 
