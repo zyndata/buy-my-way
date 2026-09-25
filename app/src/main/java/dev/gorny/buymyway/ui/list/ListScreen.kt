@@ -69,6 +69,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
@@ -138,6 +139,11 @@ fun ListScreen(
     val photoBusy by vm.photoBusy.collectAsStateWithLifecycle()
     val dictation by vm.dictation.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    // The add bar keeps its focus after the keyboard is put away, so that the next item can follow.
+    // A sheet, a menu or a photo over the list is a window of its own, and when it closes the list's
+    // window takes the focus back and brings that keyboard up again for a moment: a second slide
+    // after the sheet's own (STATE.md decision 122). Whatever opens over the list lets go of it first.
+    val focus = LocalFocusManager.current
     val scope = rememberCoroutineScope()
     // A phone with no speech recognizer gets no mic button at all (Phase 7, task 4).
     val canDictate = remember(voice) { voice != null || SpeechRecognizer.isRecognitionAvailable(context) }
@@ -156,6 +162,7 @@ fun ListScreen(
         }
     }
     val onMic: () -> Unit = {
+        focus.clearFocus()
         val activity = context as? Activity
         when {
             context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED ->
@@ -270,9 +277,9 @@ fun ListScreen(
                 boughtOpen = boughtOpen,
                 onToggleBought = { boughtOpen = !boughtOpen },
                 onClearBought = { confirmClear = true },
-                onEdit = { editing = it.id },
+                onEdit = { focus.clearFocus(); editing = it.id },
                 photoOf = { vm.photoOf(it, pendingPhotos) },
-                onOpenPhoto = { viewing = it.id },
+                onOpenPhoto = { focus.clearFocus(); viewing = it.id },
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding),
@@ -691,6 +698,7 @@ private fun ItemRow(
     onMoveDown: (() -> Unit)? = null,
 ) {
     val haptics = LocalHapticFeedback.current
+    val focus = LocalFocusManager.current
     val upLabel = stringResource(R.string.action_move_up)
     val downLabel = stringResource(R.string.action_move_down)
     val stateLabel = stringResource(if (item.checked) R.string.state_bought else R.string.state_to_buy)
@@ -706,7 +714,10 @@ private fun ItemRow(
     // A ticked item's quantity is not worth changing: its name brings it back, as the circle does.
     val onName: (() -> Unit)? = when {
         item.checked -> tick
-        onQuantity != null -> ({ adjusting = true })
+        onQuantity != null -> ({
+            focus.clearFocus() // STATE.md decision 122
+            adjusting = true
+        })
         else -> null
     }
     Row(

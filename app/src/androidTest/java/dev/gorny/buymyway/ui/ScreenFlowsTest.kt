@@ -10,6 +10,8 @@ import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsFocused
+import androidx.compose.ui.test.assertIsNotFocused
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
@@ -196,6 +198,32 @@ class ScreenFlowsTest {
         compose.onNodeWithTag("quantityValue").assertTextEquals(text(R.string.quantity_none))
         waitFor { quantity() == null }
         assertEquals(null, runBlocking { repo.loadState(listId).items.getValue(itemId).deletedAt })
+    }
+
+    /**
+     * STATE.md decision 122: a focused add bar brought its keyboard back up for a moment when the
+     * edit sheet's window closed, a second slide after the sheet's. What opens over the list
+     * takes the focus away first.
+     */
+    @Test
+    fun theEditSheetAndTheQuantityMenuTakeTheFocusFromTheAddBar() {
+        val listId = runBlocking { repo.createList("Sobota") }
+        runBlocking { repo.addItem(listId, "ziemniaki", quantity = 2.0) }
+        showList(listId)
+
+        compose.onNodeWithTag("addField").performClick()
+        compose.onNodeWithTag("addField").assertIsFocused()
+        compose.onNodeWithTag("name:ziemniaki").performSemanticsAction(SemanticsActions.OnLongClick)
+        waitFor { exists(hasTestTag("editSheet")) }
+        compose.onNodeWithTag("addField").assertIsNotFocused()
+        compose.onNodeWithText(text(R.string.action_save)).performClick()
+        waitFor { !exists(hasTestTag("editSheet")) }
+
+        compose.onNodeWithTag("addField").performClick()
+        compose.onNodeWithTag("addField").assertIsFocused()
+        compose.onNodeWithTag("name:ziemniaki").performClick()
+        waitFor { exists(hasTestTag("quantityMenu")) }
+        compose.onNodeWithTag("addField").assertIsNotFocused()
     }
 
     @Test

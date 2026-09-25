@@ -2000,6 +2000,23 @@ what was bought, which is the half of decision 106 that no build output could ha
      Cost of the change: anyone used to tapping the name to tick gets the menu instead, once.
      There is no in-app hint; the release note says it.
 
+122. **The edit sheet „closed twice": the second slide was the add bar's keyboard.** Reported
+     together with 121. Recorded with `screenrecord` on the S23 Ultra (release v0.9.2, not
+     touched: the debug build cannot be installed over it): the sheet slides down once, and
+     ~0,5 s later the keyboard of the add field rises and falls again. The emulator never showed
+     it, because there the keyboard does not come back. Material 3's `ModalBottomSheet` was read
+     first (1.4.0 sources): it calls `onDismissRequest` once and its window has no animation, so
+     the sheet itself was never at fault.
+
+     The cause: after an item is added, the add field keeps its focus (so the next one can
+     follow) while the keyboard is put away. The sheet is a window of its own; when it closes,
+     the list's window takes focus back and the still-focused field brings its keyboard up. **The
+     fix is to let go of that focus before anything opens over the list**: the edit sheet, the
+     quantity menu (a focusable popup, so the same thing), the photo viewer and „Dyktowanie".
+     `ScreenFlowsTest.theEditSheetAndTheQuantityMenuTakeTheFocusFromTheAddBar` is the regression
+     test; without the `clearFocus` it fails with „Focused = 'false'" expected. **Not yet seen on
+     the S23 itself**: that needs the next release installed there.
+
 ## Open questions
 
 1. ~~Where do shared lists live, now that `drive.file` cannot cross users?~~ Answered by
