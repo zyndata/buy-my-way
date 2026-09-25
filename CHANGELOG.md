@@ -6,6 +6,21 @@ This file is generated from Conventional Commit messages by
 The format follows [Keep a Changelog](https://keepachangelog.com) and the
 project adheres to [Semantic Versioning](https://semver.org).
 
+## [0.10.0] - 2026-09-25
+
+### Bug Fixes
+
+- **voice:** Do not let a glued dictated name become a cut point
+- **list:** Close the edit sheet with one slide, not two
+
+### Documentation
+
+- Record the end-to-end check of the update download
+
+### Features
+
+- **list:** Tick with the circle, change the quantity with a tap on the name
+
 ## [0.9.2] - 2026-09-24
 
 ### Bug Fixes
