@@ -52,7 +52,6 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -113,19 +112,18 @@ import dev.gorny.buymyway.core.text.QuantityStep
 import dev.gorny.buymyway.core.voice.VoiceSource
 import dev.gorny.buymyway.data.voice.VoiceRecognizer
 import dev.gorny.buymyway.data.photo.PhotoRef
-import dev.gorny.buymyway.ui.common.Bind
 import dev.gorny.buymyway.ui.common.DragHandle
 import dev.gorny.buymyway.ui.common.NameDialog
 import dev.gorny.buymyway.ui.common.ReorderState
 import dev.gorny.buymyway.ui.common.moveActions
 import dev.gorny.buymyway.ui.common.rememberReorderState
-import dev.gorny.buymyway.ui.common.rememberWindowFocusHandle
 import dev.gorny.buymyway.ui.common.reorderableItem
 import androidx.core.content.FileProvider
 import kotlinx.coroutines.launch
 import java.io.File
 import java.io.IOException
 import java.io.InputStream
+import dev.gorny.buymyway.ui.common.FocusSafeDropdownMenu
 
 /** Lista (PLAN.md *Screens*): the items to buy by department, „Kupione" below, the add bar. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -250,7 +248,7 @@ fun ListScreen(
                         IconButton(onClick = { menu = true }) {
                             Icon(painterResource(R.drawable.ic_more_vert), contentDescription = stringResource(R.string.action_more))
                         }
-                        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                        FocusSafeDropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                             MenuItem(R.string.action_sort) { menu = false; sorting = true }
                             if (state.canEdit) {
                                 MenuItem(R.string.action_category_order) { menu = false; onOpenCategoryOrder() }
@@ -865,18 +863,14 @@ private fun QuantityMenu(item: Item, expanded: Boolean, onSet: (Double?, String?
         val own = item.unit?.takeIf { u -> QuantityStep.UNITS.none { QuantityStep.key(it) == QuantityStep.key(u) } }
         listOfNotNull(own) + QuantityStep.UNITS
     }
-    // Gives the popup's focus back before it goes (STATE.md decision 122).
-    val focus = rememberWindowFocusHandle()
-    DropdownMenu(
+    FocusSafeDropdownMenu(
         expanded = expanded,
         onDismissRequest = {
             // Closing keeps a number typed so far, but an emptied field is no reason to lose one.
             if (typing) typed.getOrNull()?.let { set(it) }
-            focus.letGo()
             onDismiss()
         },
     ) {
-        focus.Bind()
         Column(Modifier.padding(horizontal = 8.dp).testTag("quantityMenu")) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.align(Alignment.CenterHorizontally)) {
                 IconButton(

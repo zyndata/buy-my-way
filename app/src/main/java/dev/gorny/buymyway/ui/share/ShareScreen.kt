@@ -16,7 +16,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -57,6 +56,7 @@ import dev.gorny.buymyway.R
 import dev.gorny.buymyway.core.model.Member
 import dev.gorny.buymyway.core.model.Role
 import dev.gorny.buymyway.ui.list.ListViewModel
+import dev.gorny.buymyway.ui.common.FocusSafeDropdownMenu
 
 /** Udostępnianie (PLAN.md *Screens*): who has the list, and the ways to invite someone. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -281,7 +281,7 @@ private fun MemberRow(member: Member, isMe: Boolean, canManage: Boolean, onRole:
                 IconButton(onClick = { menu = true }) {
                     Icon(painterResource(R.drawable.ic_more_vert), contentDescription = stringResource(R.string.member_actions, name))
                 }
-                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                FocusSafeDropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                     DropdownMenuItem(text = { Text(stringResource(R.string.role_editor)) }, onClick = { menu = false; onRole(Role.EDITOR) })
                     DropdownMenuItem(text = { Text(stringResource(R.string.role_viewer)) }, onClick = { menu = false; onRole(Role.VIEWER) })
                     DropdownMenuItem(text = { Text(stringResource(R.string.action_remove_member)) }, onClick = { menu = false; onRemove() })

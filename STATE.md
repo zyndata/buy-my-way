@@ -2047,8 +2047,15 @@ what was bought, which is the half of decision 106 that no build output could ha
        against 1 in every close before. A recording shows one slide and nothing after it.
      - The add bar still lets go of its focus when something opens over the list (the first
        part of this decision), since a focused field would bring its keyboard back by right.
-     - Not done: the list's `AlertDialog`s (Sortowanie, Zmień nazwę, Wyczyść kupione) and the
-       photo viewer are windows too and may do the same on the S23; nobody has reported it.
+     - **Every menu, too** (reported next for „Sortowanie"): measured on the S23, the dialog
+       itself was clean (0 in 8 closes) and the flash came from the „⋮" menu before it, a popup
+       like the quantity menu. So every `DropdownMenu` in the app is now
+       `FocusSafeDropdownMenu`, which hands the focus back both on a dismiss request and when a
+       choice closes it (the popup stays for its fade-out, long enough for the hand-over).
+       Measured: 0 in 15 closes of „⋮" (back, tap outside, „Odznacz wszystko", „Sortowanie" and a
+       choice) and of the quantity menu, against 1 per close before.
+     - Not measured: the photo viewer and the other `AlertDialog`s (Zmień nazwę, Wyczyść
+       kupione). „Sortowanie", an `AlertDialog`, did not do it.
 
 123. **The quick menu changes the unit and takes a typed number** (asked by the user after 121):
      a list imported from Eat My Way says „200 g cebuli" where the shop sells pieces.

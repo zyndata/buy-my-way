@@ -11,7 +11,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
@@ -46,6 +45,7 @@ import dev.gorny.buymyway.ui.common.NameDialog
 import dev.gorny.buymyway.ui.common.moveActions
 import dev.gorny.buymyway.ui.common.rememberReorderState
 import dev.gorny.buymyway.ui.common.reorderableItem
+import dev.gorny.buymyway.ui.common.FocusSafeDropdownMenu
 
 /**
  * Kolejność kategorii: drag the departments into the order the shop is walked. For a list, its
@@ -191,7 +191,7 @@ private fun CategoryRow(
                     IconButton(onClick = { menu = true }) {
                         Icon(painterResource(R.drawable.ic_more_vert), contentDescription = stringResource(R.string.action_more))
                     }
-                    DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                    FocusSafeDropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                         DropdownMenuItem(text = { Text(stringResource(R.string.action_rename)) }, onClick = { menu = false; onRename() })
                         DropdownMenuItem(text = { Text(stringResource(R.string.action_delete)) }, onClick = { menu = false; onDelete() })
                     }

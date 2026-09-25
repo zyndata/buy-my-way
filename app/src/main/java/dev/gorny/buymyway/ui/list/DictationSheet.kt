@@ -21,7 +21,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
@@ -62,6 +61,7 @@ import dev.gorny.buymyway.core.voice.VoiceSource
 import dev.gorny.buymyway.ui.common.Bind
 import dev.gorny.buymyway.ui.common.rememberWindowFocusHandle
 import dev.gorny.buymyway.ui.common.thenClose
+import dev.gorny.buymyway.ui.common.FocusSafeDropdownMenu
 
 /**
  * The review sheet (PLAN.md Phase 7, task 3). Dictation never writes to the list: what was
@@ -270,7 +270,7 @@ private fun DictatedRow(
                             .testTag("dictatedCategory:${item.key}")
                             .semantics { contentDescription = description },
                     )
-                    DropdownMenu(expanded = picking, onDismissRequest = { picking = false }) {
+                    FocusSafeDropdownMenu(expanded = picking, onDismissRequest = { picking = false }) {
                         categories.forEach { option ->
                             DropdownMenuItem(
                                 text = { Text(option.name) },
