@@ -2054,6 +2054,13 @@ what was bought, which is the half of decision 106 that no build output could ha
        choice closes it (the popup stays for its fade-out, long enough for the hand-over).
        Measured: 0 in 15 closes of „⋮" (back, tap outside, „Odznacz wszystko", „Sortowanie" and a
        choice) and of the quantity menu, against 1 per close before.
+     - **And a choice that takes the menu's own row away** (reported next: deleting a list).
+       „Usuń" removes the list's row, the menu inside it goes at once without its fade-out, and
+       the gap is back. `FocusSafeMenuScope.choose { … }` closes the menu and runs the choice
+       only once the window underneath has the focus. Used where the row goes: Usuń and Opuść
+       listę on Listy, removing a member, deleting a category, deleting one of „Moje produkty".
+       Measured on the S23 by deleting throwaway lists: 1 per delete without it (2 of 2), 0 with
+       it (4 of 4).
      - Not measured: the photo viewer and the other `AlertDialog`s (Zmień nazwę, Wyczyść
        kupione). „Sortowanie", an `AlertDialog`, did not do it.
 

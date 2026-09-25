@@ -175,10 +175,7 @@ private fun ProductRow(product: OwnProduct, onEdit: () -> Unit, onDelete: () -> 
                     )
                     DropdownMenuItem(
                         text = { Text(stringResource(R.string.action_delete)) },
-                        onClick = {
-                            menu = false
-                            onDelete()
-                        },
+                        onClick = { choose(onDelete) },
                     )
                 }
             }

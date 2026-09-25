@@ -284,7 +284,7 @@ private fun MemberRow(member: Member, isMe: Boolean, canManage: Boolean, onRole:
                 FocusSafeDropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                     DropdownMenuItem(text = { Text(stringResource(R.string.role_editor)) }, onClick = { menu = false; onRole(Role.EDITOR) })
                     DropdownMenuItem(text = { Text(stringResource(R.string.role_viewer)) }, onClick = { menu = false; onRole(Role.VIEWER) })
-                    DropdownMenuItem(text = { Text(stringResource(R.string.action_remove_member)) }, onClick = { menu = false; onRemove() })
+                    DropdownMenuItem(text = { Text(stringResource(R.string.action_remove_member)) }, onClick = { choose(onRemove) })
                 }
             }
         }

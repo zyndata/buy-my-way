@@ -193,7 +193,7 @@ private fun CategoryRow(
                     }
                     FocusSafeDropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                         DropdownMenuItem(text = { Text(stringResource(R.string.action_rename)) }, onClick = { menu = false; onRename() })
-                        DropdownMenuItem(text = { Text(stringResource(R.string.action_delete)) }, onClick = { menu = false; onDelete() })
+                        DropdownMenuItem(text = { Text(stringResource(R.string.action_delete)) }, onClick = { choose(onDelete) })
                     }
                 }
             }

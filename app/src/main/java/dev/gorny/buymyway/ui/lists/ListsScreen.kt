@@ -407,19 +407,14 @@ private fun ListCard(
                     onDelete?.let { delete ->
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.action_delete)) },
-                            onClick = {
-                                menu = false
-                                delete()
-                            },
+                            // The row goes with the list: see FocusSafeMenuScope.choose.
+                            onClick = { choose(delete) },
                         )
                     }
                     onLeave?.let { leave ->
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.action_leave_list)) },
-                            onClick = {
-                                menu = false
-                                leave()
-                            },
+                            onClick = { choose(leave) },
                         )
                     }
                 }

@@ -17,9 +17,10 @@ fun FocusSafeDropdownMenu(
     expanded: Boolean,
     onDismissRequest: () -> Unit,
     modifier: Modifier = Modifier,
-    content: @Composable ColumnScope.() -> Unit,
+    content: @Composable FocusSafeMenuScope.() -> Unit,
 ) {
     val focus = rememberWindowFocusHandle()
+    val afterFocus = focus.thenClose()
     LaunchedEffect(expanded) { if (!expanded) focus.letGo() }
     DropdownMenu(
         expanded = expanded,
@@ -30,6 +31,21 @@ fun FocusSafeDropdownMenu(
         modifier = modifier,
     ) {
         focus.Bind()
-        content()
+        FocusSafeMenuScope(this) { action ->
+            afterFocus(action)
+            onDismissRequest()
+        }.content()
     }
+}
+
+class FocusSafeMenuScope internal constructor(
+    column: ColumnScope,
+    private val chooseThen: (() -> Unit) -> Unit,
+) : ColumnScope by column {
+    /**
+     * Closes the menu and runs [action] once the window underneath has the focus again. For a
+     * choice that takes the menu's own row away with it (Usuń, Opuść listę): the popup then goes
+     * at once, without its fade-out, and would leave the gap the fade-out otherwise covers.
+     */
+    fun choose(action: () -> Unit) = chooseThen(action)
 }
