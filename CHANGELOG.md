@@ -6,6 +6,18 @@ This file is generated from Conventional Commit messages by
 The format follows [Keep a Changelog](https://keepachangelog.com) and the
 project adheres to [Semantic Versioning](https://semver.org).
 
+## [0.11.0] - 2026-09-25
+
+### Bug Fixes
+
+- **list:** Stop the keyboard flashing after a sheet closes on Android 16
+- **list:** Stop the keyboard flashing after a menu closes on Android 16
+- **lists:** Stop the keyboard flashing after a list is deleted on Android 16
+
+### Features
+
+- **list:** Change the unit and type the number in the quantity menu
+
 ## [0.10.0] - 2026-09-25
 
 ### Bug Fixes
