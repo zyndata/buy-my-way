@@ -17,7 +17,7 @@ class QuantityStepTest {
     fun weightsAndVolumesMoveByAStepThatFitsTheUnit() {
         assertEquals(2.0, QuantityStep.up(1.5, "kg"), 0.0)
         assertEquals(1.0, QuantityStep.down(1.5, "L"))
-        assertEquals(350.0, QuantityStep.up(250.0, "g"), 0.0)
+        assertEquals(260.0, QuantityStep.up(250.0, "g"), 0.0)
         assertEquals(400.0, QuantityStep.down(500.0, "ml"))
         assertEquals(30.0, QuantityStep.up(20.0, "dag"), 0.0)
     }
@@ -26,15 +26,31 @@ class QuantityStepTest {
     fun plusOnNothingGivesOneStepButNeverLessThanOne() {
         assertEquals(1.0, QuantityStep.up(null, null), 0.0)
         assertEquals(1.0, QuantityStep.up(null, "kg"), 0.0)
-        assertEquals(100.0, QuantityStep.up(null, "g"), 0.0)
+        assertEquals(10.0, QuantityStep.up(null, "g"), 0.0)
     }
 
     @Test
     fun minusOnTheLastStepClearsTheQuantityAndNothingStaysNothing() {
         assertNull(QuantityStep.down(1.0, null))
         assertNull(QuantityStep.down(0.5, "kg"))
-        assertNull(QuantityStep.down(50.0, "g"))
+        assertNull(QuantityStep.down(10.0, "g"))
         assertNull(QuantityStep.down(null, null))
+    }
+
+    @Test
+    fun piecesAreOneUnitHoweverTheyAreSpelled() {
+        assertEquals("szt", QuantityStep.key(null))
+        assertEquals("szt", QuantityStep.key("sztuki"))
+        assertEquals("szt", QuantityStep.key(" Szt. "))
+        assertEquals("g", QuantityStep.key("g"))
+        assertEquals("ząbki", QuantityStep.key("ząbki"))
+    }
+
+    @Test
+    fun aUnitSwitchedToStartsWhereItMakesSense() {
+        assertEquals(1.0, QuantityStep.start("szt."), 0.0)
+        assertEquals(100.0, QuantityStep.start("g"), 0.0)
+        assertEquals(1.0, QuantityStep.start("kg"), 0.0)
     }
 
     @Test

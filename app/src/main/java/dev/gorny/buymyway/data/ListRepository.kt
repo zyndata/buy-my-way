@@ -335,13 +335,14 @@ class ListRepository(
     }
 
     /**
-     * The row's quick „−/+" (decision 121): only the quantity changes, read against the item as it
-     * is now, so a name someone else just edited is not put back.
+     * The row's quick „−/+" (decisions 121, 123): only the quantity and its unit change, read
+     * against the item as it is now, so a name someone else just edited is not put back.
      */
-    suspend fun setQuantity(itemId: String, quantity: Double?) = db.withTransaction {
+    suspend fun setQuantity(itemId: String, quantity: Double?, unit: String?) = db.withTransaction {
         val item = liveItem(itemId)
-        if (item.quantity == quantity) return@withTransaction
-        commit(listOf(Op.ItemPut(newId(), item.listId, actor(), nextAt(), itemId, item.content.copy(quantity = quantity))))
+        val content = item.content.copy(quantity = quantity, unit = cleanOptional(unit, TextLimits.UNIT))
+        if (content == item.content) return@withTransaction
+        commit(listOf(Op.ItemPut(newId(), item.listId, actor(), nextAt(), itemId, content)))
     }
 
     /** A drag within a category: only the moved item's `sortKey` changes, and history does not. */

@@ -456,9 +456,9 @@ class ListViewModel(
         viewModelScope.launch { runCatching { repo.updateItem(itemId, content) } }
     }
 
-    fun setQuantity(itemId: String, quantity: Double?) {
+    fun setQuantity(itemId: String, quantity: Double?, unit: String?) {
         if (!state.value.canEdit) return
-        viewModelScope.launch { runCatching { repo.setQuantity(itemId, quantity) } }
+        viewModelScope.launch { runCatching { repo.setQuantity(itemId, quantity, unit) } }
     }
 
     fun delete(itemId: String, message: String, undoLabel: String) =held.hold(viewModelScope, itemId, message, undoLabel)

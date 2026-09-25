@@ -24,6 +24,7 @@ import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performTouchInput
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelStore
@@ -198,6 +199,38 @@ class ScreenFlowsTest {
         compose.onNodeWithTag("quantityValue").assertTextEquals(text(R.string.quantity_none))
         waitFor { quantity() == null }
         assertEquals(null, runBlocking { repo.loadState(listId).items.getValue(itemId).deletedAt })
+    }
+
+    @Test
+    fun theQuantityMenuSwitchesUnitsRemembersEachAndTakesATypedNumber() {
+        val listId = runBlocking { repo.createList("Sobota") }
+        val itemId = runBlocking { repo.addItem(listId, "marchew", quantity = 100.0, unit = "g").itemId }
+        showList(listId)
+        val stored = { runBlocking { repo.loadState(listId).items.getValue(itemId).let { it.quantity to it.unit } } }
+
+        compose.onNodeWithTag("name:marchew").performClick()
+        waitFor { exists(hasTestTag("quantityMenu")) }
+        // Grams step by ten.
+        compose.onNodeWithTag("quantityUp").performClick()
+        waitFor { stored() == (110.0 to "g") }
+
+        // To pieces: one piece, saved at once…
+        compose.onNodeWithTag("unit:szt.").performClick()
+        compose.onNodeWithTag("quantityValue").assertTextEquals("1 szt.")
+        waitFor { stored() == (1.0 to "szt.") }
+        compose.onNodeWithTag("quantityUp").performClick()
+        waitFor { stored() == (2.0 to "szt.") }
+        // …and back to grams, while the menu is open: the grams it had.
+        compose.onNodeWithTag("unit:g").performClick()
+        compose.onNodeWithTag("quantityValue").assertTextEquals("110 g")
+        waitFor { stored() == (110.0 to "g") }
+
+        // A tap on the number types one.
+        compose.onNodeWithTag("quantityValue").performClick()
+        compose.onNodeWithTag("quantityField").performTextReplacement("250")
+        compose.onNodeWithTag("quantityField").performImeAction()
+        compose.onNodeWithTag("quantityValue").assertTextEquals("250 g")
+        waitFor { stored() == (250.0 to "g") }
     }
 
     /**

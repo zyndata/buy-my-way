@@ -14,6 +14,18 @@ import androidx.core.app.ActivityCompat
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -101,11 +113,13 @@ import dev.gorny.buymyway.core.text.QuantityStep
 import dev.gorny.buymyway.core.voice.VoiceSource
 import dev.gorny.buymyway.data.voice.VoiceRecognizer
 import dev.gorny.buymyway.data.photo.PhotoRef
+import dev.gorny.buymyway.ui.common.Bind
 import dev.gorny.buymyway.ui.common.DragHandle
 import dev.gorny.buymyway.ui.common.NameDialog
 import dev.gorny.buymyway.ui.common.ReorderState
 import dev.gorny.buymyway.ui.common.moveActions
 import dev.gorny.buymyway.ui.common.rememberReorderState
+import dev.gorny.buymyway.ui.common.rememberWindowFocusHandle
 import dev.gorny.buymyway.ui.common.reorderableItem
 import androidx.core.content.FileProvider
 import kotlinx.coroutines.launch
@@ -139,11 +153,7 @@ fun ListScreen(
     val photoBusy by vm.photoBusy.collectAsStateWithLifecycle()
     val dictation by vm.dictation.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    // The add bar keeps its focus after the keyboard is put away, so that the next item can follow.
-    // A sheet, a menu or a photo over the list is a window of its own, and when it closes the list's
-    // window takes the focus back and brings that keyboard up again for a moment: a second slide
-    // after the sheet's own (STATE.md decision 122). Whatever opens over the list lets go of it first.
-    val focus = LocalFocusManager.current
+    val putAwayKeyboard = rememberPutAwayKeyboard()
     val scope = rememberCoroutineScope()
     // A phone with no speech recognizer gets no mic button at all (Phase 7, task 4).
     val canDictate = remember(voice) { voice != null || SpeechRecognizer.isRecognitionAvailable(context) }
@@ -162,7 +172,7 @@ fun ListScreen(
         }
     }
     val onMic: () -> Unit = {
-        focus.clearFocus()
+        putAwayKeyboard()
         val activity = context as? Activity
         when {
             context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED ->
@@ -277,9 +287,9 @@ fun ListScreen(
                 boughtOpen = boughtOpen,
                 onToggleBought = { boughtOpen = !boughtOpen },
                 onClearBought = { confirmClear = true },
-                onEdit = { focus.clearFocus(); editing = it.id },
+                onEdit = { putAwayKeyboard(); editing = it.id },
                 photoOf = { vm.photoOf(it, pendingPhotos) },
-                onOpenPhoto = { focus.clearFocus(); viewing = it.id },
+                onOpenPhoto = { putAwayKeyboard(); viewing = it.id },
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding),
@@ -597,7 +607,7 @@ private fun LazyListScope.itemsWithMoves(
                 initial = state.remoteTicks[item.id],
                 onToggle = if (state.canEdit) ({ vm.toggle(item) }) else null,
                 onEdit = if (state.canEdit) ({ onEdit(item) }) else null,
-                onQuantity = if (state.canEdit) ({ quantity -> vm.setQuantity(item.id, quantity) }) else null,
+                onQuantity = if (state.canEdit) ({ quantity, unit -> vm.setQuantity(item.id, quantity, unit) }) else null,
                 photo = photoOf(item),
                 loadPhoto = vm::loadPhoto,
                 onOpenPhoto = { onOpenPhoto(item) },
@@ -688,7 +698,7 @@ private fun ItemRow(
     onToggle: (() -> Unit)?,
     onEdit: (() -> Unit)?,
     modifier: Modifier = Modifier,
-    onQuantity: ((Double?) -> Unit)? = null,
+    onQuantity: ((Double?, String?) -> Unit)? = null,
     photo: PhotoRef? = null,
     loadPhoto: suspend (PhotoRef, Int) -> ImageBitmap? = { _, _ -> null },
     onOpenPhoto: () -> Unit = {},
@@ -698,7 +708,7 @@ private fun ItemRow(
     onMoveDown: (() -> Unit)? = null,
 ) {
     val haptics = LocalHapticFeedback.current
-    val focus = LocalFocusManager.current
+    val putAwayKeyboard = rememberPutAwayKeyboard()
     val upLabel = stringResource(R.string.action_move_up)
     val downLabel = stringResource(R.string.action_move_down)
     val stateLabel = stringResource(if (item.checked) R.string.state_bought else R.string.state_to_buy)
@@ -715,7 +725,7 @@ private fun ItemRow(
     val onName: (() -> Unit)? = when {
         item.checked -> tick
         onQuantity != null -> ({
-            focus.clearFocus() // STATE.md decision 122
+            putAwayKeyboard()
             adjusting = true
         })
         else -> null
@@ -819,45 +829,133 @@ private fun ItemRow(
 }
 
 /**
- * The quick „−/+" under an item's name (STATE.md decision 121): every tap is saved at once, and a
- * tap outside or „Wstecz" closes it. „−" on the last step clears the quantity, never the item.
+ * The quick menu under an item's name (STATE.md decisions 121 and 123): „−/+", the number itself
+ * (a tap types one), and the unit. Every change is saved at once; a tap outside or „Wstecz" closes
+ * it. „−" on the last step clears the quantity, never the item. While it is open it remembers each
+ * unit's number, so 100 g → szt. (1) → g is 100 g again; closing it forgets them.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun QuantityMenu(item: Item, expanded: Boolean, onSet: (Double?) -> Unit, onDismiss: () -> Unit) {
+private fun QuantityMenu(item: Item, expanded: Boolean, onSet: (Double?, String?) -> Unit, onDismiss: () -> Unit) {
     // Taps land faster than Room answers: count from what this menu last set, not from the row.
     var shown by remember(item.id, expanded) { mutableStateOf(item.quantity) }
-    fun set(value: Double?) {
+    var unit by remember(item.id, expanded) { mutableStateOf(item.unit) }
+    val remembered = remember(item.id, expanded) { mutableMapOf<String, Pair<Double?, String?>>() }
+    var typing by remember(item.id, expanded) { mutableStateOf(false) }
+    var draft by remember(item.id, expanded) { mutableStateOf(TextFieldValue()) }
+    val typed = QuantityFormat.parse(draft.text)
+    fun set(value: Double?, newUnit: String? = unit) {
         shown = value
-        onSet(value)
+        unit = newUnit
+        onSet(value, newUnit)
     }
-    DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .padding(horizontal = 8.dp)
-                .testTag("quantityMenu"),
-        ) {
-            IconButton(
-                onClick = { set(QuantityStep.down(shown, item.unit)) },
-                enabled = shown != null,
-                modifier = Modifier.testTag("quantityDown"),
-            ) {
-                Icon(painterResource(R.drawable.ic_remove), contentDescription = stringResource(R.string.action_quantity_down))
+    fun choose(option: String) {
+        if (QuantityStep.key(option) == QuantityStep.key(unit)) return
+        remembered[QuantityStep.key(unit)] = shown to unit
+        val (value, spelling) = remembered[QuantityStep.key(option)] ?: (QuantityStep.start(option) to option)
+        set(value, spelling)
+    }
+    fun finishTyping() {
+        if (typed.isFailure) return
+        set(typed.getOrNull())
+        typing = false
+    }
+    // The item's own unit („ząbki", „opak.") stays on offer beside the usual ones.
+    val options = remember(item.id, expanded) {
+        val own = item.unit?.takeIf { u -> QuantityStep.UNITS.none { QuantityStep.key(it) == QuantityStep.key(u) } }
+        listOfNotNull(own) + QuantityStep.UNITS
+    }
+    // Gives the popup's focus back before it goes (STATE.md decision 122).
+    val focus = rememberWindowFocusHandle()
+    DropdownMenu(
+        expanded = expanded,
+        onDismissRequest = {
+            // Closing keeps a number typed so far, but an emptied field is no reason to lose one.
+            if (typing) typed.getOrNull()?.let { set(it) }
+            focus.letGo()
+            onDismiss()
+        },
+    ) {
+        focus.Bind()
+        Column(Modifier.padding(horizontal = 8.dp).testTag("quantityMenu")) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.align(Alignment.CenterHorizontally)) {
+                IconButton(
+                    onClick = { set(QuantityStep.down(shown, unit)) },
+                    enabled = shown != null && !typing,
+                    modifier = Modifier.testTag("quantityDown"),
+                ) {
+                    Icon(painterResource(R.drawable.ic_remove), contentDescription = stringResource(R.string.action_quantity_down))
+                }
+                if (typing) {
+                    val field = remember { FocusRequester() }
+                    OutlinedTextField(
+                        value = draft,
+                        onValueChange = { draft = it },
+                        singleLine = true,
+                        isError = typed.isFailure,
+                        textStyle = MaterialTheme.typography.titleMedium.copy(textAlign = TextAlign.Center),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Done),
+                        keyboardActions = KeyboardActions(onDone = { finishTyping() }),
+                        modifier = Modifier
+                            .width(112.dp)
+                            .focusRequester(field)
+                            .testTag("quantityField"),
+                    )
+                    LaunchedEffect(Unit) { field.requestFocus() }
+                } else {
+                    Text(
+                        QuantityFormat.format(shown, unit) ?: stringResource(R.string.quantity_none),
+                        style = MaterialTheme.typography.titleMedium,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier
+                            .widthIn(min = 112.dp)
+                            .clickable(onClickLabel = stringResource(R.string.action_type_quantity)) {
+                                val text = shown?.let(QuantityFormat::number).orEmpty()
+                                draft = TextFieldValue(text, TextRange(0, text.length))
+                                typing = true
+                            }
+                            .padding(vertical = 12.dp)
+                            .semantics { liveRegion = LiveRegionMode.Polite }
+                            .testTag("quantityValue"),
+                    )
+                }
+                IconButton(
+                    onClick = { set(QuantityStep.up(shown, unit)) },
+                    enabled = !typing,
+                    modifier = Modifier.testTag("quantityUp"),
+                ) {
+                    Icon(painterResource(R.drawable.ic_add), contentDescription = stringResource(R.string.action_quantity_up))
+                }
             }
-            Text(
-                QuantityFormat.format(shown, item.unit) ?: stringResource(R.string.quantity_none),
-                style = MaterialTheme.typography.titleMedium,
-                textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .widthIn(min = 88.dp)
-                    .semantics { liveRegion = LiveRegionMode.Polite }
-                    .testTag("quantityValue"),
-            )
-            IconButton(onClick = { set(QuantityStep.up(shown, item.unit)) }, modifier = Modifier.testTag("quantityUp")) {
-                Icon(painterResource(R.drawable.ic_add), contentDescription = stringResource(R.string.action_quantity_up))
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.padding(bottom = 4.dp),
+            ) {
+                options.forEach { option ->
+                    FilterChip(
+                        selected = QuantityStep.key(option) == QuantityStep.key(unit),
+                        onClick = {
+                            if (typing) finishTyping()
+                            choose(option)
+                        },
+                        label = { Text(option) },
+                        modifier = Modifier.testTag("unit:$option"),
+                    )
+                }
             }
         }
     }
+}
+
+/**
+ * The add bar keeps its focus after an item is added, so that the next one can follow; whatever
+ * opens over the list lets go of it first, or the list's window would bring its keyboard back up
+ * when it takes the focus back (STATE.md decision 122).
+ */
+@Composable
+private fun rememberPutAwayKeyboard(): () -> Unit {
+    val focus = LocalFocusManager.current
+    return remember(focus) { { focus.clearFocus() } }
 }
 
 /** The circle's column: the same 56 dp the circle and its gap always took, now all of it a target. */

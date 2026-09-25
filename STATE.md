@@ -2050,6 +2050,22 @@ what was bought, which is the half of decision 106 that no build output could ha
      - Not done: the list's `AlertDialog`s (Sortowanie, Zmień nazwę, Wyczyść kupione) and the
        photo viewer are windows too and may do the same on the S23; nobody has reported it.
 
+123. **The quick menu changes the unit and takes a typed number** (asked by the user after 121):
+     a list imported from Eat My Way says „200 g cebuli" where the shop sells pieces.
+     - **A row of units under „− ilość +"**: szt., g, kg, ml, l, and the item's own unit first if
+       it is none of those („ząbki", „opak."). „sztuki", „szt." and no unit at all are one choice
+       (`QuantityStep.key`).
+     - **While the menu is open it remembers each unit's number**: marchew 100 g → szt. gives
+       1 szt. (a unit with nothing remembered starts at 1, grams and millilitres at 100) → g gives
+       100 g again. Every change is saved at once, so the list always shows the last choice;
+       closing the menu forgets the rest. `ListRepository.setQuantity` now writes the unit too.
+     - **A tap on the number types one** (numeric keyboard, the old number selected). „OK" or a
+       unit chip keeps it, and „OK" on an emptied field clears the quantity; closing the menu
+       („Wstecz", which on the S23 takes the keyboard and the menu at once, or a tap outside)
+       keeps a valid number and ignores an emptied field, so that a stray „Wstecz" cannot wipe
+       one out — seen on the S23 while testing.
+     - **Grams step by 10** (was 100); decagrams by 10, millilitres still by 100.
+
 ## Open questions
 
 1. ~~Where do shared lists live, now that `drive.file` cannot cross users?~~ Answered by
