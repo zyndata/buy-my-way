@@ -456,7 +456,12 @@ class ListViewModel(
         viewModelScope.launch { runCatching { repo.updateItem(itemId, content) } }
     }
 
-    fun delete(itemId: String, message: String, undoLabel: String) = held.hold(viewModelScope, itemId, message, undoLabel)
+    fun setQuantity(itemId: String, quantity: Double?) {
+        if (!state.value.canEdit) return
+        viewModelScope.launch { runCatching { repo.setQuantity(itemId, quantity) } }
+    }
+
+    fun delete(itemId: String, message: String, undoLabel: String) =held.hold(viewModelScope, itemId, message, undoLabel)
 
     // --- Photos (Phase 6, decision 71) ----------------------------------------------------
 

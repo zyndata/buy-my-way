@@ -65,6 +65,10 @@
     </plurals>
     <string name="revived">„%1$s” wraca z kupionych</string>
     <string name="deleted_item">Usunięto „%1$s”</string>
+    <string name="action_change_quantity">Zmień ilość</string>
+    <string name="action_quantity_up">Zwiększ ilość</string>
+    <string name="action_quantity_down">Zmniejsz ilość</string>
+    <string name="quantity_none">bez ilości</string>
 
     <!-- Edycja -->
     <string name="edit_title">Edytuj</string>

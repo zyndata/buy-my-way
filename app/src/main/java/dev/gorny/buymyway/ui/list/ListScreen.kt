@@ -14,18 +14,24 @@ import androidx.core.app.ActivityCompat
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
@@ -69,13 +75,17 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.toggleableState
 import androidx.compose.ui.state.ToggleableState
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -86,6 +96,7 @@ import dev.gorny.buymyway.core.model.Item
 import dev.gorny.buymyway.core.model.ListDetail
 import dev.gorny.buymyway.core.model.SortView
 import dev.gorny.buymyway.core.text.QuantityFormat
+import dev.gorny.buymyway.core.text.QuantityStep
 import dev.gorny.buymyway.core.voice.VoiceSource
 import dev.gorny.buymyway.data.voice.VoiceRecognizer
 import dev.gorny.buymyway.data.photo.PhotoRef
@@ -579,6 +590,7 @@ private fun LazyListScope.itemsWithMoves(
                 initial = state.remoteTicks[item.id],
                 onToggle = if (state.canEdit) ({ vm.toggle(item) }) else null,
                 onEdit = if (state.canEdit) ({ onEdit(item) }) else null,
+                onQuantity = if (state.canEdit) ({ quantity -> vm.setQuantity(item.id, quantity) }) else null,
                 photo = photoOf(item),
                 loadPhoto = vm::loadPhoto,
                 onOpenPhoto = { onOpenPhoto(item) },
@@ -656,10 +668,12 @@ private fun BoughtHeader(count: Int, open: Boolean, onToggle: () -> Unit, onClea
 }
 
 /**
- * One item. A tap ticks it (or, in „Kupione", brings it back); a long press edits it. A ticked
- * row is struck through, and TalkBack hears „kupione" (PLAN.md Phase 3, task 7). [initial] is
- * shown on a tick someone else just made (Phase 5, task 5). A viewer gets neither action. A
- * [photo] shows as a thumbnail that opens full screen, for a viewer too (Phase 6).
+ * One item, in two parts (STATE.md decision 121). The circle, a column the row's full height, ticks
+ * it (or, in „Kupione", brings it back). A tap on the name opens the quick „−/+" for the quantity;
+ * on a ticked item it brings it back instead, as the circle does. A long press on the name edits
+ * it. A ticked row is struck through, and TalkBack hears „kupione" (PLAN.md Phase 3, task 7).
+ * [initial] is shown on a tick someone else just made (Phase 5, task 5). A viewer gets none of
+ * these. A [photo] shows as a thumbnail that opens full screen, for a viewer too (Phase 6).
  */
 @Composable
 private fun ItemRow(
@@ -667,6 +681,7 @@ private fun ItemRow(
     onToggle: (() -> Unit)?,
     onEdit: (() -> Unit)?,
     modifier: Modifier = Modifier,
+    onQuantity: ((Double?) -> Unit)? = null,
     photo: PhotoRef? = null,
     loadPhoto: suspend (PhotoRef, Int) -> ImageBitmap? = { _, _ -> null },
     onOpenPhoto: () -> Unit = {},
@@ -679,34 +694,41 @@ private fun ItemRow(
     val upLabel = stringResource(R.string.action_move_up)
     val downLabel = stringResource(R.string.action_move_down)
     val stateLabel = stringResource(if (item.checked) R.string.state_bought else R.string.state_to_buy)
+    val toggleLabel = stringResource(if (item.checked) R.string.action_uncheck else R.string.action_check)
     val quantity = QuantityFormat.format(item.quantity, item.unit)
+    var adjusting by remember { mutableStateOf(false) }
+    val tick: (() -> Unit)? = onToggle?.let { toggle ->
+        {
+            haptics.performHapticFeedback(if (item.checked) HapticFeedbackType.ToggleOff else HapticFeedbackType.ToggleOn)
+            toggle()
+        }
+    }
+    // A ticked item's quantity is not worth changing: its name brings it back, as the circle does.
+    val onName: (() -> Unit)? = when {
+        item.checked -> tick
+        onQuantity != null -> ({ adjusting = true })
+        else -> null
+    }
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .height(IntrinsicSize.Min)
+            .heightIn(min = 56.dp)
+            .testTag("item:${item.name}"),
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
+        Box(
+            contentAlignment = Alignment.Center,
             modifier = Modifier
-                .weight(1f)
-                .heightIn(min = 56.dp)
-                .testTag("item:${item.name}")
-                .combinedClickable(
-                    enabled = onToggle != null,
-                    role = Role.Checkbox,
-                    onClickLabel = stringResource(if (item.checked) R.string.action_uncheck else R.string.action_check),
-                    onLongClickLabel = onEdit?.let { stringResource(R.string.action_edit) },
-                    onLongClick = onEdit,
-                    onClick = {
-                        haptics.performHapticFeedback(if (item.checked) HapticFeedbackType.ToggleOff else HapticFeedbackType.ToggleOn)
-                        onToggle?.invoke()
-                    },
-                )
+                .fillMaxHeight()
+                .width(TICK_WIDTH)
+                .clickable(enabled = tick != null, role = Role.Checkbox, onClickLabel = toggleLabel) { tick?.invoke() }
                 .semantics {
+                    contentDescription = item.name
                     toggleableState = ToggleableState(item.checked)
                     stateDescription = stateLabel
-                    customActions = moveActions(upLabel, downLabel, onMoveUp, onMoveDown)
                 }
-                .padding(start = 16.dp, end = if (reorder == null) 16.dp else 0.dp),
+                .testTag("tick:${item.name}"),
         ) {
             if (initial != null) {
                 // Someone else's tick: their initial where the tick mark would be.
@@ -728,12 +750,29 @@ private fun ItemRow(
                     tint = if (item.checked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(start = 16.dp, top = 8.dp, bottom = 8.dp)
-                    .alpha(if (item.checked) 0.6f else 1f),
-            ) {
+        }
+        val end = when {
+            photo != null -> 8.dp
+            reorder == null -> 16.dp
+            else -> 0.dp
+        }
+        Column(
+            verticalArrangement = Arrangement.Center,
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxHeight()
+                .combinedClickable(
+                    enabled = onName != null,
+                    onClickLabel = if (item.checked) toggleLabel else stringResource(R.string.action_change_quantity),
+                    onLongClickLabel = onEdit?.let { stringResource(R.string.action_edit) },
+                    onLongClick = onEdit,
+                    onClick = { onName?.invoke() },
+                )
+                .semantics { customActions = moveActions(upLabel, downLabel, onMoveUp, onMoveDown) }
+                .testTag("name:${item.name}")
+                .padding(top = 8.dp, bottom = 8.dp, end = end),
+        ) {
+            Column(Modifier.alpha(if (item.checked) 0.6f else 1f)) {
                 val decoration = if (item.checked) TextDecoration.LineThrough else null
                 Text(item.name, style = MaterialTheme.typography.bodyLarge, textDecoration = decoration)
                 val details = listOfNotNull(quantity, item.note).joinToString(" · ")
@@ -748,12 +787,67 @@ private fun ItemRow(
                     )
                 }
             }
-            if (photo != null) {
-                PhotoThumbnail(photo, item.name, 40.dp, loadPhoto, onOpenPhoto, Modifier.padding(start = 8.dp))
+            if (onQuantity != null) {
+                QuantityMenu(item, expanded = adjusting && !item.checked, onSet = onQuantity, onDismiss = { adjusting = false })
             }
+        }
+        if (photo != null) {
+            PhotoThumbnail(
+                photo,
+                item.name,
+                40.dp,
+                loadPhoto,
+                onOpenPhoto,
+                Modifier.padding(end = if (reorder == null) 16.dp else 0.dp),
+            )
         }
         if (reorder != null) {
             DragHandle(reorder, item.id, Modifier.size(48.dp))
         }
     }
 }
+
+/**
+ * The quick „−/+" under an item's name (STATE.md decision 121): every tap is saved at once, and a
+ * tap outside or „Wstecz" closes it. „−" on the last step clears the quantity, never the item.
+ */
+@Composable
+private fun QuantityMenu(item: Item, expanded: Boolean, onSet: (Double?) -> Unit, onDismiss: () -> Unit) {
+    // Taps land faster than Room answers: count from what this menu last set, not from the row.
+    var shown by remember(item.id, expanded) { mutableStateOf(item.quantity) }
+    fun set(value: Double?) {
+        shown = value
+        onSet(value)
+    }
+    DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .padding(horizontal = 8.dp)
+                .testTag("quantityMenu"),
+        ) {
+            IconButton(
+                onClick = { set(QuantityStep.down(shown, item.unit)) },
+                enabled = shown != null,
+                modifier = Modifier.testTag("quantityDown"),
+            ) {
+                Icon(painterResource(R.drawable.ic_remove), contentDescription = stringResource(R.string.action_quantity_down))
+            }
+            Text(
+                QuantityFormat.format(shown, item.unit) ?: stringResource(R.string.quantity_none),
+                style = MaterialTheme.typography.titleMedium,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .widthIn(min = 88.dp)
+                    .semantics { liveRegion = LiveRegionMode.Polite }
+                    .testTag("quantityValue"),
+            )
+            IconButton(onClick = { set(QuantityStep.up(shown, item.unit)) }, modifier = Modifier.testTag("quantityUp")) {
+                Icon(painterResource(R.drawable.ic_add), contentDescription = stringResource(R.string.action_quantity_up))
+            }
+        }
+    }
+}
+
+/** The circle's column: the same 56 dp the circle and its gap always took, now all of it a target. */
+private val TICK_WIDTH = 56.dp

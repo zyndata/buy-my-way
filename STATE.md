@@ -1969,6 +1969,37 @@ what was bought, which is the half of decision 106 that no build output could ha
      restart does not remove the glued key), so it is put down to the recognizer, which hands
      over a different sentence from one attempt to the next.
 
+
+### 2026-09-25 — The circle ticks, the name changes the quantity
+
+121. **An item's row is two targets now, a deviation from PLAN.md Phase 3 (task 7: „a tap
+     ticks it").** Reported by the user: turning „2" into „5" took a long press, deleting the 2,
+     typing 5 and „Zapisz". Now:
+     - **The circle ticks** (and, in „Kupione", brings the item back). Its target is the whole
+       56 dp column the circle and its gap always took, the row's full height, so the row looks
+       exactly as before and the target is no smaller than the part of the row a thumb already
+       aimed at. Same haptics as before.
+     - **A tap on the name opens a small „−  2 szt.  +" menu** anchored to the row. Every tap is
+       saved at once (`ListRepository.setQuantity`, which reads the item as it is now and changes
+       only `quantity`, so it cannot put back a name someone else just edited); a tap outside or
+       „Wstecz" closes it. The menu counts from what it last set, not from the row, so three
+       taps faster than Room answers are still three steps.
+     - **On a ticked item the name brings it back**, as the circle does: changing the quantity
+       of something already bought is not worth a menu.
+     - **A long press on the name edits**, as before. A viewer gets none of the three.
+     - **The step follows the unit** (`QuantityStep`): 1 for pieces and anything unknown, 0,5 for
+       kg and l, 100 for g and ml, 10 for dag. „+" on no quantity gives one step but never less
+       than 1; „−" on the last step clears the quantity and never deletes the item; the ceiling
+       is the edit sheet's 10 000.
+     - TalkBack: the circle is a checkbox named after the item; the name is a button „Zmień
+       ilość" with „Edytuj" as its long-press action and the move actions. Tests address the
+       two as `tick:<name>` and `name:<name>`; `item:<name>` is the whole row.
+     - Two people pressing „+" at once is last-write-wins on the item's node, not a sum (the
+       merge keeps one node per item), which is acceptable for a quantity.
+
+     Cost of the change: anyone used to tapping the name to tick gets the menu instead, once.
+     There is no in-app hint; the release note says it.
+
 ## Open questions
 
 1. ~~Where do shared lists live, now that `drive.file` cannot cross users?~~ Answered by
