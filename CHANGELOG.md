@@ -6,6 +6,17 @@ This file is generated from Conventional Commit messages by
 The format follows [Keep a Changelog](https://keepachangelog.com) and the
 project adheres to [Semantic Versioning](https://semver.org).
 
+## [0.12.1] - 2026-09-26
+
+### Bug Fixes
+
+- **photos:** Keep the photo of an item moved to another list
+- **update:** Delete a downloaded APK once its version is installed
+
+### Documentation
+
+- **state:** Record the access gate going live and its first check on a phone
+
 ## [0.12.0] - 2026-09-26
 
 ### Features
