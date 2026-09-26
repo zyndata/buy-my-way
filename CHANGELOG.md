@@ -6,6 +6,13 @@ This file is generated from Conventional Commit messages by
 The format follows [Keep a Changelog](https://keepachangelog.com) and the
 project adheres to [Semantic Versioning](https://semver.org).
 
+## [0.12.0] - 2026-09-26
+
+### Features
+
+- **list:** Move or copy an item to another list from the edit sheet
+- **account:** Let the owner limit the cloud lists to an allow-list of accounts
+
 ## [0.11.0] - 2026-09-25
 
 ### Bug Fixes
