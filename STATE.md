@@ -2080,6 +2080,35 @@ what was bought, which is the half of decision 106 that no build output could ha
        one out — seen on the S23 while testing.
      - **Grams step by 10** (was 100); decagrams by 10, millilitres still by 100.
 
+124. **„Przenieś do innej listy" in the edit sheet** (asked by the user, 2026-09-26). A long
+     press on an item opens the edit sheet; a button under the dates, „Przenieś do innej listy",
+     opens a small dialog over the sheet: a drop-down with the other lists this user may change
+     (`observeEditableLists`, the import's own rule; the button is not there when there is none)
+     and „Usuń z aktualnej listy", ticked at first. The confirm button says „Przenieś", or
+     „Kopiuj" when the box is unticked. A list is chosen up front only when there is one.
+     - **What moves is what the sheet holds**, edits included; unticked, the item stays with the
+       edits saved, as „Zapisz" would. „Anuluj" goes back to the sheet with its edits.
+     - `ListRepository.moveItemTo`, one transaction, one batch of ops over two lists: an
+       `item.put` on the target and, ticked, an `item.delete` here — no „Cofnij", the snackbar
+       says „Przeniesiono „…” do listy „…”" and the item can be moved back. The copy is an item to
+       buy (a bought item moved elsewhere is one to buy there). Its category keeps its id where
+       the target has it (the nine departments always), else the target's category of the same
+       name, else a new one placed last in the target's order; a category deleted here gives way
+       to the target's proposal for the name. A name the target has in „Kupione" comes back with
+       the moved content rather than being added twice (decision 36).
+     - **The photo goes along as a new photo** of the moved item: its bytes are read first (a
+       photo not sent yet lives in the outbox under the old item and goes with it), then set
+       like one from the gallery. Offline and never downloaded here, it is lost; nothing else is.
+     - **The keyboard (decision 122).** The button clears the sheet's focus first, so no field
+       brings its keyboard back when the dialog closes. The dialog is one more window over the
+       list, so it takes the same care: „Anuluj" and „Wstecz" hand its focus back to the sheet
+       before it goes (`thenClose` from the sheet's composition); „Przenieś" lets go of the
+       dialog's and the sheet's focus together and removes both only once the list's window
+       holds it. The list drop-down is a `FocusSafeDropdownMenu` under a read-only field that a
+       tap never focuses. `ScreenFlowsTest.anItemMovesOrIsCopiedToAnotherListFromTheEditSheet`
+       checks that the add bar stays unfocused. **Not yet measured on the S23**; the emulator
+       never showed the flash.
+
 ## Open questions
 
 1. ~~Where do shared lists live, now that `drive.file` cannot cross users?~~ Answered by

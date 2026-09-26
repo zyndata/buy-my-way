@@ -176,6 +176,58 @@ class ListRepositoryTest {
         assertEquals(emptyList<Any>(), db.categories().getAllForList(listId))
     }
 
+    /** STATE.md decision 124: „Przenieś do innej listy", with „Usuń z aktualnej listy" and without. */
+    @Test
+    fun anItemMovesToAnotherListWithItsCategoryOrIsCopied() = runTest {
+        val here = repo.createList("Sobota")
+        val there = repo.createList("Niedziela")
+        val drugstore = repo.addCategory(here, "Drogeria")
+        val drugstoreThere = repo.addCategory(there, "drogeria")
+        val garden = repo.addCategory(here, "Ogród")
+        val milk = repo.addItem(here, "Mleko", quantity = 2.0, unit = "l", note = "0,5%").itemId
+        val soap = repo.addItem(here, "Mydło", categoryId = drugstore).itemId
+        val seeds = repo.addItem(here, "Nasiona", categoryId = garden).itemId
+
+        // A department keeps its id; the sheet's edits go with the item, which leaves this list.
+        val content = repo.loadState(here).items.getValue(milk).content.copy(name = "Mleko owsiane")
+        val movedMilk = repo.moveItemTo(milk, content, there, removeHere = true)
+        // A category of the same name is the target's own; a new one is made where there is none.
+        val movedSoap = repo.moveItemTo(soap, repo.loadState(here).items.getValue(soap).content, there, removeHere = true)
+        val copiedSeeds = repo.moveItemTo(seeds, repo.loadState(here).items.getValue(seeds).content, there, removeHere = false)
+
+        val target = repo.loadState(there)
+        with(target.items.getValue(movedMilk)) {
+            assertEquals(listOf("Mleko owsiane", 2.0, "l", "0,5%", "nabial"), listOf(name, quantity, unit, note, categoryId))
+            assertFalse(checked)
+        }
+        assertEquals(drugstoreThere, target.items.getValue(movedSoap).categoryId)
+        val newGarden = target.items.getValue(copiedSeeds).categoryId
+        assertEquals("Ogród", target.categories.getValue(newGarden).name)
+        assertEquals(newGarden, target.list!!.categoryOrder.last())
+
+        val source = repo.observeList(here).first()!!
+        assertEquals(listOf("Nasiona"), source.sections.flatMap { it.items }.map { it.name })
+        assertRoomIsTheMergeOfTheOutbox(here)
+        assertRoomIsTheMergeOfTheOutbox(there)
+    }
+
+    @Test
+    fun anItemMovedOntoANameInKupioneBringsThatOneBack() = runTest {
+        val here = repo.createList("Sobota")
+        val there = repo.createList("Niedziela")
+        val bought = repo.addItem(there, "Chleb").itemId
+        repo.setChecked(bought, true)
+        val bread = repo.addItem(here, "chleb", quantity = 2.0).itemId
+
+        val moved = repo.moveItemTo(bread, repo.loadState(here).items.getValue(bread).content, there, removeHere = true)
+
+        assertEquals(bought, moved)
+        val detail = repo.observeList(there).first()!!
+        assertEquals(listOf("chleb" to 2.0), detail.sections.flatMap { it.items }.map { it.name to it.quantity })
+        assertEquals(emptyList<Any>(), detail.bought)
+        assertRoomIsTheMergeOfTheOutbox(there)
+    }
+
     @Test
     fun remoteNodesAreMergedWithoutTouchingTheOutbox() = runTest {
         val listId = repo.createList("Sobota")

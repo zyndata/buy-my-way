@@ -150,6 +150,7 @@ fun ListScreen(
     val pendingPhotos by vm.pendingPhotos.collectAsStateWithLifecycle()
     val photoBusy by vm.photoBusy.collectAsStateWithLifecycle()
     val dictation by vm.dictation.collectAsStateWithLifecycle()
+    val moveTargets by vm.moveTargets.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val putAwayKeyboard = rememberPutAwayKeyboard()
     val scope = rememberCoroutineScope()
@@ -211,6 +212,16 @@ fun ListScreen(
     }
     LaunchedEffect(vm) {
         vm.revived.collect { name -> vm.held.snackbar.showSnackbar(resources.getString(R.string.revived, name)) }
+    }
+    LaunchedEffect(vm) {
+        vm.moved.collect { moved ->
+            val text = when {
+                moved.listName == null -> resources.getString(R.string.move_failed, moved.name)
+                moved.removed -> resources.getString(R.string.moved_item, moved.name, moved.listName)
+                else -> resources.getString(R.string.copied_item, moved.name, moved.listName)
+            }
+            vm.held.snackbar.showSnackbar(text)
+        }
     }
     LaunchedEffect(vm) {
         vm.photoFailed.collect { vm.held.snackbar.showSnackbar(resources.getString(R.string.photo_failed)) }
@@ -417,6 +428,11 @@ fun ListScreen(
                 )
             },
             onDismiss = { editing = null },
+            moveTargets = moveTargets,
+            onMove = { content, target, removeHere ->
+                editing = null
+                vm.moveTo(edited.id, content, target, removeHere)
+            },
         )
     }
 

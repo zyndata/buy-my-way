@@ -80,6 +80,17 @@
     <string name="field_category">Kategoria</string>
     <string name="field_note">Notatka</string>
 
+    <!-- Przenoszenie do innej listy -->
+    <string name="action_move_item">Przenieś do innej listy</string>
+    <string name="move_item_title">Przenieś do innej listy</string>
+    <string name="field_target_list">Lista</string>
+    <string name="move_remove_here">Usuń z aktualnej listy</string>
+    <string name="action_move">Przenieś</string>
+    <string name="action_copy">Kopiuj</string>
+    <string name="moved_item">Przeniesiono „%1$s” do listy „%2$s”</string>
+    <string name="copied_item">Skopiowano „%1$s” do listy „%2$s”</string>
+    <string name="move_failed">Nie udało się przenieść „%1$s”.</string>
+
     <!-- Zdjęcia (Phase 6) -->
     <string name="action_take_photo">Zrób zdjęcie</string>
     <string name="action_pick_photo">Wybierz z galerii</string>

@@ -32,6 +32,9 @@ interface ItemPhotos {
     suspend fun remove(listId: String, itemId: String)
 
     suspend fun load(ref: PhotoRef, maxPx: Int): ImageBitmap?
+
+    /** The photo's own bytes, to set it on another item (STATE.md decision 124); null if unreadable. */
+    suspend fun bytes(ref: PhotoRef): ByteArray? = null
 }
 
 /**
@@ -97,6 +100,8 @@ class Photos(
     }
 
     override suspend fun load(ref: PhotoRef, maxPx: Int): ImageBitmap? = loader.load(ref, maxPx)
+
+    override suspend fun bytes(ref: PhotoRef): ByteArray? = loader.bytes(ref)
 
     /** Whether something waits that could be sent now: a change on a list RTDB has. */
     suspend fun ready(): Boolean = outbox.all().any { repo.isSynced(it.listId) }

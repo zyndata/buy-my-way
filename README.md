@@ -5,8 +5,9 @@
 A shared shopping list for Android. Keep any number of lists, private or shared with the people
 you shop with; when one of you ticks something off at the shelf, the other sees it crossed out
 within a second, and a closed app gets a notification. Items are grouped by the part of the shop
-they are bought in, can carry a note and a photo, can be dictated, and a whole week's list can be
-brought in from [Eat My Way](https://github.com/zyndata/eat-my-way) with one share.
+they are bought in, can carry a note and a photo, can be dictated or moved to another list, and a
+whole week's list can be brought in from [Eat My Way](https://github.com/zyndata/eat-my-way) with
+one share.
 
 The interface is in **Polish**. The code, comments and documentation are in English.
 
