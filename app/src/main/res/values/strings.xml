@@ -163,6 +163,11 @@
     <string name="account_session_lost_generic">Sesja konta wygasła. Listy są na telefonie, a zmiany poczekają na wysłanie.</string>
     <string name="session_lost_banner">Zaloguj się ponownie jako %1$s, aby wysłać zmiany do chmury. Listy są bezpieczne na telefonie.</string>
     <string name="session_lost_banner_generic">Zaloguj się ponownie, aby wysłać zmiany do chmury. Listy są bezpieczne na telefonie.</string>
+    <string name="no_access_sign_in">To konto Google nie ma dostępu do list w chmurze. Aby go dostać, napisz do autora na GitHubie.</string>
+    <string name="no_access_banner">Konto %1$s nie ma już dostępu do list w chmurze. Listy są bezpieczne na telefonie. Aby odzyskać dostęp, napisz do autora na GitHubie.</string>
+    <string name="no_access_banner_generic">To konto nie ma już dostępu do list w chmurze. Listy są bezpieczne na telefonie. Aby odzyskać dostęp, napisz do autora na GitHubie.</string>
+    <string name="action_write_on_github">Napisz na GitHubie</string>
+    <string name="no_access_contact_url" translatable="false">https://github.com/zyndata/buy-my-way/issues</string>
     <string name="sign_in_other_account">Na tym telefonie są listy konta %1$s. Zaloguj się tym kontem albo najpierw się wyloguj.</string>
     <string name="sign_in_other_account_generic">Na tym telefonie są listy innego konta. Zaloguj się nim albo najpierw się wyloguj.</string>
     <string name="sign_in_no_account">Na telefonie nie ma konta Google. Dodaj je w ustawieniach systemu.</string>

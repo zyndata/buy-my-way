@@ -29,6 +29,7 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
@@ -61,6 +62,7 @@ import dev.gorny.buymyway.R
 import dev.gorny.buymyway.data.auth.AccountState
 import dev.gorny.buymyway.data.auth.SignInResult
 import dev.gorny.buymyway.data.prefs.ThemeChoice
+import dev.gorny.buymyway.ui.common.openAccessRequest
 import kotlinx.coroutines.launch
 
 /**
@@ -115,11 +117,28 @@ fun SettingsScreen(
         }
     }
 
+    val writeOnGithub = stringResource(R.string.action_write_on_github)
+    val noBrowser = stringResource(R.string.about_source_failed)
     val signIn: () -> Unit = {
         if (activity != null) {
             vm.signIn(activity) { result ->
                 val message = when (result) {
                     SignInResult.Done, SignInResult.Cancelled -> null
+                    SignInResult.NoAccess -> {
+                        // Long, with the way to ask: the sentence is the whole of what the user can do.
+                        messages.launch {
+                            val answer = snackbar.showSnackbar(
+                                resources.getString(R.string.no_access_sign_in),
+                                actionLabel = writeOnGithub,
+                                withDismissAction = true,
+                                duration = SnackbarDuration.Indefinite,
+                            )
+                            if (answer == SnackbarResult.ActionPerformed && !openAccessRequest(context)) {
+                                snackbar.showSnackbar(noBrowser)
+                            }
+                        }
+                        null
+                    }
                     SignInResult.NoAccount -> resources.getString(R.string.sign_in_no_account)
                     SignInResult.Failed -> resources.getString(R.string.sign_in_failed)
                     is SignInResult.OtherAccount -> result.expectedEmail
@@ -424,8 +443,12 @@ private fun AccountSection(
                 headlineContent = { Text(stringResource(R.string.action_sign_in_again)) },
                 supportingContent = {
                     Text(
-                        account.email?.let { stringResource(R.string.account_session_lost, it) }
-                            ?: stringResource(R.string.account_session_lost_generic),
+                        when {
+                            account.accessDenied -> account.email?.let { stringResource(R.string.no_access_banner, it) }
+                                ?: stringResource(R.string.no_access_banner_generic)
+                            else -> account.email?.let { stringResource(R.string.account_session_lost, it) }
+                                ?: stringResource(R.string.account_session_lost_generic)
+                        },
                     )
                 },
                 modifier = Modifier.clickable(enabled = !busy, onClick = onSignIn),

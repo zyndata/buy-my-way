@@ -56,7 +56,9 @@ Each release carries two files:
 - **Shared lists live in a Firebase project, not on a server of ours.** When you sign in, your
   lists and their photos go to a Firebase Realtime Database that only the list's members can
   read, enforced by the database's rules. The app asks Google for your name and email and
-  nothing else: no access to your Drive, your contacts or your location.
+  nothing else: no access to your Drive, your contacts or your location. The project's owner
+  can limit sign-in to a private list of accounts; an account left off it is told so, keeps
+  its lists on the phone, and can ask for access through this repository's issues.
 - **Live, without draining the battery.** Another person's screen moves in under a second while
   the list is open. When the app is closed, a push message wakes it — no background service,
   no polling.

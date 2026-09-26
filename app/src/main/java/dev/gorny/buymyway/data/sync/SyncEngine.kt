@@ -86,7 +86,12 @@ class SyncEngine(
 
     /** Reads what RTDB has and this phone does not, for every list of [uid]. */
     suspend fun catchUp(uid: String) = mutex.withLock {
-        val remoteIds = read(RemoteWrites.userLists(uid)).asNode().keys
+        val remoteIds = try {
+            read(RemoteWrites.userLists(uid)).asNode().keys
+        } catch (e: RemoteDenied) {
+            refused(e) // the access gate, most likely: say so rather than fail in silence
+            throw e
+        }
         val localIds = db.lists().getAll().filter { db.listSync().get(it.id)?.synced == true }.map { it.id }
         for (listId in (remoteIds + localIds).distinct().sorted()) {
             try {
@@ -112,11 +117,13 @@ class SyncEngine(
     /**
      * A list this user cannot read any more. Their own stays (it is only not in RTDB); one
      * shared with them was taken away, and leaves the phone with a sentence (PLAN.md
-     * *Sharing & permissions*), unless it was deleted anyway.
+     * *Sharing & permissions*), unless it was deleted anyway. Nothing leaves while the session
+     * is gone or the access gate refuses this account: then every list reads as refused.
      */
     suspend fun lost(uid: String, listId: String) {
         val list = db.lists().get(listId) ?: return
         if (list.ownerUid == uid || list.ownerUid == null) return
+        if (!sessionValid()) return
         repo.forget(listId)
         if (list.deletedAt == null && list.updatedAt > 0) onListLost(list.name)
     }

@@ -39,8 +39,11 @@ sealed interface AccountState {
      * The phone's lists belong to [uid], but its Firebase session is gone without a sign-out
      * (STATE.md decision 23: e.g. the app was removed in Google Account → Connections). The
      * lists stay, new ops are still made under [uid], and the app asks to sign in again.
+     *
+     * [accessDenied]: the session was ended by the app because the database's access gate
+     * refused the account (decision 60, revised). Same lists, same way back; another sentence.
      */
-    data class SessionLost(val uid: String, val email: String?) : AccountState
+    data class SessionLost(val uid: String, val email: String?, val accessDenied: Boolean = false) : AccountState
 }
 
 sealed interface SignInResult {
@@ -53,6 +56,9 @@ sealed interface SignInResult {
 
     /** The phone holds [expectedEmail]'s lists; another account was picked (decision 57). */
     data class OtherAccount(val expectedEmail: String?) : SignInResult
+
+    /** Signed in with Google, but the database's access gate refused the account (decision 60, revised). */
+    data object NoAccess : SignInResult
 
     data object Failed : SignInResult
 }
@@ -69,6 +75,11 @@ class AccountRepository(
     private val record: AccountRecord,
     private val serverClientId: String,
     scope: CoroutineScope,
+    /**
+     * Whether the database lets this account in (`/access/check`, decision 60, revised): false
+     * when the rules refused it, null when there was no answer (offline), which is no verdict.
+     */
+    private val accessAllowed: suspend () -> Boolean? = { true },
 ) {
     private val firebaseUser: Flow<FirebaseUser?> = callbackFlow {
         val listener = FirebaseAuth.AuthStateListener { trySend(it.currentUser) }
@@ -79,6 +90,7 @@ class AccountRepository(
     val state: StateFlow<AccountState> = combine(firebaseUser, record.account) { user, stored ->
         when {
             stored == null -> AccountState.SignedOut
+            stored.denied -> AccountState.SessionLost(stored.uid, stored.email, accessDenied = true)
             user != null && user.uid == stored.uid -> AccountState.SignedIn(stored.uid, stored.email, stored.name)
             else -> AccountState.SessionLost(stored.uid, stored.email)
         }
@@ -132,6 +144,13 @@ class AccountRepository(
             auth.signOut()
             return SignInResult.OtherAccount(stored.email)
         }
+        if (accessAllowed() == false) {
+            // Nothing is recorded for an account that never got in; one that holds lists here
+            // keeps them, and says why it cannot sync.
+            auth.signOut()
+            if (stored != null) record.setDenied(true)
+            return SignInResult.NoAccess
+        }
         record.set(AccountRecord.Account(user.uid, user.email, user.displayName))
         return SignInResult.Done
     }
@@ -139,19 +158,26 @@ class AccountRepository(
     /**
      * Whether the session still works. A refresh the server refuses for the user
      * (`FirebaseAuthInvalidUserException`) ends it, which [state] reports as [AccountState.SessionLost].
-     * Anything else (no network above all) is no verdict, and counts as working.
+     * So does the access gate turning the account away: then every refusal that follows says
+     * nothing about the data, and no list or op may be dropped because of it. Anything else
+     * (no network above all) is no verdict, and counts as working.
      */
     suspend fun checkSession(): Boolean {
         val user = auth.currentUser ?: return false
-        return try {
+        try {
             user.getIdToken(false).await()
-            true
         } catch (_: FirebaseAuthInvalidUserException) {
             auth.signOut()
-            false
+            return false
         } catch (_: FirebaseException) {
-            true
+            return true
         }
+        if (accessAllowed() == false) {
+            record.setDenied(true)
+            auth.signOut()
+            return false
+        }
+        return true
     }
 
     /** The Firebase session and Credential Manager's memory of the choice. The caller clears the rest. */

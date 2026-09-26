@@ -165,6 +165,64 @@ describe('users and emailIndex', () => {
   });
 });
 
+describe('the access gate (decision 60, revised)', () => {
+  // `/access` is written by the owner in the console and read by nobody: the allow-list never
+  // leaves the database. Absent, or `mode: 'all'`, lets every signed-in account in.
+  const alice = () => withEmail(ALICE, 'Alice.Smith@example.com');
+  const bob = () => withEmail(BOB, 'bob@example.com');
+
+  test('with no /access node every signed-in account passes, as before', async () => {
+    await assertSucceeds(alice().ref('access/check').get());
+    await assertSucceeds(bob().ref(`users/${BOB}`).set({ name: 'Bob', updatedAt: T0 }));
+    await assertFails(anonymous().ref('access/check').get());
+  });
+
+  test("mode 'all' lets everyone in", async () => {
+    await seed('access', { mode: 'all', allow: { 'alice,smith@example,com': true } });
+    await assertSucceeds(bob().ref('access/check').get());
+    await assertSucceeds(bob().ref(`users/${BOB}`).set({ name: 'Bob', updatedAt: T0 }));
+  });
+
+  test("mode 'allowlist' lets in only a verified address on the list", async () => {
+    await seed('access', { mode: 'allowlist', allow: { 'alice,smith@example,com': true } });
+    await assertSucceeds(alice().ref('access/check').get());
+    await assertFails(bob().ref('access/check').get());
+    await assertFails(withEmail(BOB, 'alice.smith@example.com', false).ref('access/check').get());
+    await assertFails(db(BOB).ref('access/check').get()); // no e-mail in the token at all
+  });
+
+  test('an unknown mode is treated as the allow-list, never as open', async () => {
+    await seed('access', { mode: 'whitelist' });
+    await assertFails(alice().ref('access/check').get());
+  });
+
+  test('a refused account can neither read nor write anything, its own nodes included', async () => {
+    await seedList();
+    await seed(`lists/${LIST}/members`, { [ALICE]: { role: 'owner', since: T0 }, [BOB]: { role: 'editor', since: T0 } });
+    await seed(`users/${BOB}`, { name: 'Bob', updatedAt: T0 });
+    await seed('access', { mode: 'allowlist', allow: { 'alice,smith@example,com': true } });
+    await assertFails(bob().ref(`users/${BOB}`).get());
+    await assertFails(bob().ref(`users/${BOB}/name`).set('Bob'));
+    await assertFails(bob().ref(`userLists/${BOB}`).get());
+    await assertFails(bob().ref(`lists/${LIST}`).get());
+    await assertFails(bob().ref().update(checkWrite(T0 + 1, true, BOB)));
+    await assertFails(bob().ref(`fcmTokens/${BOB}/token-b`).set({ at: TIMESTAMP }));
+    await assertFails(bob().ref(`users/${ALICE}/name`).get());
+    // Alice, on the list, carries on.
+    await assertSucceeds(alice().ref(`lists/${LIST}`).get());
+    await assertSucceeds(alice().ref().update(checkWrite(T0 + 1)));
+  });
+
+  test('nobody reads or writes /access itself', async () => {
+    await seed('access', { mode: 'allowlist', allow: { 'alice,smith@example,com': true } });
+    await assertFails(alice().ref('access').get());
+    await assertFails(alice().ref('access/allow').get());
+    await assertFails(alice().ref('access/mode').get());
+    await assertFails(alice().ref('access/mode').set('all'));
+    await assertFails(bob().ref('access/allow/bob@example,com').set(true));
+  });
+});
+
 describe('prefs', () => {
   const prefs = `users/${ALICE}/prefs`;
 
