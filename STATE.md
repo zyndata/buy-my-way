@@ -2154,6 +2154,13 @@ what was bought, which is the half of decision 106 that no build output could ha
        build under a closed gate is refused everywhere and, not knowing why, drops refused ops
        and shared lists from the phone (they stay in RTDB). How to edit the list:
        docs/DEPLOYMENT.md *Who may use the database*.
+     - **Live since v0.12.0 (2026-09-26).** The rules were published before the tag, as the
+       order above asks. `/access` holds two keys under `allow` with `mode: "all"`. A first try
+       stored `allow` as one string of both addresses: under `"allowlist"` that admits nobody,
+       since the rules look for one child per address. **Checked on a real phone the same day:**
+       the owner's test account was left off the list and `mode` set to `"allowlist"`. On its
+       return to the foreground the phone showed the „nie ma już dostępu" banner. Not recorded
+       as checked: letting the account back in, and the Apps Script's new version.
 
 ## Open questions
 
