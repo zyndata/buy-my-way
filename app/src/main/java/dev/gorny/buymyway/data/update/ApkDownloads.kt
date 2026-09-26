@@ -8,6 +8,7 @@ import android.os.Environment
 import android.provider.Settings
 import androidx.core.content.FileProvider
 import androidx.core.net.toUri
+import dev.gorny.buymyway.BuildConfig
 import dev.gorny.buymyway.core.update.Updates
 import kotlinx.coroutines.delay
 import java.io.File
@@ -95,6 +96,19 @@ class ApkDownloads(context: Context) {
     internal fun destination(release: Updates.Release): File =
         File(appContext.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), safeName(release))
 
+    /**
+     * Deletes the APKs [installed] has made redundant and returns how many went. Nothing tells
+     * the app that the installer finished — the process is replaced — so the first start of the
+     * new version is where the file it came from is cleared up; without this every update left
+     * its APK behind in `Android/data`, where only „Wyczyść dane" or an uninstall reached it.
+     */
+    fun removeStale(installed: String = BuildConfig.VERSION_NAME): Int {
+        val directory = appContext.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: return 0
+        return directory.listFiles().orEmpty()
+            .filter { it.isFile && Updates.isStaleApk(it.name, installed) }
+            .count { it.delete() }
+    }
+
     /** Whether Android will let this app install an APK at all. */
     fun canInstall(): Boolean = appContext.packageManager.canRequestPackageInstalls()
 
@@ -112,7 +126,6 @@ class ApkDownloads(context: Context) {
         const val APK_TYPE = "application/vnd.android.package-archive"
         const val POLL_MS = 400L
 
-        /** `buy-my-way-v1.2.3.apk`, built here rather than taken from the document. */
-        fun safeName(release: Updates.Release) = "buy-my-way-v${release.version}.apk"
+        fun safeName(release: Updates.Release) = Updates.apkName(release.version)
     }
 }

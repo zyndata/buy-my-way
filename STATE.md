@@ -2100,6 +2100,14 @@ what was bought, which is the half of decision 106 that no build output could ha
      - **The photo goes along as a new photo** of the moved item: its bytes are read first (a
        photo not sent yet lives in the outbox under the old item and goes with it), then set
        like one from the gallery. Offline and never downloaded here, it is lost; nothing else is.
+       **Shipped broken in v0.12.0** (reported 2026-09-26: a moved item arrived without its
+       photo). `PhotoWorker` sent the photos *before* the outbox, and `/photos` accepts a photo
+       only for an item RTDB already has: the moved item is new, so its photo was refused and
+       `Photos.send` dropped it, as it drops any refused photo. The worker now flushes the items
+       first, then the photos, then their `photoAt`.
+       `PhotoSyncTest.aMovedItemTakesItsPhotoToTheOtherList` failed before the change and passes
+       after it. A photo already lost this way does not come back; take it again on the moved
+       item.
      - **The keyboard (decision 122).** The button clears the sheet's focus first, so no field
        brings its keyboard back when the dialog closes. The dialog is one more window over the
        list, so it takes the same care: „Anuluj" and „Wstecz" hand its focus back to the sheet
@@ -2154,6 +2162,13 @@ what was bought, which is the half of decision 106 that no build output could ha
        build under a closed gate is refused everywhere and, not knowing why, drops refused ops
        and shared lists from the phone (they stay in RTDB). How to edit the list:
        docs/DEPLOYMENT.md *Who may use the database*.
+     - **Live since v0.12.0 (2026-09-26).** The rules were published before the tag, as the
+       order above asks. `/access` holds two keys under `allow` with `mode: "all"`. A first try
+       stored `allow` as one string of both addresses: under `"allowlist"` that admits nobody,
+       since the rules look for one child per address. **Checked on a real phone the same day:**
+       the owner's test account was left off the list and `mode` set to `"allowlist"`. On its
+       return to the foreground the phone showed the „nie ma już dostępu" banner. Not recorded
+       as checked: letting the account back in, and the Apps Script's new version.
 
 ## Open questions
 
