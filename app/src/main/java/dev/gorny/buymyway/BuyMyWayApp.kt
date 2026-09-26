@@ -496,13 +496,16 @@ class AppContainer(context: Context) {
     }
 
     /**
-     * [PhotoWorker]'s work: the photos, then the `photoAt` changes they lead to. True when
-     * nothing is left to retry.
+     * [PhotoWorker]'s work: the items' own changes first, then the photos, then the `photoAt`
+     * changes they lead to. True when nothing is left to retry. `/photos` accepts a photo only
+     * for an item RTDB already has, and one refused is dropped: an item just made here — moved
+     * from another list with its photo (STATE.md decision 124) — must be sent before its photo.
      */
     suspend fun sendPhotosInBackground(): Boolean {
         val uid = account.syncUid() ?: return true // waits for the next sign-in
         return try {
             connection.hold {
+                sync.flush(uid)
                 photos.send(uid)
                 sync.flush(uid)
             } == 0

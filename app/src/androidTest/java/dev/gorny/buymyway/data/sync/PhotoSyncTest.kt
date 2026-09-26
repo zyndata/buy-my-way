@@ -79,8 +79,9 @@ class PhotoSyncTest {
             engine.catchUp(uid)
         }
 
-        /** What `PhotoWorker` does: the photos, then the `photoAt` they lead to. */
+        /** What `PhotoWorker` does: the items, the photos, then the `photoAt` they lead to. */
         suspend fun sendPhotos() {
+            engine.flush(uid)
             photos.send(uid)
             engine.flush(uid)
         }
@@ -322,6 +323,36 @@ class PhotoSyncTest {
         alice.repo.deleteList(listId)
         alice.sync()
         assertNull(server.node("photos/$listId"))
+    }
+
+    /**
+     * STATE.md decision 124: an item moved to another list takes its photo along. The moved item
+     * is new in RTDB, and `/photos` accepts a photo only for an item that is there, so the item
+     * has to be sent before the photo — or the photo is refused and dropped.
+     */
+    @Test
+    fun aMovedItemTakesItsPhotoToTheOtherList() = runBlocking {
+        val alice = Phone(ALICE, "Alice")
+        val bob = Phone(BOB, "Bob")
+        val listId = shared(alice, bob)
+        val milk = alice.itemId(listId, "mleko")
+        alice.now = 2_000_000
+        alice.photos.set(listId, milk, jpeg(Color.BLUE)::inputStream)
+        alice.sendPhotos()
+        val photoAt = alice.item(listId, "mleko").photoAt!!
+
+        val other = alice.repo.createList("Niedziela")
+        alice.sync()
+        alice.now = 3_000_000
+        // What `ListViewModel.moveTo` does: the bytes first, then the move, then the photo.
+        val bytes = alice.photos.bytes(PhotoRef.Remote(listId, milk, photoAt))!!
+        val moved = alice.repo.moveItemTo(milk, alice.item(listId, "mleko").content, other, removeHere = true)
+        alice.photos.set(other, moved, bytes::inputStream)
+        alice.sendPhotos()
+
+        assertNotNull("the photo is in RTDB under the moved item", server.node(RemoteWrites.photo(other, moved)))
+        assertNotNull(alice.repo.loadState(other).items.getValue(moved).photoAt)
+        assertTrue(alice.photos.pending.first().isEmpty())
     }
 
     private companion object {
