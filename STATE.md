@@ -1226,7 +1226,8 @@ Newest last. Every deviation from PLAN.md lands here **before** it is acted on.
     was last filed under. So a correction made on one phone is used on the other, and so is
     the autocomplete history. A catch-up reads the memory entries by `changedAt` since the
     last read.
-60. **No household allow-list (owner, 2026-09-22, answers open question 9).** Any Google account
+60. ~~**No household allow-list (owner, 2026-09-22, answers open question 9).**~~ Revised by
+    decision 125: an allow-list the owner can switch on in the console. Any Google account
     that signs in through our signed APK can keep its own lists. Spark cannot bill, and a
     rebuild with another key cannot sign in (decision 34). An allow-list later would change
     only the rules.
@@ -2080,6 +2081,80 @@ what was bought, which is the half of decision 106 that no build output could ha
        one out — seen on the S23 while testing.
      - **Grams step by 10** (was 100); decagrams by 10, millilitres still by 100.
 
+124. **„Przenieś do innej listy" in the edit sheet** (asked by the user, 2026-09-26). A long
+     press on an item opens the edit sheet; a button under the dates, „Przenieś do innej listy",
+     opens a small dialog over the sheet: a drop-down with the other lists this user may change
+     (`observeEditableLists`, the import's own rule; the button is not there when there is none)
+     and „Usuń z aktualnej listy", ticked at first. The confirm button says „Przenieś", or
+     „Kopiuj" when the box is unticked. A list is chosen up front only when there is one.
+     - **What moves is what the sheet holds**, edits included; unticked, the item stays with the
+       edits saved, as „Zapisz" would. „Anuluj" goes back to the sheet with its edits.
+     - `ListRepository.moveItemTo`, one transaction, one batch of ops over two lists: an
+       `item.put` on the target and, ticked, an `item.delete` here — no „Cofnij", the snackbar
+       says „Przeniesiono „…” do listy „…”" and the item can be moved back. The copy is an item to
+       buy (a bought item moved elsewhere is one to buy there). Its category keeps its id where
+       the target has it (the nine departments always), else the target's category of the same
+       name, else a new one placed last in the target's order; a category deleted here gives way
+       to the target's proposal for the name. A name the target has in „Kupione" comes back with
+       the moved content rather than being added twice (decision 36).
+     - **The photo goes along as a new photo** of the moved item: its bytes are read first (a
+       photo not sent yet lives in the outbox under the old item and goes with it), then set
+       like one from the gallery. Offline and never downloaded here, it is lost; nothing else is.
+     - **The keyboard (decision 122).** The button clears the sheet's focus first, so no field
+       brings its keyboard back when the dialog closes. The dialog is one more window over the
+       list, so it takes the same care: „Anuluj" and „Wstecz" hand its focus back to the sheet
+       before it goes (`thenClose` from the sheet's composition); „Przenieś" lets go of the
+       dialog's and the sheet's focus together and removes both only once the list's window
+       holds it. The list drop-down is a `FocusSafeDropdownMenu` under a read-only field that a
+       tap never focuses. `ScreenFlowsTest.anItemMovesOrIsCopiedToAnotherListFromTheEditSheet`
+       checks that the add bar stays unfocused. **Not yet measured on the S23**; the emulator
+       never showed the flash.
+
+### 2026-09-26 — An access gate the owner switches in the console
+
+125. **„Allow all" or an allow-list of e-mails, set in the Firebase console, never in the
+     repository or the APK (owner, 2026-09-26; revises decision 60, answers open question 9
+     again).** The owner wants to decide who may use the database without a rebuild and
+     without the addresses ever being public. So the list lives in the database itself:
+     - **`/access`**, written by hand in the console (the console is past the rules) and
+       readable and writable by nobody through the rules. `mode` is `"all"` or
+       `"allowlist"`; `allow/{key}` = `true` per address, the key being the address in lower
+       case with every `.` written as `,` — the `/emailIndex` encoding (decision 63), because
+       the rules can `toLowerCase()` and `replace()` but not hash. **No `/access` node, or no
+       `mode`, means „all"**, so publishing these rules locks nobody out; **any other `mode`
+       than `"all"` means the allow-list** (a typo closes the door rather than opening it).
+     - **Every `.read` and `.write` in `database.rules.json` gets the same gate**, ANDed after
+       `auth != null`: open, or `auth.token.email_verified === true` and the key under
+       `allow`. RTDB grants cascade and cannot be revoked lower down, so the gate has to be in
+       each grant, not once at the top. One new node, `/access/check`, is readable exactly
+       when the gate passes: that is how the app asks „am I let in?" without learning the list.
+       Six emulator tests (`the access gate`).
+     - **The Apps Script applies the same gate** (`admitted_` in `push/Code.gs`): it reads as
+       the owner, past the rules, so without it an account taken off the list could still ring
+       the phones of lists it had been a member of. It needs a **new deployment version**.
+     - **The app.** Sign-in reads `/access/check` after Firebase sign-in: refused, it signs
+       Firebase out and says „To konto Google nie ma dostępu do list w chmurze. Aby go dostać,
+       napisz do autora na GitHubie." with a „Napisz na GitHubie" action (the repository's
+       issues). An account removed later is found by `checkSession` — the check that already
+       runs when the app comes to the foreground and after any refused write — which now also
+       reads `/access/check`: refused, it records `account.denied` in DataStore and signs
+       Firebase out, and the account shows as `SessionLost(accessDenied = true)`: the lists
+       stay on the phone, unsent changes stay in the outbox, and the home screen's banner and
+       Ustawienia say why, with the GitHub button and „Zaloguj się ponownie" (which clears the
+       flag once the gate lets the account in).
+     - **Nothing is dropped because of the gate.** Before, a refusal meant „RTDB holds
+       something newer, or this list was taken away": the op was dropped and a shared list left
+       the phone. `SyncEngine.lost` now asks `sessionValid` first, and a refused `/userLists`
+       read goes through the same check, so a gate refusal throws `SessionLost` instead
+       (`SharingTest.whileTheAccessGateRefusesTheAccountNoListAndNoChangeLeavesThePhone`).
+     - **Battery:** no new background work and nothing that wakes the device; one small read
+       more per foreground start and per refused write. **No new dependency.**
+     - **Order of publishing:** rules first (with no `/access` node they change nothing), then
+       the build, then the script's new version; only then set `mode` to `"allowlist"`. An old
+       build under a closed gate is refused everywhere and, not knowing why, drops refused ops
+       and shared lists from the phone (they stay in RTDB). How to edit the list:
+       docs/DEPLOYMENT.md *Who may use the database*.
+
 ## Open questions
 
 1. ~~Where do shared lists live, now that `drive.file` cannot cross users?~~ Answered by
@@ -2142,7 +2217,8 @@ what was bought, which is the half of decision 106 that no build output could ha
    from uids listed under an `/allowed` node that only the owner can edit in the console.
    That would stop a stranger's Google account from using the quota even through our own
    APK, but every new user would need a manual step. ~~Phase 4 decides.~~ No allow-list
-   (decision 60).
+   (decision 60). Revised 2026-09-26: an optional allow-list of e-mails in `/access`, switched
+   in the console (decision 125).
 10. ~~**Can `/emailIndex` be squatted?**~~ Answered by decision 63: it is keyed by the e-mail
     itself, checked against `auth.token.email`. The original question: the rules cannot hash, so they cannot check that a key
     is the sha256 of the writer's own email (decision 57). Phase 5, which reads the index for

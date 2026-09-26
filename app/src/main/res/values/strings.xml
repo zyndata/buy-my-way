@@ -80,6 +80,17 @@
     <string name="field_category">Kategoria</string>
     <string name="field_note">Notatka</string>
 
+    <!-- Przenoszenie do innej listy -->
+    <string name="action_move_item">Przenieś do innej listy</string>
+    <string name="move_item_title">Przenieś do innej listy</string>
+    <string name="field_target_list">Lista</string>
+    <string name="move_remove_here">Usuń z aktualnej listy</string>
+    <string name="action_move">Przenieś</string>
+    <string name="action_copy">Kopiuj</string>
+    <string name="moved_item">Przeniesiono „%1$s” do listy „%2$s”</string>
+    <string name="copied_item">Skopiowano „%1$s” do listy „%2$s”</string>
+    <string name="move_failed">Nie udało się przenieść „%1$s”.</string>
+
     <!-- Zdjęcia (Phase 6) -->
     <string name="action_take_photo">Zrób zdjęcie</string>
     <string name="action_pick_photo">Wybierz z galerii</string>
@@ -152,6 +163,11 @@
     <string name="account_session_lost_generic">Sesja konta wygasła. Listy są na telefonie, a zmiany poczekają na wysłanie.</string>
     <string name="session_lost_banner">Zaloguj się ponownie jako %1$s, aby wysłać zmiany do chmury. Listy są bezpieczne na telefonie.</string>
     <string name="session_lost_banner_generic">Zaloguj się ponownie, aby wysłać zmiany do chmury. Listy są bezpieczne na telefonie.</string>
+    <string name="no_access_sign_in">To konto Google nie ma dostępu do list w chmurze. Aby go dostać, napisz do autora na GitHubie.</string>
+    <string name="no_access_banner">Konto %1$s nie ma już dostępu do list w chmurze. Listy są bezpieczne na telefonie. Aby odzyskać dostęp, napisz do autora na GitHubie.</string>
+    <string name="no_access_banner_generic">To konto nie ma już dostępu do list w chmurze. Listy są bezpieczne na telefonie. Aby odzyskać dostęp, napisz do autora na GitHubie.</string>
+    <string name="action_write_on_github">Napisz na GitHubie</string>
+    <string name="no_access_contact_url" translatable="false">https://github.com/zyndata/buy-my-way/issues</string>
     <string name="sign_in_other_account">Na tym telefonie są listy konta %1$s. Zaloguj się tym kontem albo najpierw się wyloguj.</string>
     <string name="sign_in_other_account_generic">Na tym telefonie są listy innego konta. Zaloguj się nim albo najpierw się wyloguj.</string>
     <string name="sign_in_no_account">Na telefonie nie ma konta Google. Dodaj je w ustawieniach systemu.</string>

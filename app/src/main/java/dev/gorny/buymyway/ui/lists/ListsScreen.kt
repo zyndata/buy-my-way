@@ -66,6 +66,7 @@ import dev.gorny.buymyway.ui.common.DragHandle
 import dev.gorny.buymyway.ui.common.NameDialog
 import dev.gorny.buymyway.ui.common.ReorderState
 import dev.gorny.buymyway.ui.common.moveActions
+import dev.gorny.buymyway.ui.common.openAccessRequest
 import dev.gorny.buymyway.ui.common.rememberReorderState
 import dev.gorny.buymyway.ui.common.reorderableItem
 import dev.gorny.buymyway.ui.list.watchingText
@@ -153,7 +154,7 @@ fun ListsScreen(
         ) {
             Column(Modifier.fillMaxSize()) {
                 (account as? AccountState.SessionLost)?.let { lost ->
-                    SessionLostBanner(lost.email, onSignIn = onOpenSettings)
+                    SessionLostBanner(lost.email, lost.accessDenied, onSignIn = onOpenSettings)
                 }
                 if (updates != null) UpdateBanner(updates, onUpdateIntent)
                 val lists = state.lists
@@ -274,9 +275,13 @@ private fun ListCards(
     }
 }
 
-/** Decision 23: the session is gone, the lists are not; say so and offer the way back. */
+/**
+ * Decision 23: the session is gone, the lists are not; say so and offer the way back. When the
+ * access gate refused the account (decision 60, revised), the way back goes through the author.
+ */
 @Composable
-private fun SessionLostBanner(email: String?, onSignIn: () -> Unit) {
+private fun SessionLostBanner(email: String?, accessDenied: Boolean, onSignIn: () -> Unit) {
+    val context = LocalContext.current
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
         modifier = Modifier
@@ -285,12 +290,24 @@ private fun SessionLostBanner(email: String?, onSignIn: () -> Unit) {
     ) {
         Column(Modifier.padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 4.dp)) {
             Text(
-                if (email != null) stringResource(R.string.session_lost_banner, email) else stringResource(R.string.session_lost_banner_generic),
+                when {
+                    accessDenied && email != null -> stringResource(R.string.no_access_banner, email)
+                    accessDenied -> stringResource(R.string.no_access_banner_generic)
+                    email != null -> stringResource(R.string.session_lost_banner, email)
+                    else -> stringResource(R.string.session_lost_banner_generic)
+                },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onErrorContainer,
             )
-            TextButton(onClick = onSignIn, modifier = Modifier.align(Alignment.End)) {
-                Text(stringResource(R.string.action_sign_in_again))
+            Row(Modifier.align(Alignment.End)) {
+                if (accessDenied) {
+                    TextButton(onClick = { openAccessRequest(context) }) {
+                        Text(stringResource(R.string.action_write_on_github))
+                    }
+                }
+                TextButton(onClick = onSignIn) {
+                    Text(stringResource(R.string.action_sign_in_again))
+                }
             }
         }
     }

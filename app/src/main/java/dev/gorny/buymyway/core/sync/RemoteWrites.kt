@@ -62,6 +62,12 @@ object RemoteWrites {
 
     fun emailIndex(key: String) = "emailIndex/$key"
 
+    /**
+     * Readable exactly when the access gate lets the reader in (decision 60, revised). The
+     * allow-list beside it, `/access/allow`, is readable by nobody.
+     */
+    const val ACCESS_CHECK = "access/check"
+
     /** This phone's FCM registration, written by its own user and read by nobody (decision 98). */
     fun fcmTokens(uid: String) = "fcmTokens/$uid"
 

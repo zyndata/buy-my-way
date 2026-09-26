@@ -9,6 +9,7 @@ import dev.gorny.buymyway.core.model.ListViews
 import dev.gorny.buymyway.core.model.Member
 import dev.gorny.buymyway.core.model.Ordering
 import dev.gorny.buymyway.core.model.Role
+import dev.gorny.buymyway.core.model.ShoppingList
 import dev.gorny.buymyway.core.model.SortView
 import dev.gorny.buymyway.core.parse.ItemParser
 import dev.gorny.buymyway.core.text.TextKey
@@ -462,6 +463,40 @@ class ListViewModel(
     }
 
     fun delete(itemId: String, message: String, undoLabel: String) =held.hold(viewModelScope, itemId, message, undoLabel)
+
+    // --- Move to another list (STATE.md decision 124) -------------------------------------
+
+    /** The lists an item can be moved to: every other one this user may change. */
+    val moveTargets: StateFlow<List<ShoppingList>> = repo.observeEditableLists()
+        .map { lists -> lists.map { it.list }.filter { it.id != listId } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), emptyList())
+
+    /** What a move did, for the snackbar: null [listName] when it could not be made. */
+    data class Moved(val name: String, val listName: String?, val removed: Boolean)
+
+    private val movedItems = Channel<Moved>(Channel.BUFFERED)
+    val moved: Flow<Moved> = movedItems.receiveAsFlow()
+
+    /**
+     * „Przenieś do innej listy": [content] as the edit sheet holds it goes to [target], and with
+     * [removeHere] leaves this list. A photo goes along as a new photo of the moved item; its
+     * bytes are read first, since a photo still waiting to be sent goes with the item it was for.
+     * Made in the app's scope, so leaving the screen does not lose it.
+     */
+    fun moveTo(itemId: String, content: ItemContent, target: ShoppingList, removeHere: Boolean) {
+        if (!state.value.canEdit) return
+        val ref = state.value.detail?.let { detail ->
+            (detail.sections.flatMap { it.items } + detail.bought).firstOrNull { it.id == itemId }
+        }?.let { photoOf(it, pendingPhotos.value) }
+        commitScope.launch {
+            val bytes = ref?.let { photos?.let { p -> runCatching { p.bytes(it) }.getOrNull() } }
+            val movedId = runCatching { repo.moveItemTo(itemId, content, target.id, removeHere) }.getOrNull()
+            movedItems.trySend(Moved(content.name.trim(), target.name.takeIf { movedId != null }, removeHere))
+            if (movedId != null && bytes != null) {
+                runCatching { photos?.set(target.id, movedId) { bytes.inputStream() } }
+            }
+        }
+    }
 
     // --- Photos (Phase 6, decision 71) ----------------------------------------------------
 

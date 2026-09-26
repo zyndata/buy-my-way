@@ -5,8 +5,9 @@
 A shared shopping list for Android. Keep any number of lists, private or shared with the people
 you shop with; when one of you ticks something off at the shelf, the other sees it crossed out
 within a second, and a closed app gets a notification. Items are grouped by the part of the shop
-they are bought in, can carry a note and a photo, can be dictated, and a whole week's list can be
-brought in from [Eat My Way](https://github.com/zyndata/eat-my-way) with one share.
+they are bought in, can carry a note and a photo, can be dictated or moved to another list, and a
+whole week's list can be brought in from [Eat My Way](https://github.com/zyndata/eat-my-way) with
+one share.
 
 The interface is in **Polish**. The code, comments and documentation are in English.
 
@@ -55,7 +56,9 @@ Each release carries two files:
 - **Shared lists live in a Firebase project, not on a server of ours.** When you sign in, your
   lists and their photos go to a Firebase Realtime Database that only the list's members can
   read, enforced by the database's rules. The app asks Google for your name and email and
-  nothing else: no access to your Drive, your contacts or your location.
+  nothing else: no access to your Drive, your contacts or your location. The project's owner
+  can limit sign-in to a private list of accounts; an account left off it is told so, keeps
+  its lists on the phone, and can ask for access through this repository's issues.
 - **Live, without draining the battery.** Another person's screen moves in under a second while
   the list is open. When the app is closed, a push message wakes it — no background service,
   no polling.

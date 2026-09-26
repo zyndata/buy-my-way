@@ -12,7 +12,10 @@ import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsNotFocused
+import androidx.compose.ui.test.assertIsOff
+import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.assertTextEquals
+import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createComposeRule
@@ -21,6 +24,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performImeAction
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
@@ -257,6 +261,59 @@ class ScreenFlowsTest {
         compose.onNodeWithTag("name:ziemniaki").performClick()
         waitFor { exists(hasTestTag("quantityMenu")) }
         compose.onNodeWithTag("addField").assertIsNotFocused()
+    }
+
+    /**
+     * STATE.md decision 124: „Przenieś do innej listy" in the edit sheet. „Anuluj" goes back to
+     * the sheet with its edits; „Przenieś" (ticked at first) moves what the sheet holds and closes
+     * both; unticked it copies, and the item stays. The add bar never gets its focus back.
+     */
+    @Test
+    fun anItemMovesOrIsCopiedToAnotherListFromTheEditSheet() {
+        val listId = runBlocking { repo.createList("Sobota") }
+        val other = runBlocking { repo.createList("Niedziela") }
+        runBlocking {
+            repo.addItem(listId, "ziemniaki", quantity = 2.0, unit = "kg")
+            repo.addItem(listId, "chleb")
+        }
+        showList(listId)
+
+        compose.onNodeWithTag("addField").performClick()
+        compose.onNodeWithTag("name:ziemniaki").performSemanticsAction(SemanticsActions.OnLongClick)
+        waitFor { exists(hasTestTag("editSheet")) }
+        compose.onNode(hasSetTextAction() and hasText("ziemniaki")).performTextReplacement("młode ziemniaki")
+        compose.onNodeWithTag("moveItem").performScrollTo().performClick()
+        waitFor { exists(hasTestTag("moveDialog")) }
+        // The only other list is chosen already, and „Usuń z aktualnej listy" is ticked.
+        compose.onNodeWithTag("moveRemoveHere").assertIsOn()
+        compose.onNodeWithText(text(R.string.action_cancel)).performClick()
+        waitFor { !exists(hasTestTag("moveDialog")) }
+        compose.onNodeWithTag("editSheet").assertIsDisplayed()
+        compose.onNodeWithText("młode ziemniaki").assertIsDisplayed()
+
+        compose.onNodeWithTag("moveItem").performScrollTo().performClick()
+        waitFor { exists(hasTestTag("moveDialog")) }
+        compose.onNodeWithTag("moveTarget").performClick()
+        compose.onNodeWithTag("moveTo:Niedziela").performClick()
+        compose.onNodeWithTag("confirmMove").assertTextEquals(text(R.string.action_move)).performClick()
+        waitFor { !exists(hasTestTag("editSheet")) && !exists(hasTestTag("moveDialog")) }
+        waitFor { !exists(hasTestTag("item:ziemniaki")) }
+        compose.onNodeWithTag("addField").assertIsNotFocused()
+        val moved = { runBlocking { repo.observeList(other).first()!!.sections.flatMap { it.items } } }
+        waitFor { moved().isNotEmpty() }
+        assertEquals(listOf("młode ziemniaki" to 2.0), moved().map { it.name to it.quantity })
+        waitFor { exists(hasText(text(R.string.moved_item, "młode ziemniaki", "Niedziela"))) }
+
+        // Unticked: a copy, and the bread stays here.
+        compose.onNodeWithTag("name:chleb").performSemanticsAction(SemanticsActions.OnLongClick)
+        waitFor { exists(hasTestTag("editSheet")) }
+        compose.onNodeWithTag("moveItem").performScrollTo().performClick()
+        waitFor { exists(hasTestTag("moveDialog")) }
+        compose.onNodeWithTag("moveRemoveHere").performClick().assertIsOff()
+        compose.onNodeWithTag("confirmMove").assertTextEquals(text(R.string.action_copy)).performClick()
+        waitFor { !exists(hasTestTag("editSheet")) }
+        waitFor { moved().any { it.name == "chleb" } }
+        compose.onNodeWithTag("item:chleb").assertIsDisplayed()
     }
 
     @Test

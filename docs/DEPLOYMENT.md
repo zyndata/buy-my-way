@@ -84,6 +84,41 @@ them every product would be refused and, because the preferences are pushed in o
 push would stop there. Nothing else is affected: an older build simply never reads or writes
 that key, and it holds no list data — only the user's own words and their departments.
 
+## Who may use the database (STATE.md decision 125)
+
+Every rule grant passes through one gate, set by hand on the
+[data page](https://console.firebase.google.com/project/buy-my-way-c3949/database/buy-my-way-c3949-default-rtdb/data)
+under `/access`. The rules let nobody read or write that node, so the addresses on it are seen
+only by the project's owners — never by the app, never in this repository. Changing it takes
+effect on the next read or write; no build, no release.
+
+```
+access
+├── mode: "allowlist"          ← "all" = every Google account; anything else = the list only
+└── allow
+    ├── jan,kowalski@gmail,com: true
+    └── anna@example,pl: true
+```
+
+- **No `/access` node (or no `mode`) is the same as `"all"`**, which is how it was before.
+- **A key is the address in lower case with every `.` replaced by `,`**:
+  `Jan.Kowalski@gmail.com` → `jan,kowalski@gmail,com`. RTDB keys cannot hold a dot. The value
+  just has to be there; use `true`.
+- **Only verified addresses count** — every Google account's address is.
+- **To let someone in:** add their key under `allow`. They sign in (or tap „Zaloguj się
+  ponownie" if they were refused before). **To take someone out:** delete their key. Their
+  phone finds out the next time the app comes to the foreground, keeps its lists and its
+  unsent changes, and says it has no access, with a button to the repository's issues.
+- **To open up again:** set `mode` to `"all"` — the list can stay for next time.
+- The Apps Script applies the same gate (it reads as the owner, past the rules), so a new
+  deployment version is needed once after `push/Code.gs` gained it.
+
+**Order, the first time:** publish the rules (with no `/access` node they change nothing),
+install the build that knows about the gate on the phones that are to keep access, deploy the
+script's new version, then set `mode`. A build from before the gate, refused, does not know
+why: it treats every refusal as a list taken away, dropping its shared lists and unsent
+changes from the phone (not from the database).
+
 ## Invite links (Phase 5)
 
 A list is shared by `https://eatmyway.gorny.dev/bmw/i/<token>` (STATE.md decisions 35 and 63).

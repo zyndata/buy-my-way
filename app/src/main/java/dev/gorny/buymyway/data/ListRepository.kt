@@ -335,6 +335,91 @@ class ListRepository(
     }
 
     /**
+     * „Przenieś do innej listy" (STATE.md decision 124): [content], as the edit sheet holds it,
+     * goes to [targetListId] as an item to buy, and — with [removeHere] — the item leaves its own
+     * list in the same step; without it the item stays, with the sheet's edits saved. The
+     * category keeps its id where the target has it (the nine departments always), its name
+     * otherwise, and is created there if the target has no such name. A name the target has in
+     * „Kupione" comes back with the moved content instead of being added twice (decision 36).
+     * Returns the id of the item on the target list. The photo is not the repository's to copy.
+     */
+    suspend fun moveItemTo(itemId: String, content: ItemContent, targetListId: String, removeHere: Boolean): String =
+        db.withTransaction {
+            val item = liveItem(itemId)
+            require(item.listId != targetListId) { "an item is moved to another list" }
+            val target = liveList(targetListId)
+            val targetItems = db.items().getAllForList(targetListId).map { it.toDomain() }
+            val name = cleanName(content.name, TextLimits.ITEM_NAME)
+            val at = nextAt()
+            val uid = actor()
+            val ops = mutableListOf<Op>()
+
+            val category = categoryInTarget(item.listId, content.categoryId, target, name, at, ops)
+            val cleaned = content.copy(
+                name = name,
+                unit = cleanOptional(content.unit, TextLimits.UNIT),
+                note = cleanOptional(content.note, TextLimits.NOTE),
+                categoryId = category,
+            )
+            val revived = ListViews.revivable(target, targetItems, name)
+            val movedId = if (revived != null) {
+                val sortKey = if (revived.categoryId == category) revived.sortKey else ListViews.nextSortKey(target, targetItems, category)
+                ops += Op.ItemPut(
+                    newId(), targetListId, uid, at, revived.id,
+                    cleaned.copy(photoAt = revived.photoAt, sortKey = sortKey, manualKey = revived.manualKey),
+                )
+                ops += Op.ItemCheck(newId(), targetListId, uid, at, revived.id, checked = false)
+                revived.id
+            } else {
+                val newItemId = newId()
+                val placed = targetItems.filter { Merge.isVisible(it, target) }
+                ops += Op.ItemPut(
+                    newId(), targetListId, uid, at, newItemId,
+                    cleaned.copy(
+                        photoAt = null,
+                        sortKey = ListViews.nextSortKey(target, targetItems, category),
+                        manualKey = if (placed.any { it.manualKey != null }) ListViews.nextManualKey(placed) else null,
+                    ),
+                )
+                newItemId
+            }
+
+            if (removeHere) {
+                ops += Op.ItemDelete(newId(), item.listId, uid, at, itemId)
+                commit(ops)
+            } else {
+                commit(ops)
+                updateItem(itemId, content)
+            }
+            remember(name, category, at)
+            movedId
+        }
+
+    /**
+     * The category [categoryId] of list [fromListId] as it is on [target]: the same id where the
+     * target has it, else the target's category of that name, else a new one made by [ops].
+     * A category that is gone here gives way to the one the target would propose for [name].
+     */
+    private suspend fun categoryInTarget(
+        fromListId: String,
+        categoryId: String,
+        target: ShoppingList,
+        name: String,
+        at: Long,
+        ops: MutableList<Op>,
+    ): String {
+        val onTarget = db.categories().getAllForList(target.id).map { it.toDomain() }.filter { Merge.isVisible(it) }
+        if (onTarget.any { it.id == categoryId }) return categoryId
+        val here = db.categories().get(fromListId, categoryId)?.toDomain()?.takeIf { Merge.isVisible(it) }
+            ?: return proposeCategory(target.id, name)
+        onTarget.firstOrNull { TextKey.fold(it.name) == TextKey.fold(here.name) }?.let { return it.id }
+        val made = newId()
+        ops += Op.CategoryPut(newId(), target.id, actor(), at, made, here.name, builtin = false)
+        ops += Op.ListPut(newId(), target.id, actor(), at, target.name, target.categoryOrder + made)
+        return made
+    }
+
+    /**
      * The row's quick „−/+" (decisions 121, 123): only the quantity and its unit change, read
      * against the item as it is now, so a name someone else just edited is not put back.
      */

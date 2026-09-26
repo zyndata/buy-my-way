@@ -3,6 +3,7 @@
  *
  * POST {idToken, listId, kind, added, checked, changed}
  *   → the Firebase ID token is verified with Auth REST
+ *   → the caller must pass the access gate (`/access`, STATE.md decision 60, revised)
  *   → the caller must be a member of that list
  *   → one FCM v1 **data** message per other member's device token.
  *
@@ -52,8 +53,17 @@ function handle_(e) {
     return reply_({ ok: false, error: 'misconfigured', detail: 'FIREBASE_DB_URL script property is not set' });
   }
 
-  var uid = verifyIdToken_(body.idToken, props.getProperty('FIREBASE_API_KEY'));
-  if (!uid) return reply_({ ok: false, error: 'unauthenticated' });
+  var caller = verifyIdToken_(body.idToken, props.getProperty('FIREBASE_API_KEY'));
+  if (!caller) return reply_({ ok: false, error: 'unauthenticated' });
+  var uid = caller.uid;
+
+  // The same gate as the rules. This script reads as the owner, past the rules, so it must
+  // apply it itself, or an account taken off the list could still ring its old lists' phones.
+  var access = dbGet_(props, '/access');
+  if (access === DB_UNREACHABLE) {
+    return reply_({ ok: false, error: 'misconfigured', detail: 'cannot read the database: check the firebase.database scope and FIREBASE_DB_URL' });
+  }
+  if (!admitted_(access, caller)) return reply_({ ok: false, error: 'forbidden' });
 
   var listId = String(body.listId || '');
   if (!/^[A-Za-z0-9_-]{1,64}$/.test(listId)) return reply_({ ok: false, error: 'bad request' });
@@ -243,7 +253,7 @@ function sendTo_(props, token, data) {
 
 /**
  * Firebase Auth REST accounts:lookup rejects an expired, forged or foreign-project token, so a
- * 200 with a user is the verification. Returns the uid or null.
+ * 200 with a user is the verification. Returns {uid, email, emailVerified} or null.
  */
 function verifyIdToken_(idToken, apiKey) {
   if (!idToken || !apiKey) return null;
@@ -258,7 +268,20 @@ function verifyIdToken_(idToken, apiKey) {
   );
   if (res.getResponseCode() !== 200) return null;
   var users = JSON.parse(res.getContentText()).users;
-  return users && users.length ? users[0].localId : null;
+  if (!users || !users.length) return null;
+  return { uid: users[0].localId, email: users[0].email || '', emailVerified: users[0].emailVerified === true };
+}
+
+/**
+ * The access gate of database.rules.json, word for word: no node or mode 'all' lets everyone
+ * in; any other mode admits only a verified address whose key (lower case, `.` as `,`) is
+ * under `allow`.
+ */
+function admitted_(access, caller) {
+  if (!access || access.mode === undefined || access.mode === 'all') return true;
+  if (!caller.emailVerified || !caller.email) return false;
+  var key = caller.email.toLowerCase().split('.').join(',');
+  return !!(access.allow && access.allow[key] !== undefined && access.allow[key] !== null);
 }
 
 /**

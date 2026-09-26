@@ -57,6 +57,9 @@ class SharingTest {
         val listSort = ListSortPreferences(store) { now }
         val remote = server.client(uid)
         val lost = mutableListOf<String>()
+
+        /** What `AccountRepository.checkSession` would say: false once the access gate refuses. */
+        var sessionOk = true
         val repo = ListRepository(
             db = db,
             categoryOrder = CategoryOrderPreferences(store) { now },
@@ -77,6 +80,7 @@ class SharingTest {
                 listSort,
                 timeoutMs = TIMEOUT_MS,
             ),
+            sessionValid = { sessionOk },
             clock = { now },
             timeoutMs = TIMEOUT_MS,
             onListLost = { lost += it },
@@ -254,6 +258,34 @@ class SharingTest {
         alice.sharing.makePrivate(listId)
         assertFalse(alice.state(listId).list!!.shared)
         assertNull(server.node("lists/$listId/members"))
+    }
+
+    @Test
+    fun whileTheAccessGateRefusesTheAccountNoListAndNoChangeLeavesThePhone() = runBlocking {
+        val alice = Phone(ALICE, "Alice", "alice@example.com")
+        val bob = Phone(BOB, "Bob", "bob@example.com")
+        val listId = alice.aList()
+        bob.join(alice, listId)
+        alice.sync()
+        bob.now = 2_000_000
+        bob.repo.setChecked(bob.itemId(listId, "mleko"), true)
+
+        // Every read and write of Bob's is refused from now on, and the session check says why
+        // (decision 60, revised). Taking him off the list stands in for the refusal.
+        val bobAsMember = alice.repo.observeMembers(listId).first().first { it.uid == BOB }
+        alice.sharing.remove(listId, bobAsMember)
+        bob.sessionOk = false
+        assertTrue(runCatching { bob.engine.flush(BOB) }.exceptionOrNull() is SyncEngine.SessionLost)
+        runCatching { bob.engine.catchUp(BOB) }
+        assertEquals(1, bob.db.outbox().count())
+        assertEquals(true, bob.visible(listId)["mleko"])
+        assertTrue(bob.lost.isEmpty())
+
+        // Let back in, the refusal is about the list again, and it goes as it always did.
+        bob.sessionOk = true
+        bob.sync()
+        assertNull(bob.repo.loadState(listId).list)
+        assertEquals(listOf("Sobota"), bob.lost)
     }
 
     @Test
