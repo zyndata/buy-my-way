@@ -1,6 +1,7 @@
 package dev.gorny.buymyway.core.update
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -108,5 +109,39 @@ class UpdatesTest {
         for (document in listOf("", "   ", "not json", "[]", "null", "{}", """{"tag_name": null}""", "{\"tag_name\": \"v1.1.0\"}")) {
             assertNull(document, Updates.offer(document, installed = "1.0.0"))
         }
+    }
+
+    @Test
+    fun `the APK of the running version and of older ones is stale`() {
+        assertTrue(Updates.isStaleApk("buy-my-way-v1.2.0.apk", installed = "1.2.0"))
+        assertTrue(Updates.isStaleApk("buy-my-way-v1.1.9.apk", installed = "1.2.0"))
+        assertTrue(Updates.isStaleApk("buy-my-way-v0.10.0.apk", installed = "1.2.0"))
+        assertTrue(Updates.isStaleApk(Updates.apkName(Updates.Version(1, 2, 0)), installed = "1.2.0"))
+    }
+
+    @Test
+    fun `an APK newer than the running version is kept, as it may not be installed yet`() {
+        assertFalse(Updates.isStaleApk("buy-my-way-v1.2.1.apk", installed = "1.2.0"))
+        assertFalse(Updates.isStaleApk("buy-my-way-v1.10.0.apk", installed = "1.9.0"))
+    }
+
+    @Test
+    fun `only names the app gives a download are ever stale`() {
+        for (name in listOf(
+            "buy-my-way-v1.0.0.apk.tmp",
+            ".pending-1700000000-buy-my-way-v1.0.0.apk",
+            "buy-my-way-v1.0.0-1.apk",
+            "something-else-v1.0.0.apk",
+            "buy-my-way-1.0.0.apk",
+            "notes.txt",
+        )) {
+            assertFalse(name, Updates.isStaleApk(name, installed = "2.0.0"))
+        }
+    }
+
+    @Test
+    fun `a development build judges nothing stale`() {
+        assertFalse(Updates.isStaleApk("buy-my-way-v0.1.0.apk", installed = "0.0.0-dev"))
+        assertFalse(Updates.isStaleApk("buy-my-way-v0.1.0.apk", installed = null))
     }
 }

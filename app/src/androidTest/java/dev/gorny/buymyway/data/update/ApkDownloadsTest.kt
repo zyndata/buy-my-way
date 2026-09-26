@@ -7,8 +7,10 @@ import dev.gorny.buymyway.core.update.Updates
 import org.junit.After
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.File
@@ -36,10 +38,29 @@ class ApkDownloadsTest {
     )
     private val outside = File(context.cacheDir, "not-an-update.apk")
 
+    private val older = downloads.destination(release.copy(version = Updates.Version(1, 0, 0)))
+    private val unfinished = File(older.parentFile, ".pending-1-buy-my-way-v1.0.0.apk")
+
     @After
     fun clean() {
         downloads.destination(release).delete()
         outside.delete()
+        older.delete()
+        unfinished.delete()
+    }
+
+    @Test
+    fun theApkThisVersionWasInstalledFromIsDeletedAndANewerOneIsKept() {
+        older.parentFile?.mkdirs()
+        older.writeBytes(ByteArray(8))
+        unfinished.writeBytes(ByteArray(8))
+        val newer = downloads.destination(release)
+        newer.writeBytes(ByteArray(8))
+
+        assertEquals(1, downloads.removeStale(installed = "1.0.0"))
+        assertFalse(older.exists())
+        assertTrue("a transfer in progress is not ours to delete", unfinished.exists())
+        assertTrue("an APK not installed yet stays", newer.exists())
     }
 
     @Test

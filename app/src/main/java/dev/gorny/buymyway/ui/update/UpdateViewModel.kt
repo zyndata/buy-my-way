@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import dev.gorny.buymyway.core.update.Updates
 import dev.gorny.buymyway.data.update.ApkDownloads
 import dev.gorny.buymyway.data.update.AppUpdates
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -46,6 +47,11 @@ class UpdateViewModel(
 
     private val checkingState = MutableStateFlow(false)
     val checking: StateFlow<Boolean> = checkingState.asStateFlow()
+
+    init {
+        // Once per start: the APK this version was installed from has done its job.
+        downloads?.let { viewModelScope.launch(Dispatchers.IO) { it.removeStale() } }
+    }
 
     /** Listy was shown. At most one call a day reaches GitHub (STATE.md decision 108). */
     fun onScreenShown() {

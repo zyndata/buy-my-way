@@ -40,6 +40,25 @@ object Updates {
     fun version(text: String?): Version? = text?.trim()?.let { VERSION.matchEntire(it) }?.destructured
         ?.let { (major, minor, patch) -> Version(major.toInt(), minor.toInt(), patch.toInt()) }
 
+    /** `buy-my-way-v1.2.3.apk`: the one name a downloaded APK is given, built here rather than taken from the document. */
+    fun apkName(version: Version): String = "buy-my-way-v$version.apk"
+
+    private val APK_NAME = Regex("""^buy-my-way-(v\d{1,4}\.\d{1,4}\.\d{1,4})\.apk$""")
+
+    /**
+     * Whether a downloaded file called [name] can go: an APK of [installed] or older is either
+     * what is running now or something it replaced. Only names [apkName] makes are ever judged
+     * stale — whatever else is in the directory (a transfer `DownloadManager` has not finished)
+     * is left alone — and an APK newer than [installed] stays too: it was fetched and never
+     * installed, and „Pobierz" will fetch it again anyway. An unparseable [installed]
+     * („0.0.0-dev") judges nothing stale.
+     */
+    fun isStaleApk(name: String, installed: String?): Boolean {
+        val current = version(installed) ?: return false
+        val apk = APK_NAME.matchEntire(name)?.groupValues?.get(1)?.let(::version) ?: return false
+        return apk <= current
+    }
+
     /**
      * The release to offer, or null when there is nothing to offer: the document did not
      * parse, it carries no `X.Y.Z` tag, it has no APK attached, or [installed] is already
