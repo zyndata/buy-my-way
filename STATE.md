@@ -2170,6 +2170,41 @@ what was bought, which is the half of decision 106 that no build output could ha
        return to the foreground the phone showed the „nie ma już dostępu" banner. Not recorded
        as checked: letting the account back in, and the Apps Script's new version.
 
+### 2026-11-21 — Dragging an item into another department
+
+126. **An item can be dragged past a department heading, and then takes that department's
+     category (owner, 2026-11-21; revises PLAN.md Phase 3 „reorder within a category" and
+     extends decisions 45 and 49).** The owner found that a drag stopped at the edge of its
+     department and wanted one gesture for both: reorder within the department, or move the
+     item to another one. In the „Działy" view the rows a drag passes over are now every
+     heading and every item, not one section's items (`core/model/SectionDrag`, pure, 8 JVM
+     tests):
+     - The row lands in the section under the nearest heading above it. Dragged down past the
+       next heading, it is first in that department; dragged up past its own heading, it is
+       last in the one above. Dropped on an item of another department, it takes that item's
+       place. Nothing goes above the first heading, nothing onto an item still lingering
+       struck through. TalkBack's „Przesuń wyżej / niżej" steps one row the same way, so it
+       crosses a heading too.
+     - While the finger is down the item is shown in its new department at once (the view
+       model's `movedKeys` now holds a category as well as a key), and a department the drag
+       emptied keeps its heading until the drop is in Room, so the item can be dragged back.
+     - **A drop is still one `item.put`**: the new `sortKey` and, only when the department
+       changed, the new `categoryId` (`ListRepository.moveItem`). A department change is
+       remembered for the name in the device's history, exactly as the edit sheet's choice is,
+       so the next „Mleko owsiane" added lands where it was dragged. An item whose own
+       category was deleted (shown under the fallback) keeps its id when dragged within that
+       section.
+     - „A–Z" and „Ręcznie" are flat and have no headings, so nothing changes there.
+     - No new dependency, no new background work, nothing new that wakes the device.
+     - Verified: 224 JVM tests (8 new in `SectionDragTest`), lint, and on the Windows machine's
+       API 35 emulator `ListRepositoryTest` (new: a drag into another department is one op and
+       is remembered) and `ScreenFlowsTest` (new: „Przesuń wyżej" past the Nabiał heading
+       moves „mleko" to Warzywa). A full emulator run had one failure, the „Ręcznie" test,
+       caused by the emulator's `system_server` aborting in the middle; it passed on rerun.
+       A drag on the emulator (`adb input swipe`) took „mleko" up past the Nabiał heading into
+       Warzywa and back down into Nabiał, and the owner checked it there by hand
+       („działa"). **Not verified:** a finger drag on a real phone.
+
 ## Open questions
 
 1. ~~Where do shared lists live, now that `drive.file` cannot cross users?~~ Answered by

@@ -7,8 +7,8 @@ import dev.gorny.buymyway.core.model.ItemContent
 import dev.gorny.buymyway.core.model.ListDetail
 import dev.gorny.buymyway.core.model.ListViews
 import dev.gorny.buymyway.core.model.Member
-import dev.gorny.buymyway.core.model.Ordering
 import dev.gorny.buymyway.core.model.Role
+import dev.gorny.buymyway.core.model.SectionDrag
 import dev.gorny.buymyway.core.model.ShoppingList
 import dev.gorny.buymyway.core.model.SortView
 import dev.gorny.buymyway.core.parse.ItemParser
@@ -141,8 +141,14 @@ class ListViewModel(
     /** Items someone else just ticked, held in place with their initial (PLAN.md Phase 5, task 5). */
     private val remoteLingering = MutableStateFlow<Map<String, String>>(emptyMap())
 
-    /** Keys of items being dragged (`sortKey`, or `manualKey` in „Ręcznie"), shown before Room has them. */
-    private val movedKeys = MutableStateFlow<Map<String, Double>>(emptyMap())
+    /**
+     * Where dragged items landed (their `sortKey`, or `manualKey` in „Ręcznie", and their
+     * section's category), shown before Room has them.
+     */
+    private val movedKeys = MutableStateFlow<Map<String, SectionDrag.Landing>>(emptyMap())
+
+    /** The category each item being dragged started the drag in (decision 126). */
+    private val dragOrigins = mutableMapOf<String, String?>()
 
     /** „Ręcznie" positions a drag writes for items not placed yet (decision 67). */
     private var pendingPlacements: Map<String, Double> = emptyMap()
@@ -559,37 +565,47 @@ class ListViewModel(
         }
     }
 
-    // --- Reorder: within a category, or anywhere in „Ręcznie" -----------------------------
+    // --- Reorder: within a category or into another one, or anywhere in „Ręcznie" ----------
 
-    /** Whether [toId] is an item to buy in the same section as [fromId]: the only valid drop. */
-    fun canMove(fromId: String, toId: String): Boolean {
+    /** Whether [toKey] (an item to buy, or a heading) is a place [fromId] may take (decision 126). */
+    fun canMove(fromId: String, toKey: String): Boolean {
         val sections = state.value.detail?.sections ?: return false
-        return sections.any { section -> section.items.any { it.id == fromId } && section.items.any { it.id == toId && !it.checked } }
+        return SectionDrag.canMove(sections, fromId, toKey)
     }
 
-    fun move(fromId: String, toId: String) {
+    fun move(fromId: String, toKey: String) {
         val detail = state.value.detail ?: return
-        val section = detail.sections.firstOrNull { s -> s.items.any { it.id == fromId } } ?: return
         val manual = detail.view == SortView.MANUAL
-        if (manual && pendingPlacements.isEmpty()) pendingPlacements = ListViews.placements(section.items)
-        val ids = section.items.map { it.id }
-        val reordered = Ordering.move(section.items, ids.indexOf(fromId), ids.indexOf(toId))
-        val index = reordered.indexOfFirst { it.id == fromId }
-        val keys = reordered.map { if (manual) it.manualKey ?: pendingPlacements[it.id] ?: 0.0 else it.sortKey }
-        movedKeys.update { it + (fromId to Ordering.sortKeyAt(keys, index)) }
+        if (manual && pendingPlacements.isEmpty()) {
+            pendingPlacements = ListViews.placements(detail.sections.firstOrNull()?.items.orEmpty())
+        }
+        if (fromId !in dragOrigins) dragOrigins[fromId] = SectionDrag.sectionOf(detail.sections, fromId)
+        val landing = SectionDrag.land(detail.sections, fromId, toKey) {
+            if (manual) it.manualKey ?: pendingPlacements[it.id] ?: 0.0 else it.sortKey
+        } ?: return
+        movedKeys.update { it + (fromId to landing) }
     }
 
-    /** TalkBack's „Przesuń wyżej / niżej". */
+    /** Whether TalkBack's „Przesuń wyżej" ([delta] -1) or „niżej" (+1) can move [itemId]. */
+    fun canMoveBy(itemId: String, delta: Int): Boolean =
+        state.value.detail?.sections?.let { SectionDrag.neighbour(it, itemId, delta) } != null
+
+    /** TalkBack's „Przesuń wyżej / niżej": one row, so past a heading into the next department. */
     fun moveBy(itemId: String, delta: Int) {
-        val items = state.value.detail?.sections?.firstOrNull { s -> s.items.any { it.id == itemId } }?.items ?: return
-        val target = items.getOrNull(items.indexOfFirst { it.id == itemId } + delta) ?: return
-        move(itemId, target.id)
+        val sections = state.value.detail?.sections ?: return
+        val target = SectionDrag.neighbour(sections, itemId, delta) ?: return
+        move(itemId, target)
         drop(itemId)
     }
 
     fun drop(itemId: String) {
-        val key = movedKeys.value[itemId] ?: return
+        val origin = dragOrigins.remove(itemId)
+        val landing = movedKeys.value[itemId] ?: return
+        val key = landing.key
         val manual = state.value.detail?.view == SortView.MANUAL
+        // Only a drop in another department changes the category (an item of a deleted category,
+        // shown under the fallback, keeps its own id while it is dragged within it).
+        val category = landing.categoryId?.takeIf { !manual && it != origin }
         val placements = pendingPlacements - itemId
         pendingPlacements = emptyMap()
         viewModelScope.launch {
@@ -598,14 +614,16 @@ class ListViewModel(
                     repo.placeManually(listId, placements)
                     repo.moveItemManually(itemId, key)
                 } else {
-                    repo.moveItem(itemId, key)
+                    repo.moveItem(itemId, key, category)
                 }
             }
             // Keep showing the new place until Room has it, so the row does not jump back.
             withTimeoutOrNull(SETTLE_MS) {
-                repo.observeItem(itemId).first { it == null || (if (manual) it.manualKey else it.sortKey) == key }
+                repo.observeItem(itemId).first {
+                    it == null || if (manual) it.manualKey == key else it.sortKey == key && (category == null || it.categoryId == category)
+                }
             }
-            movedKeys.update { it - itemId }
+            movedKeys.update { moved -> if (moved[itemId] == landing) moved - itemId else moved }
         }
     }
 
@@ -657,13 +675,16 @@ class ListViewModel(
         return displayName(member).firstOrNull()?.uppercaseChar()?.toString() ?: "?"
     }
 
-    private fun present(detail: ListDetail, hidden: Set<String>, moved: Map<String, Double>): ListDetail {
+    private fun present(detail: ListDetail, hidden: Set<String>, moved: Map<String, SectionDrag.Landing>): ListDetail {
         if (hidden.isEmpty() && moved.isEmpty()) return detail
         val manual = detail.view == SortView.MANUAL
-        val sections = detail.sections.mapNotNull { section ->
+        val kept = detail.sections
+            .map { section -> section.copy(items = section.items.filterNot { it.id in hidden }) }
+            .filter { it.items.isNotEmpty() }
+        val categories = moved.mapNotNull { (id, landing) -> landing.categoryId?.let { id to it } }.toMap()
+        val sections = SectionDrag.regroup(kept, if (manual) emptyMap() else categories).map { section ->
             val items = section.items
-                .filterNot { it.id in hidden }
-                .map { item -> moved[item.id]?.let { if (manual) item.copy(manualKey = it) else item.copy(sortKey = it) } ?: item }
+                .map { item -> moved[item.id]?.key?.let { if (manual) item.copy(manualKey = it) else item.copy(sortKey = it) } ?: item }
                 .let { list ->
                     if (manual) {
                         list.sortedWith(compareBy<Item>({ it.manualKey ?: pendingPlacements[it.id] ?: Double.MAX_VALUE }))
@@ -671,7 +692,7 @@ class ListViewModel(
                         list.sortedWith(compareBy<Item>({ it.sortKey }, { it.createdAt }, { it.id }))
                     }
                 }
-            if (items.isEmpty()) null else section.copy(items = items)
+            section.copy(items = items)
         }
         return detail.copy(sections = sections, bought = detail.bought.filterNot { it.id in hidden })
     }

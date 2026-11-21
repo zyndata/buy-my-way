@@ -104,6 +104,27 @@ class ListRepositoryTest {
     }
 
     @Test
+    fun aDragIntoAnotherDepartmentChangesTheCategoryAndIsRemembered() = runTest {
+        val listId = repo.createList("Sobota")
+        val first = repo.addItem(listId, "Mleko owsiane").itemId
+        val opsBefore = outboxOps().size
+
+        repo.moveItem(first, sortKey = 0.5)
+        assertEquals("nabial", repo.observeItem(first).first()!!.categoryId)
+
+        repo.moveItem(first, sortKey = 0.25, categoryId = "napoje")
+        val moved = repo.observeItem(first).first()!!
+        assertEquals("napoje", moved.categoryId)
+        assertEquals(0.25, moved.sortKey, 0.0)
+        assertEquals(opsBefore + 2, outboxOps().size) // one op per drop, category and key together
+        assertRoomIsTheMergeOfTheOutbox(listId)
+
+        repo.deleteItem(first)
+        val second = repo.addItem(listId, "Mleko owsiane").itemId
+        assertEquals("napoje", repo.observeItem(second).first()!!.categoryId)
+    }
+
+    @Test
     fun addingANameFromKupioneBringsItBack() = runTest {
         val listId = repo.createList("Sobota")
         val butter = repo.addItem(listId, "Masło", quantity = 2.0, unit = "szt.", categoryId = "nabial").itemId
