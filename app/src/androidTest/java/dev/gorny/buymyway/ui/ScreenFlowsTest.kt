@@ -462,6 +462,26 @@ class ScreenFlowsTest {
     }
 
     @Test
+    fun movingAnItemPastADepartmentHeadingChangesItsCategory() {
+        val listId = runBlocking { repo.createList("Sobota") }
+        val milk = runBlocking {
+            repo.addItem(listId, "ziemniaki", categoryId = "warzywa")
+            repo.addItem(listId, "banany", categoryId = "warzywa")
+            repo.addItem(listId, "mleko", categoryId = "nabial").itemId
+        }
+        showList(listId)
+        waitFor { exists(hasText("Nabiał i jaja")) }
+        assertEquals(listOf("ziemniaki", "banany", "mleko"), shownItems())
+
+        // „Mleko" is first under Nabiał: one row up is the heading, and past it is Warzywa.
+        val actions = compose.onNodeWithTag("name:mleko").fetchSemanticsNode().config[SemanticsActions.CustomActions]
+        compose.runOnIdle { actions.single { it.label == text(R.string.action_move_up) }.action() }
+        waitFor { runBlocking { repo.observeItem(milk).first()!!.categoryId == "warzywa" } }
+        waitFor { !exists(hasText("Nabiał i jaja")) }
+        assertEquals(listOf("ziemniaki", "banany", "mleko"), shownItems())
+    }
+
+    @Test
     fun theEditSheetShowsWhenAnItemWasEditedAndBought() {
         val listId = runBlocking { repo.createList("Sobota") }
         val itemId = runBlocking { repo.addItem(listId, "mleko").itemId }

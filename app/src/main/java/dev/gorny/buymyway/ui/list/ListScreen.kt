@@ -106,6 +106,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.gorny.buymyway.R
 import dev.gorny.buymyway.core.model.Item
 import dev.gorny.buymyway.core.model.ListDetail
+import dev.gorny.buymyway.core.model.SectionDrag
 import dev.gorny.buymyway.core.model.SortView
 import dev.gorny.buymyway.core.text.QuantityFormat
 import dev.gorny.buymyway.core.text.QuantityStep
@@ -571,7 +572,7 @@ private fun ListContent(
         for (section in detail.sections) {
             // The flat views have no headings (decision 62).
             section.category?.let { category ->
-                item(key = "h:${category.id}") {
+                item(key = SectionDrag.headerKey(category.id)) {
                     SectionHeader(category.name, Modifier.animateItem())
                 }
             }
@@ -613,7 +614,7 @@ private fun LazyListScope.itemsWithMoves(
     photoOf: (Item) -> PhotoRef?,
     onOpenPhoto: (Item) -> Unit,
 ) {
-    items.forEachIndexed { index, item ->
+    items.forEach { item ->
         item(key = item.id) {
             val movable = !item.checked && state.canEdit
             ItemRow(
@@ -626,8 +627,8 @@ private fun LazyListScope.itemsWithMoves(
                 loadPhoto = vm::loadPhoto,
                 onOpenPhoto = { onOpenPhoto(item) },
                 reorder = if (movable) reorder else null,
-                onMoveUp = if (movable && index > 0) ({ vm.moveBy(item.id, -1) }) else null,
-                onMoveDown = if (movable && index < items.lastIndex && !items[index + 1].checked) ({ vm.moveBy(item.id, 1) }) else null,
+                onMoveUp = if (movable && vm.canMoveBy(item.id, -1)) ({ vm.moveBy(item.id, -1) }) else null,
+                onMoveDown = if (movable && vm.canMoveBy(item.id, 1)) ({ vm.moveBy(item.id, 1) }) else null,
                 modifier = Modifier.reorderableItem(this, reorder, item.id),
             )
         }

@@ -430,11 +430,18 @@ class ListRepository(
         commit(listOf(Op.ItemPut(newId(), item.listId, actor(), nextAt(), itemId, content)))
     }
 
-    /** A drag within a category: only the moved item's `sortKey` changes, and history does not. */
-    suspend fun moveItem(itemId: String, sortKey: Double) = db.withTransaction {
+    /**
+     * A drag: the moved item's `sortKey` changes, and with [categoryId] — a drop in another
+     * department (decision 126) — its category too, which is remembered for its name as the edit
+     * sheet's choice is. A drag within a category leaves the history alone.
+     */
+    suspend fun moveItem(itemId: String, sortKey: Double, categoryId: String? = null) = db.withTransaction {
         val item = liveItem(itemId)
-        if (item.sortKey == sortKey) return@withTransaction
-        commit(listOf(Op.ItemPut(newId(), item.listId, actor(), nextAt(), itemId, item.content.copy(sortKey = sortKey))))
+        val category = categoryId ?: item.categoryId
+        if (item.sortKey == sortKey && item.categoryId == category) return@withTransaction
+        val at = nextAt()
+        commit(listOf(Op.ItemPut(newId(), item.listId, actor(), at, itemId, item.content.copy(sortKey = sortKey, categoryId = category))))
+        if (category != item.categoryId) remember(item.name, category, at)
     }
 
     /** A drag in the „Ręcznie" view: only the moved item's `manualKey` changes. */

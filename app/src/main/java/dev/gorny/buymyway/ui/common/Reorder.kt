@@ -27,7 +27,8 @@ import dev.gorny.buymyway.R
 
 /**
  * Drag-to-reorder for a `LazyColumn`, written in-house (STATE.md decisions 45 and 49): the lists
- * on the home screen, the items of a category and the category order editor.
+ * on the home screen, the items of a list (across its department headings, decision 126) and
+ * the category order editor.
  *
  * A drag starts on a row's [DragHandle]. While it moves, the row follows the finger; when its
  * centre crosses a row it may take the place of ([canMove]), [onMove] reorders the data at once
