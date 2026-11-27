@@ -2205,6 +2205,69 @@ what was bought, which is the half of decision 106 that no build output could ha
        Warzywa and back down into Nabiał, and the owner checked it there by hand
        („działa"). **Not verified:** a finger drag on a real phone.
 
+### 2026-11-27 — „Wyczyść kupione" in the menu, dependencies brought up to date
+
+127. **„Wyczyść kupione" moves from the „Kupione" heading to the bottom of the list's ⋮ menu
+     (owner, 2026-11-27; revises PLAN.md *Screens* „the „Kupione" section … with „Wyczyść
+     kupione"").** The owner asked for it. On a shared list it empties *everybody's*
+     „Kupione", and with it the only record of who bought what („Kupiono … · Ania" in the
+     edit sheet), so it no longer sits one tap away beside the heading anyone opens. It is
+     the menu's last entry, under a divider, disabled while „Kupione" is empty, and still
+     asks first. It is offered to owners and
+     editors only: the heading's button was shown to a viewer too, whose tap did nothing
+     (`commit` refuses a viewer's op, and the view model swallowed the refusal).
+     - **Dependencies, all to their latest stable release.** Gradle 9.7.1 → 9.9.2 (with the
+       distribution checksum), AGP 9.4.1 → 9.5.3, Kotlin 2.4.20 → 2.4.21, KSP 2.3.12 →
+       2.3.14, google-services 4.5.0 → 4.6.0, Compose BOM 2026.09.00 → 2026.11.01, Navigation
+       2.10.1 → 2.10.2, Lifecycle 2.11.0 → 2.11.1, **Firebase BoM 34.19.0 → 35.2.0** (auth 25,
+       database 23, messaging 26: the only breaking change is `minSdk` 24, and ours is 26),
+       DataStore 1.2.1 → 1.3.0, kotlinx.serialization 1.11.0 → 1.13.0, WorkManager 2.11.2 →
+       2.12.0. CI's `actions/setup-java` 5 → 6 and `gradle/actions/setup-gradle` 5 → 6.
+       Supersedes Dependabot's PRs #1, #2, #3 and #5. No library added or removed.
+     - **What the Compose BOM brought with it.** Compose 1.13 compiles against Android 37.1,
+       so `compileSdk` is `release(37) { minorApiLevel = 1 }` (AGP fetched the platform by
+       itself; `targetSdk` stays 37). Material3 1.5 hid the member `ExposedDropdownMenu` in
+       favour of an extension (an import), and deprecated two things the build's `-Werror`
+       refuses: `rememberModalBottomSheetState` (both sheets now use
+       `rememberBottomSheetState(Hidden, {Hidden, Expanded})`, which is what it did) and the
+       `ListItem(headlineContent = …)` overload. Its replacement is the expressive list item,
+       with other paddings, shapes and type, which is a redesign of Ustawienia, „O aplikacji"
+       and „Moje produkty" rather than an update, so their 21 rows go through
+       `ui/common/SettingRow`, the one place that still calls the baseline overload, under a
+       `@Suppress("DEPRECATION")`. Moving them to the new look is left for when it is wanted.
+     - **One instrumented test turned flaky with Material3 1.5, and the test was at fault.**
+       `ScreenFlowsTest.anItemMovesOrIsCopiedToAnotherListFromTheEditSheet` failed about one
+       run in two: a tree dumped at the failure showed the edit sheet open, „Przenieś do
+       innej listy" enabled and on screen, and no dialog even seconds later — the tap had
+       been lost. The test types into the name field and taps at once; the field's keyboard
+       is still coming up, the 1.5 sheet rides up with the keyboard's animation, and the tap
+       aimed at where the row was a frame before lands beside it. A finger taps a sheet that
+       has stopped. The test now taps once the row's bounds hold still (`clickWhenStill`);
+       six runs in a row passed.
+     - **npm (tooling only, nothing of it is in the APK).** git-cliff 2.14.2; in `firebase/`
+       `firebase` 13.4.0, `@firebase/rules-unit-testing` 6.0.0 and `firebase-tools` 15.37.0.
+       The first two need **Node ≥ 24.12**, so `.nvmrc` goes from 22 to 24 (CI reads it) and
+       both `engines` say so; the Linux machine needs Node 24 too. `npm audit` found 35
+       advisories in `firebase/` (high: undici, zod, `@grpc/grpc-js`); after the bumps and
+       four `overrides` (`@grpc/grpc-js` 1.14.7 for the copy `@firebase/firestore` pins,
+       `uuid` 11.1.1, `glob` 14.0.6, `minimatch` 11.0.9 in place of the 7–11.0.0 range) one
+       moderate one is left: `@opentelemetry/core` < 2.8 inside `firebase-tools` → pubsub,
+       whose fix is a major version of a library we never run (the emulator does not use
+       pubsub tracing). Root: 0 advisories.
+     - **Dependabot alerts were switched on** for the repository (they were off, so GitHub
+       never reported an advisory). Dependabot's automatic security PRs stay off: they target
+       `main`, which would bypass `dev` and its emulator gate.
+     - **Two bugs found while reviewing.** (1) Tick, untick and tick again within 1.5 s: the
+       first tick's timer ended the third tap's hold, so the row jumped to „Kupione" at once;
+       the same with someone else's ticks inside 2.5 s. Each item now has one hold timer,
+       which a new tap replaces. (2) The viewer's „Wyczyść kupione" above.
+     - **Performance:** `ListRepository.observeList` (grouping, the Polish collation sort and
+       the `distinctUntilChanged` comparison, run on every change to the list) now runs on
+       `Dispatchers.Default` instead of the main thread.
+     - No new dependency, no new background work, nothing new that wakes the device.
+     - **README:** `docs/screenshots/list-bought.png` still shows the button beside „Kupione
+       (6)". It was taken on the owner's phone, so it is retaken there, not on the emulator.
+
 ## Open questions
 
 1. ~~Where do shared lists live, now that `drive.file` cannot cross users?~~ Answered by

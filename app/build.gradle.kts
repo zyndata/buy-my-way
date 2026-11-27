@@ -44,7 +44,10 @@ val releaseKeystore = secret("buymyway.keystore", "BUYMYWAY_KEYSTORE")?.let(::fi
 
 android {
     namespace = "dev.gorny.buymyway"
-    compileSdk = 37
+    // 37.1: Compose 1.13 (BOM 2026.11) compiles against it (STATE.md decision 127).
+    compileSdk {
+        version = release(37) { minorApiLevel = 1 }
+    }
 
     defaultConfig {
         applicationId = "dev.gorny.buymyway"

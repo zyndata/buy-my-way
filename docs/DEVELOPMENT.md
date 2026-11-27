@@ -73,7 +73,7 @@ CI runs `lint testDebugUnitTest assembleDebug`, `connectedDebugAndroidTest` on a
 emulator, and the rules tests, as three jobs, on every push to `dev`. Run the same before
 pushing.
 
-The rules tests need Node 22+ and a Java runtime (the database emulator is a Java program;
+The rules tests need Node 24.12+ and a Java runtime (the database emulator is a Java program;
 the JDK that builds the app will do). `firebase emulators:exec` downloads the emulator on the
 first run and starts it under the project id `demo-buy-my-way`: a demo id needs no login and
 never reaches the real project. Nothing in `firebase/` needs a Firebase account.

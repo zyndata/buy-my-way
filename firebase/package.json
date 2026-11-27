@@ -6,14 +6,20 @@
   "license": "MIT",
   "type": "module",
   "engines": {
-    "node": ">=22"
+    "node": ">=24.12"
   },
   "scripts": {
     "test": "firebase emulators:exec --only database --project demo-buy-my-way \"node --test test/rules.test.mjs\""
   },
   "devDependencies": {
-    "@firebase/rules-unit-testing": "5.0.2",
-    "firebase": "12.19.0",
-    "firebase-tools": "15.30.2"
+    "@firebase/rules-unit-testing": "6.0.0",
+    "firebase": "13.4.0",
+    "firebase-tools": "15.37.0"
+  },
+  "overrides": {
+    "@grpc/grpc-js": "1.14.7",
+    "uuid": "11.1.1",
+    "glob": "14.0.6",
+    "minimatch@>=7 <11.0.1": "11.0.9"
   }
 }

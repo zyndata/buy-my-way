@@ -16,7 +16,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.ListItem
+import dev.gorny.buymyway.ui.common.SettingRow
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -157,7 +157,7 @@ private fun ProductRow(product: OwnProduct, onEdit: () -> Unit, onDelete: () -> 
     var menu by remember { mutableStateOf(false) }
     val department = BuiltinCategories.ALL.firstOrNull { it.first == product.categoryId }?.second.orEmpty()
     val description = stringResource(R.string.product_description, product.name, department)
-    ListItem(
+    SettingRow(
         headlineContent = { Text(product.name) },
         supportingContent = { Text(department) },
         trailingContent = {

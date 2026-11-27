@@ -25,7 +25,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.ListItem
+import dev.gorny.buymyway.ui.common.SettingRow
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
@@ -194,7 +194,7 @@ fun SettingsScreen(
                     .padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 4.dp)
                     .semantics { heading() },
             )
-            ListItem(
+            SettingRow(
                 headlineContent = { Text(stringResource(R.string.settings_notifications_enabled)) },
                 supportingContent = { Text(stringResource(R.string.settings_notifications_hint)) },
                 trailingContent = {
@@ -227,12 +227,12 @@ fun SettingsScreen(
                 onChange = vm::setNotifyShared,
             )
             HorizontalDivider()
-            ListItem(
+            SettingRow(
                 headlineContent = { Text(stringResource(R.string.settings_default_order)) },
                 supportingContent = { Text(stringResource(R.string.settings_default_order_hint)) },
                 modifier = Modifier.clickable(onClick = onOpenDefaultOrder),
             )
-            ListItem(
+            SettingRow(
                 headlineContent = { Text(stringResource(R.string.settings_own_products)) },
                 supportingContent = { Text(stringResource(R.string.settings_own_products_hint)) },
                 modifier = Modifier
@@ -240,14 +240,14 @@ fun SettingsScreen(
                     .testTag("ownProducts"),
             )
             HorizontalDivider()
-            ListItem(
+            SettingRow(
                 headlineContent = { Text(stringResource(R.string.settings_theme)) },
                 supportingContent = { Text(stringResource(themeLabel(theme))) },
                 modifier = Modifier
                     .clickable { choosingTheme = true }
                     .testTag("theme"),
             )
-            ListItem(
+            SettingRow(
                 headlineContent = { Text(stringResource(R.string.settings_about)) },
                 supportingContent = { Text(stringResource(R.string.settings_about_hint)) },
                 modifier = Modifier
@@ -375,7 +375,7 @@ private fun NotificationSwitch(
     tag: String,
     onChange: (Boolean) -> Unit,
 ) {
-    ListItem(
+    SettingRow(
         headlineContent = {
             Text(label, color = if (enabled) Color.Unspecified else MaterialTheme.colorScheme.outline)
         },
@@ -405,13 +405,13 @@ private fun AccountSection(
 ) {
     when (account) {
         AccountState.Loading -> Unit
-        AccountState.SignedOut -> ListItem(
+        AccountState.SignedOut -> SettingRow(
             headlineContent = { Text(stringResource(R.string.action_sign_in)) },
             supportingContent = { Text(stringResource(R.string.account_sign_in_hint)) },
             modifier = Modifier.clickable(enabled = !busy, onClick = onSignIn),
         )
         is AccountState.SignedIn -> {
-            ListItem(
+            SettingRow(
                 headlineContent = { Text(account.email ?: account.name ?: stringResource(R.string.account_signed_in)) },
                 supportingContent = {
                     Text(
@@ -423,12 +423,12 @@ private fun AccountSection(
                     )
                 },
             )
-            ListItem(
+            SettingRow(
                 headlineContent = { Text(stringResource(R.string.action_sign_out)) },
                 modifier = Modifier.clickable(enabled = !busy, onClick = onSignOut),
             )
             // Only where it can work: deleting needs a session to write with (decision 97).
-            ListItem(
+            SettingRow(
                 headlineContent = {
                     Text(stringResource(R.string.settings_delete_data), color = MaterialTheme.colorScheme.error)
                 },
@@ -439,7 +439,7 @@ private fun AccountSection(
             )
         }
         is AccountState.SessionLost -> {
-            ListItem(
+            SettingRow(
                 headlineContent = { Text(stringResource(R.string.action_sign_in_again)) },
                 supportingContent = {
                     Text(
@@ -453,7 +453,7 @@ private fun AccountSection(
                 },
                 modifier = Modifier.clickable(enabled = !busy, onClick = onSignIn),
             )
-            ListItem(
+            SettingRow(
                 headlineContent = { Text(stringResource(R.string.action_sign_out)) },
                 modifier = Modifier.clickable(enabled = !busy, onClick = onSignOut),
             )
