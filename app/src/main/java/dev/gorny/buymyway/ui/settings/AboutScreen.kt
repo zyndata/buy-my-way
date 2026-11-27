@@ -12,7 +12,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.ListItem
+import dev.gorny.buymyway.ui.common.SettingRow
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -105,20 +105,20 @@ fun AboutScreen(
                 modifier = Modifier.padding(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 16.dp),
             )
             HorizontalDivider()
-            ListItem(
+            SettingRow(
                 headlineContent = { Text(stringResource(R.string.about_version)) },
                 supportingContent = { Text(BuildConfig.VERSION_NAME) },
             )
-            ListItem(
+            SettingRow(
                 headlineContent = { Text(stringResource(R.string.about_licence)) },
                 supportingContent = { Text(stringResource(R.string.about_licence_value)) },
             )
-            ListItem(
+            SettingRow(
                 headlineContent = { Text(stringResource(R.string.about_icons)) },
                 supportingContent = { Text(stringResource(R.string.about_icons_value)) },
             )
             if (updates != null) {
-                ListItem(
+                SettingRow(
                     headlineContent = { Text(stringResource(R.string.about_check_updates)) },
                     supportingContent = if (checking) {
                         { Text(stringResource(R.string.about_checking)) }
@@ -130,7 +130,7 @@ fun AboutScreen(
                         .testTag("check-updates"),
                 )
             }
-            ListItem(
+            SettingRow(
                 headlineContent = { Text(stringResource(R.string.about_source)) },
                 supportingContent = { Text(source) },
                 modifier = Modifier.clickable {

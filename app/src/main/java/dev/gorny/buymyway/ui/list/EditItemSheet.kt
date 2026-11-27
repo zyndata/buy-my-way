@@ -20,6 +20,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenu
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
@@ -30,7 +31,8 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.SheetValue
+import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -84,7 +86,7 @@ fun EditItemSheet(
     moveTargets: List<ShoppingList> = emptyList(),
     onMove: (content: ItemContent, target: ShoppingList, removeHere: Boolean) -> Unit = { _, _, _ -> },
 ) {
-    val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val sheet = rememberBottomSheetState(initialValue = SheetValue.Hidden, enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded))
     var name by rememberSaveable(item.id) { mutableStateOf(item.name) }
     var quantity by rememberSaveable(item.id) { mutableStateOf(item.quantity?.let(QuantityFormat::number).orEmpty()) }
     var unit by rememberSaveable(item.id) { mutableStateOf(item.unit.orEmpty()) }

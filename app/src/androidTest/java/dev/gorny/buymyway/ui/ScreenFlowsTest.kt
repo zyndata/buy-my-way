@@ -123,6 +123,22 @@ class ScreenFlowsTest {
 
     private fun exists(matcher: SemanticsMatcher) = compose.onAllNodes(matcher).fetchSemanticsNodes().isNotEmpty()
 
+    /**
+     * Scrolls [tag] into view and taps it once it has stopped moving. A sheet whose text field
+     * just took the focus slides up with the keyboard, and Material3 1.5's sheet follows the
+     * keyboard's animation: a tap aimed at where the row was a frame ago lands beside it.
+     */
+    private fun clickWhenStill(tag: String) {
+        val node = compose.onNodeWithTag(tag).performScrollTo()
+        var last = node.fetchSemanticsNode().boundsInRoot
+        waitFor {
+            Thread.sleep(STILL_MS)
+            val now = node.fetchSemanticsNode().boundsInRoot
+            (now == last).also { last = now }
+        }
+        node.performClick()
+    }
+
     /** The list screen's link to sync, played by the test: who is looking, and the sort view. */
     private class FakeLive : ListLive {
         val present = MutableStateFlow<Set<String>>(emptySet())
@@ -282,7 +298,7 @@ class ScreenFlowsTest {
         compose.onNodeWithTag("name:ziemniaki").performSemanticsAction(SemanticsActions.OnLongClick)
         waitFor { exists(hasTestTag("editSheet")) }
         compose.onNode(hasSetTextAction() and hasText("ziemniaki")).performTextReplacement("młode ziemniaki")
-        compose.onNodeWithTag("moveItem").performScrollTo().performClick()
+        clickWhenStill("moveItem")
         waitFor { exists(hasTestTag("moveDialog")) }
         // The only other list is chosen already, and „Usuń z aktualnej listy" is ticked.
         compose.onNodeWithTag("moveRemoveHere").assertIsOn()
@@ -291,7 +307,7 @@ class ScreenFlowsTest {
         compose.onNodeWithTag("editSheet").assertIsDisplayed()
         compose.onNodeWithText("młode ziemniaki").assertIsDisplayed()
 
-        compose.onNodeWithTag("moveItem").performScrollTo().performClick()
+        clickWhenStill("moveItem")
         waitFor { exists(hasTestTag("moveDialog")) }
         compose.onNodeWithTag("moveTarget").performClick()
         compose.onNodeWithTag("moveTo:Niedziela").performClick()
@@ -307,7 +323,7 @@ class ScreenFlowsTest {
         // Unticked: a copy, and the bread stays here.
         compose.onNodeWithTag("name:chleb").performSemanticsAction(SemanticsActions.OnLongClick)
         waitFor { exists(hasTestTag("editSheet")) }
-        compose.onNodeWithTag("moveItem").performScrollTo().performClick()
+        clickWhenStill("moveItem")
         waitFor { exists(hasTestTag("moveDialog")) }
         compose.onNodeWithTag("moveRemoveHere").performClick().assertIsOff()
         compose.onNodeWithTag("confirmMove").assertTextEquals(text(R.string.action_copy)).performClick()
@@ -589,5 +605,8 @@ class ScreenFlowsTest {
     private companion object {
         /** A made-up uid: the repository is public (CLAUDE.md). */
         const val ANIA = "test-ania"
+
+        /** Two reads of a row's place this far apart that agree mean it has stopped moving. */
+        const val STILL_MS = 150L
     }
 }

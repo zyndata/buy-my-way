@@ -267,6 +267,14 @@ fun ListScreen(
                                 MenuItem(R.string.action_check_all) { menu = false; vm.setAllChecked(true) }
                                 MenuItem(R.string.action_uncheck_all) { menu = false; vm.setAllChecked(false) }
                                 MenuItem(R.string.action_rename) { menu = false; renaming = true }
+                                // Last and set apart: it cannot be undone and empties everybody's
+                                // „Kupione" on a shared list (decision 39).
+                                HorizontalDivider()
+                                MenuItem(
+                                    R.string.action_clear_bought,
+                                    enabled = detail?.bought?.isNotEmpty() == true,
+                                    modifier = Modifier.testTag("clearBought"),
+                                ) { menu = false; confirmClear = true }
                             }
                         }
                     }
@@ -296,7 +304,6 @@ fun ListScreen(
                 vm = vm,
                 boughtOpen = boughtOpen,
                 onToggleBought = { boughtOpen = !boughtOpen },
-                onClearBought = { confirmClear = true },
                 onEdit = { putAwayKeyboard(); editing = it.id },
                 photoOf = { vm.photoOf(it, pendingPhotos) },
                 onOpenPhoto = { putAwayKeyboard(); viewing = it.id },
@@ -466,8 +473,8 @@ private fun opener(context: Context, uri: Uri): () -> InputStream {
 }
 
 @Composable
-private fun MenuItem(label: Int, onClick: () -> Unit) {
-    DropdownMenuItem(text = { Text(stringResource(label)) }, onClick = onClick)
+private fun MenuItem(label: Int, modifier: Modifier = Modifier, enabled: Boolean = true, onClick: () -> Unit) {
+    DropdownMenuItem(text = { Text(stringResource(label)) }, onClick = onClick, enabled = enabled, modifier = modifier)
 }
 
 /** „Ania ogląda", „Ania i Tomek oglądają". */
@@ -536,7 +543,6 @@ private fun ListContent(
     vm: ListViewModel,
     boughtOpen: Boolean,
     onToggleBought: () -> Unit,
-    onClearBought: () -> Unit,
     onEdit: (Item) -> Unit,
     photoOf: (Item) -> PhotoRef?,
     onOpenPhoto: (Item) -> Unit,
@@ -584,7 +590,6 @@ private fun ListContent(
                     count = detail.bought.size,
                     open = boughtOpen,
                     onToggle = onToggleBought,
-                    onClear = onClearBought,
                     modifier = Modifier.animateItem(),
                 )
             }
@@ -665,36 +670,31 @@ private fun SectionHeader(name: String, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun BoughtHeader(count: Int, open: Boolean, onToggle: () -> Unit, onClear: () -> Unit, modifier: Modifier = Modifier) {
+private fun BoughtHeader(count: Int, open: Boolean, onToggle: () -> Unit, modifier: Modifier = Modifier) {
     val stateLabel = stringResource(if (open) R.string.state_expanded else R.string.state_collapsed)
     Column(modifier) {
         HorizontalDivider(Modifier.padding(top = 12.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .weight(1f)
-                    .heightIn(min = 48.dp)
-                    .combinedClickable(onClick = onToggle, role = Role.Button)
-                    .semantics {
-                        heading()
-                        stateDescription = stateLabel
-                    }
-                    .padding(horizontal = 16.dp),
-            ) {
-                Text(
-                    stringResource(R.string.bought_header, count),
-                    style = MaterialTheme.typography.titleSmall,
-                    modifier = Modifier.weight(1f),
-                )
-                Icon(
-                    painterResource(if (open) R.drawable.ic_expand_less else R.drawable.ic_expand_more),
-                    contentDescription = null,
-                )
-            }
-            TextButton(onClick = onClear, modifier = Modifier.padding(end = 8.dp)) {
-                Text(stringResource(R.string.action_clear_bought))
-            }
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 48.dp)
+                .combinedClickable(onClick = onToggle, role = Role.Button)
+                .semantics {
+                    heading()
+                    stateDescription = stateLabel
+                }
+                .padding(horizontal = 16.dp),
+        ) {
+            Text(
+                stringResource(R.string.bought_header, count),
+                style = MaterialTheme.typography.titleSmall,
+                modifier = Modifier.weight(1f),
+            )
+            Icon(
+                painterResource(if (open) R.drawable.ic_expand_less else R.drawable.ic_expand_more),
+                contentDescription = null,
+            )
         }
     }
 }
