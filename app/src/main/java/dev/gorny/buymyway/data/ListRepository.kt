@@ -26,10 +26,12 @@ import dev.gorny.buymyway.data.local.OwnProductEntity
 import dev.gorny.buymyway.data.local.toDomain
 import dev.gorny.buymyway.data.local.toEntity
 import dev.gorny.buymyway.data.prefs.CategoryOrderSource
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import java.util.UUID
 
@@ -109,6 +111,9 @@ class ListRepository(
             ?.takeIf { it.deletedAt == null && it.updatedAt > 0 }
             ?.let { ListViews.detail(it, categories.map { c -> c.toDomain() }, items.map { i -> i.toDomain() }, inPlace, sortView) }
     }.distinctUntilChanged()
+        // Grouping, sorting by the Polish collation and comparing the result run on every change
+        // to the list, so off the main thread: the screen only receives the finished detail.
+        .flowOn(Dispatchers.Default)
 
     /** Every known, undeleted item of a list, ticked or not: what the screen diffs for remote ticks. */
     fun observeItems(listId: String): Flow<List<Item>> =
