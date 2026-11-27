@@ -6,6 +6,24 @@ This file is generated from Conventional Commit messages by
 The format follows [Keep a Changelog](https://keepachangelog.com) and the
 project adheres to [Semantic Versioning](https://semver.org).
 
+## [0.14.0] - 2026-11-27
+
+### Bug Fixes
+
+- **list:** An item ticked, unticked and ticked again keeps its full hold
+
+### Build
+
+- **deps:** Bring every dependency to its latest release
+
+### Features
+
+- **list:** Move „Wyczyść kupione" to the bottom of the list menu
+
+### Performance
+
+- **list:** Build the list view off the main thread
+
 ## [0.13.0] - 2026-11-21
 
 ### Features
