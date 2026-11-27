@@ -23,6 +23,7 @@ import dev.gorny.buymyway.ui.common.HeldDeletes
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
@@ -137,6 +138,9 @@ class ListViewModel(
 
     /** Items just ticked here, still shown in place (STATE.md decision 51). */
     private val lingering = MutableStateFlow<Set<String>>(emptySet())
+
+    /** The running hold of each item in [lingering] (touched on the main thread only). */
+    private val lingerTimers = HashMap<String, Job>()
 
     /** Items someone else just ticked, held in place with their initial (PLAN.md Phase 5, task 5). */
     private val remoteLingering = MutableStateFlow<Map<String, String>>(emptyMap())
@@ -432,21 +436,27 @@ class ListViewModel(
      */
     fun toggle(item: Item) {
         if (!state.value.canEdit) return
-        viewModelScope.launch {
-            if (!item.checked) {
-                lingering.update { it + item.id }
-                runCatching { repo.setChecked(item.id, true) }
+        // A tick, untick and tick again within the hold must not let the first tick's timer
+        // end the last one's hold early: each item has one timer, and a new tap replaces it.
+        lingerTimers.remove(item.id)?.cancel()
+        if (!item.checked) {
+            lingering.update { it + item.id }
+            viewModelScope.launch { runCatching { repo.setChecked(item.id, true) } }
+            lingerTimers[item.id] = viewModelScope.launch {
                 delay(LINGER_MS)
                 lingering.update { it - item.id }
-            } else {
-                lingering.update { it - item.id }
-                remoteLingering.update { it - item.id }
-                runCatching { repo.setChecked(item.id, false) }
+                lingerTimers.remove(item.id)
             }
+        } else {
+            lingering.update { it - item.id }
+            remoteLingering.update { it - item.id }
+            viewModelScope.launch { runCatching { repo.setChecked(item.id, false) } }
         }
     }
 
     fun setAllChecked(checked: Boolean) {
+        lingerTimers.values.forEach { it.cancel() }
+        lingerTimers.clear()
         lingering.value = emptySet()
         viewModelScope.launch { runCatching { repo.setAllChecked(listId, checked) } }
     }
@@ -652,6 +662,8 @@ class ListViewModel(
 
     private suspend fun watchTicks(me: String?) = coroutineScope {
         var before: Map<String, Item>? = null
+        // One timer per item, as for ticks made here: a second remote tick restarts the hold.
+        val timers = HashMap<String, Job>()
         repo.observeItems(listId).collect { items ->
             val previous = before
             before = items.associateBy { it.id }
@@ -662,9 +674,11 @@ class ListViewModel(
                 if (!newlyTicked || item.checkedBy == null || item.checkedBy == me) continue
                 val initial = initialOf(item.checkedBy)
                 remoteLingering.update { it + (item.id to initial) }
-                launch {
+                timers.remove(item.id)?.cancel()
+                timers[item.id] = launch {
                     delay(REMOTE_LINGER_MS)
                     remoteLingering.update { it - item.id }
+                    timers.remove(item.id)
                 }
             }
         }
